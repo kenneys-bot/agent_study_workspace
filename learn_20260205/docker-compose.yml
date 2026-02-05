@@ -1,0 +1,12 @@
+services:
+  python-ubuntu:
+    image: homebrew/ubuntu24.04
+    container_name: ubuntu24_04
+    volumes:
+      - ./app:/app  # 挂载本地目录
+    working_dir: /app
+    tty: true
+    stdin_open: true
+    command: /bin/bash  # 保持容器运行
+    ports:
+      - "8000:8000"  # 如果需要暴露端口

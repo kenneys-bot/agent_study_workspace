@@ -1,0 +1,9 @@
+langgraph==1.0.7
+python-dotenv==1.2.1
+
+langchain==1.2.8
+langchain-openai==1.1.7
+langchain-deepseek==1.0.1
+
+# 若只用 requirements.txt 管理依赖，可额外安装 CLI：
+# pip install -U "langgraph-cli[inmem]==0.4.12"
