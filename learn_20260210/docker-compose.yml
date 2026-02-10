@@ -1,0 +1,12 @@
+services:
+  python-ubuntu:
+    image: python:3.13-slim
+    container_name: dev_python3_13
+    volumes:
+      - ./app:/app  # 挂载本地目录
+    working_dir: /app
+    tty: true
+    stdin_open: true
+    command: /bin/bash  # 保持容器运行
+    ports:
+      - "8000:8000"  # 如果需要暴露端口
