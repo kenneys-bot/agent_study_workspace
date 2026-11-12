@@ -1,0 +1,38 @@
+# 构建上下文最小化：只把运行时需要的源码、依赖清单和包元数据送进镜像。
+# 注意：.env 永远不进镜像；凭据只在运行时由 compose 的 env_file/环境变量注入。
+
+# 版本库与本地工具
+.git
+.gitignore
+.worktrees
+.pytest_cache
+.ruff_cache
+.mypy_cache
+__pycache__
+*.py[cod]
+*.egg-info
+
+# Python 环境与缓存（依赖在镜像内按 uv.lock 重新安装）
+.venv
+.uv-cache
+
+# 历史与前端产物；archive/ 不参与构建
+archive
+node_modules
+web/node_modules
+web/dist
+
+# 本地配置与凭据
+.env
+.env.*
+!.env.example
+
+# 非运行时内容
+docs
+tests
+deploy
+scripts
+data
+artifacts
+*.log
+.DS_Store
