@@ -1,7 +1,7 @@
 # 执行进度
 
 当前里程碑：M4（进行中）；M1–M3 已交付
-当前任务：M4 T17 规则版本与演示规则集（#18）
+当前任务：M4 T19 证据定位与校验（#20）；M5 T23 坐席工作台（#24）并行
 当前状态：M1/M2 READY_FOR_ACCEPTANCE；M3 IN_PROGRESS
 本机代码分支：`feat/bank-assistant`
 本机代码SHA：`979b076`（后续提交见 git log）
@@ -63,13 +63,22 @@ Ubuntu 与 Mac 同 SHA；两端 `uv run pytest tests -q` 均 144 用例全过（
 - Ubuntu 整机重启：需负责人逐次准许。
 - GPU 分时：M6 微调（#28）前需确认 `dingtalk-train` 空闲。
 
+## M5 工单状态
+
+| 工单 | 状态 | 证据 |
+|---|---|---|
+| #23 T22 前端骨架+登录+版本页 | DONE | web build/test 通过；GET /system/version 真实数据、无密钥 |
+| #24 T23 坐席工作台页 | IN_PROGRESS | worktree 中进行 |
+| #25 T24 质检复核页 | BLOCKED | 等 #21 |
+| #26 T25 演示脚本与端到端 | BLOCKED | 等 #24/#25 |
+
 ## M4 工单状态
 
 | 工单 | 状态 | 证据 |
 |---|---|---|
-| #18 T17 规则版本与演示规则集 | IN_PROGRESS | worktree 中进行 |
+| #18 T17 规则版本与演示规则集 | DONE | 6 条 demo_only 规则；360 unit / 78 integration |
 | #19 T18 质检任务执行 | READY_FOR_ACCEPTANCE | inspection_runs/findings + 0009 迁移；202+幂等、worker 租约/条件最终化、失败 error_code；379 unit / 94 integration |
-| #20 T19 证据定位与校验 | BLOCKED | 等 #19 |
+| #20 T19 证据定位与校验 | IN_PROGRESS | worktree 中进行 |
 | #21 T20 人工复核闭环 | BLOCKED | 等 #20 |
 | #22 T21 报告导出 | BLOCKED | 等 #21 |
 
