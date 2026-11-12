@@ -31,8 +31,7 @@ from .quality_inspector import (
     TranscribeResponse,
     InspectRequest,
     InspectResponse,
-    GenerateReportRequest,
-    GenerateReportResponse
+    GenerateReportRequest
 )
 
 __all__ = [
@@ -61,6 +60,5 @@ __all__ = [
     "TranscribeResponse",
     "InspectRequest",
     "InspectResponse",
-    "GenerateReportRequest",
-    "GenerateReportResponse"
+    "GenerateReportRequest"
 ]
