@@ -94,7 +94,7 @@ docker inspect -f '{{.State.Health.Status}}' bank-assistant-db-db-1
 | 项 | 实测值 |
 |---|---|
 | 容器 | `bank-assistant-api`（compose 项目 `bank-assistant-app`），`healthy`，`restart=unless-stopped` |
-| 镜像 | `bank-assistant:api-<code_sha7>`（不可变；本次 `api-f4f1346`，`linux/amd64`）；服务器不重建源码 |
+| 镜像 | `bank-assistant:api-<code_sha7>`（不可变；本次 `api-1fb91b6`，`linux/amd64`）；服务器不重建源码 |
 | 网络/端口 | `network_mode=host` + uvicorn `--host 127.0.0.1`；`ss -tln` 仅 `127.0.0.1:8000`，不写 `ports:` |
 | 配置 | 仓库外 `~/workspace/bank-assistant/.env.app`（chmod 600）；模板 `deploy/env.app.example` |
 | 数据/产物 | `~/workspace/bank-assistant/{data,artifacts}`；索引 `data/index`、模型缓存 `data/models` |

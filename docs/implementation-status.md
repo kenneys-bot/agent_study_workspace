@@ -5,7 +5,7 @@
 当前状态：M1–M5 已交付（等待负责人验收）；M6 已交付（T26/T27 完成、T28 harness 交付但真实训练 NOT_RUN）；**M7-01/M7-05 已真实执行**（不可变镜像部署、备份恢复演练、回滚演练、索引重建；2026-11-12）
 本机代码分支：`feat/bank-assistant`（集成分支）
 本机代码SHA：以 `git log -1` 为准（T29 合并后刷新）
-Ubuntu代码SHA：`f4f1346`（API 部署与备份/回滚演练使用的锁定 checkout；镜像 `bank-assistant:api-f4f1346`）
+Ubuntu代码SHA：`1fb91b6`（合并 `feat/bank-assistant` 后的部署提交；镜像 `bank-assistant:api-1fb91b6`）
 最近更新：2026-11-12（Asia/Shanghai）
 
 ## 任务状态
@@ -149,20 +149,20 @@ M6 报告：`docs/milestones/M6-report.md`（READY_FOR_ACCEPTANCE，含未达门
 | #28 T27 评测脚本与基线对比 | READY_FOR_ACCEPTANCE | `make eval` 全量 replay（50 检索/48 质检，1014 条预测）；live 20 条真实 DeepSeek（p50 1.23s、p95 1.66s、¥0.338 估算）；产物 `artifacts/evals/eval-replay-…103010Z`、`eval-live-…102704Z` |
 | #34 T33 数据库迁到 Ubuntu + SSH 隧道 | DONE（部署已执行） | PG18 容器 healthy；四库 owner=bank；`make test-integration` 130 passed；`make doctor` 隧道缺失失败/建立通过；`make seed-demo` 幂等且不触达 dev/test；LAN 直连失败 |
 | #29 T28 条件性微调 | READY_FOR_ACCEPTANCE | `make train` 默认 dry-run（train 202/test 50，数据哈希校验通过）；真实训练 `NOT_RUN`（GPU 1457 MiB 被 `dingtalk-embed` 占用、模型权重未缓存）；见 [M6 微调报告](milestones/M6-tuning-report.md) |
-| #30 T29 部署与恢复演练 | READY_FOR_ACCEPTANCE | 镜像 `api-f4f1346`；备份恢复/回滚/索引重建全部实测；`docs/milestones/M7-deploy-report.md` |
+| #30 T29 部署与恢复演练 | READY_FOR_ACCEPTANCE | 镜像 `api-1fb91b6`；备份恢复/回滚/索引重建全部实测；`docs/milestones/M7-deploy-report.md` |
 
 ## M7 部署与恢复演练（T29 / #30，2026-11-12 已执行）
 
 | 项 | 实际值 |
 |---|---|
-| 镜像 | `bank-assistant:api-f4f1346`，id `sha256:30d11a86…`，`linux/amd64`；`docker save \| ssh docker load`，tar sha256 `27cb18c2…` |
-| 代码 SHA | `f4f1346427b72b940afdaabf60b5fd31cdc2fe97`（服务器 repo 重置到同一 SHA，工作树干净） |
+| 镜像 | `bank-assistant:api-1fb91b6`，id `sha256:1c755209…`，`linux/amd64`；`docker save \| ssh docker load`，tar sha256 `7aeeca3b…` |
+| 代码 SHA | `1fb91b6b22085dd8064ec6fe128420b2e598f755`（服务器 repo 重置到同一 SHA，工作树干净） |
 | 容器 | `bank-assistant-api`，`restart=unless-stopped`，healthy；host 网络 + `--host 127.0.0.1`，`ss` 仅 `127.0.0.1:8000` |
 | 配置 | 仓库外 `.env.app`（600）；数据/产物在 `~/workspace/bank-assistant/{data,artifacts}` |
 | 索引 | `idx-20261112T110703Z-2334d03e`，校准 sha256 `136e030a…`，`BAAI/bge-small-zh-v1.5@512`，30 分块；版本页可查 |
 | 迁移 | 迁移前备份 `20261112T110515Z` → `alembic upgrade head`（0011，no-op）→ 建索引 → 备份 `20261112T110714Z` |
 | 恢复演练 | 两库恢复到 `*_restore_check`；21 张表行数一致；demo `knowledge_versions` 32 行 max `fea41b4d…` md5 `de01cec6…`；alembic 0011 |
-| 回滚演练 | `api-f4f1346` → `api-54fa344`（live/ready/版本页通过）→ 恢复 `api-f4f1346`；未降 schema、未重启服务器 |
+| 回滚演练 | `api-1fb91b6` → `api-f4f1346`（live/ready/版本页通过）→ 恢复 `api-1fb91b6`；另做过 `api-f4f1346` ↔ `api-54fa344`；未降 schema、未重启服务器 |
 | 隔离 | Mac 直连服务器 8000/5432 均拒绝；服务器仅回环监听 |
 | 报告 | `docs/milestones/M7-deploy-report.md`；手册 `docs/ops/runbook.md` |
 

@@ -11,16 +11,17 @@
 | 验收项 | 结果 | 证据 |
 |---|---|---|
 | 备份恢复后记录数与关键哈希一致 | **PASS** | 备份 `20261112T110714Z`；dev/demo 各 21 张表行数一致；demo `knowledge_versions` 32 行、`max_content_hash=fea41b4d…`、聚合 md5=`de01cec6…`；`conversations` 6 行 md5=`aa1eb51f…`；alembic 均为 `0011_report_exports` |
-| 回滚演练成功 | **PASS** | `api-f4f1346` → 上一版 `api-54fa344`（`/health/live`、`/health/ready` 200，版本页 `code_sha=54fa344…`）→ 恢复 `api-f4f1346`（版本页 `code_sha=f4f1346…`），未降 schema、未重启服务器 |
+| 回滚演练成功 | **PASS** | 最终版 `api-1fb91b6` → 上一版 `api-f4f1346`（`/health/live`、`/health/ready` 200，版本页 `code_sha=f4f1346…`）→ 恢复 `api-1fb91b6`（版本页 `code_sha=1fb91b6…`）；另做过 `api-f4f1346` ↔ `api-54fa344`（T29 前基线）。均未降 schema、未重启服务器 |
 | 索引可重建 | **PASS** | 服务器用已部署镜像重建：`idx-20261112T110703Z-2334d03e`，30 版本/30 分块，校准 sha256 `136e030a…`，embedding `BAAI/bge-small-zh-v1.5@512`；`/api/v1/system/version` 返回同值 |
 
 ## 2. 部署身份（不可变）
 
 | 项 | 实际值 |
 |---|---|
-| 代码 SHA / 分支 | `f4f1346427b72b940afdaabf60b5fd31cdc2fe97` / `ticket/T29` |
-| 镜像 | `bank-assistant:api-f4f1346`，id `sha256:30d11a865f3f6801e2293a709a9a5c06f9fbe4ac5da8fe19aecc3a5f8baf6fcf`，`linux/amd64`，210,998,212 B |
-| 传输校验 | `docker save | ssh docker load`，tar sha256 `27cb18c2892674b46d6fb13d84b6421420a5b2ba90fd5560ca15bbca6022a6fd`；两端 image id 相同 |
+| 代码 SHA / 分支 | `1fb91b6b22085dd8064ec6fe128420b2e598f755`（合并 `feat/bank-assistant` 后的集成分支）/ `ticket/T29` |
+| 镜像 | `bank-assistant:api-1fb91b6`，id `sha256:1c7552095188f4ebfc02f91c277c25d97830f772f550ba792b9552fb06186205`，`linux/amd64`，210,192,787 B |
+| 传输校验 | `docker save | ssh docker load`，tar sha256 `7aeeca3b96d3d0008a42afcc1da00e6148716f952ad80fb152c46db48421886c`；两端 image id 相同 |
+| 上一版（回滚点） | `bank-assistant:api-f4f1346`（`sha256:30d11a86…`，T29 功能提交）；更早基线 `api-54fa344` 也保留 |
 | 服务器 checkout | `~/workspace/bank-assistant/repo` 重置到同一 SHA，工作树干净（`git status --porcelain` 为空） |
 | 容器 | `bank-assistant-api`，`restart=unless-stopped`，health `healthy`，`network_mode=host` |
 | 端口 | 服务器 `ss -tln` 仅 `127.0.0.1:8000`（应用 `--host 127.0.0.1`）与 `127.0.0.1:5432`（PG） |
@@ -42,7 +43,7 @@ uvicorn `--host 127.0.0.1` 保证（compose 不写 `ports:`），`ss` 与 Mac �
 | 索引 embedding 模型 | `BAAI/bge-small-zh-v1.5@512`（fastembed，ONNX CPU） |
 | 知识快照 / 分块 | 30 个已发布版本 / 30 个分块（DB `knowledge_chunks` 校验 30 行） |
 | 模型 provider / chat | `deepseek` / `deepseek-chat`；`MODEL_MODE=live` |
-| 版本页 | `/api/v1/system/version` 返回上述 `index_version`、`index_calibration_sha256`、`index_embedding_model`、`code_sha` |
+| 版本页 | `/api/v1/system/version` 返回上述 `index_version`、`index_calibration_sha256`、`index_embedding_model`、`code_sha=1fb91b6…` |
 
 重建方式：服务器上 `docker run --rm --network host --user <项目用户> --env-file .env.app
 -v repo:/app/repo -v data:/app/data -w /app/repo bank-assistant:api-f4f1346
@@ -85,22 +86,23 @@ artifacts=skipped-empty
 | `report_exports` | 0 行 | 0 行 |
 
 `RESULT: PASS（backup=20261112T110714Z，2 个库恢复到 *_restore_check 并核对一致）`。
+合并、重新部署与回滚演练之后又执行了一次 `make restore-check`，仍 PASS（源库未变化）。
 恢复前后另校验“源库自备份后未变化”，因此比较的是同一时点快照，不是旧备份对当前源。
 守卫反向验证：`require_restore_target bank_assistant_demo bank_assistant_demo`
 非零退出并打印拒绝原因。
 
 ## 6. 回滚演练
 
-上一版保留为 `bank-assistant:api-54fa344`（id `sha256:e3c642e5…`，即 T29 之前的
-集成分支提交），当前版 `api-f4f1346`。演练命令：
+最终版 `api-1fb91b6`，上一版 `api-f4f1346`（T29 功能提交，id `sha256:30d11a86…`），
+更早基线 `api-54fa344`。演练命令：
 
 ```bash
-BACK_TO=bank-assistant:api-54fa344 BACK_TO_SHA=54fa344a151c314432f300c40c678aa7ad6a31e9 make rollback
+make rollback    # 默认使用 state.env 里的上一版；也可 BACK_TO=<镜像> BACK_TO_SHA=<sha>
 ```
 
 过程：回滚前记录 alembic head → 用旧镜像 `up -d --wait` → 校验 live/ready/版本页
-`code_sha=54fa344…`（旧版没有新增的索引校准字段，按预期不要求）→ 再切回
-`api-f4f1346` → 校验 `code_sha=f4f1346…` 与索引身份。全程未重启服务器、
+`code_sha=f4f1346…` 与索引身份 → 再切回 `api-1fb91b6` → 校验 `code_sha=1fb91b6…`。
+更早一次演练使用 `BACK_TO=bank-assistant:api-54fa344`，同样通过。全程未重启服务器、
 未执行 `alembic downgrade`、未停止数据库容器。旧版与当前 schema（0011）兼容。
 
 ## 7. 代码回归
@@ -131,5 +133,5 @@ BACK_TO=bank-assistant:api-54fa344 BACK_TO_SHA=54fa344a151c314432f300c40c678aa7a
   恢复：`make restore-check`；回滚：`make rollback`；校验：`make verify-deploy`。
 - 运维手册：`docs/ops/runbook.md`。
 - 服务器证据：`~/workspace/bank-assistant/{backups/<ts>,deploy/state.env,data/index}`。
-- 部署状态（非秘密）：`CURRENT_IMAGE=bank-assistant:api-f4f1346`、
-  `CURRENT_SHA=f4f1346…`、`PREVIOUS_IMAGE=bank-assistant:api-b294668`。
+- 部署状态（非秘密）：`CURRENT_IMAGE=bank-assistant:api-1fb91b6`、
+  `CURRENT_SHA=1fb91b6…`、`PREVIOUS_IMAGE=bank-assistant:api-f4f1346`。
