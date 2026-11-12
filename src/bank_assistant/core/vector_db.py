@@ -40,6 +40,40 @@ class StorageError(VectorDBException):
     pass
 
 
+def normalize_query_texts(query_texts: Any) -> List[str]:
+    """把 str、list[str] 或误传的嵌套列表归一化为扁平的 ``list[str]``。
+
+    Chroma 的 ``query_texts`` 只接受每个元素都是字符串的列表；历史上业务层
+    传入 ``[query_text]``、本层又包一层，导致 Chroma 收到 ``[[...]]``。
+    这里做唯一的规范化入口，任何非字符串元素都显式报错，不静默丢弃。
+    """
+    if isinstance(query_texts, str):
+        candidates = [query_texts]
+    elif isinstance(query_texts, (list, tuple)):
+        candidates = list(query_texts)
+    else:
+        raise QueryError("查询文本必须是字符串或字符串列表")
+
+    flattened: List[str] = []
+
+    def _flatten(items):
+        for item in items:
+            if isinstance(item, str):
+                flattened.append(item)
+            elif isinstance(item, (list, tuple)):
+                _flatten(item)
+            else:
+                raise QueryError("查询文本列表只能包含字符串")
+
+    _flatten(candidates)
+
+    if not flattened:
+        raise QueryError("查询文本不能为空")
+    if any(not text.strip() for text in flattened):
+        raise QueryError("查询文本不能为空白")
+    return flattened
+
+
 class Document:
     """
     文档数据模型
@@ -195,7 +229,7 @@ class VectorDBClient:
     
     def query(
         self,
-        query_texts: List[str],
+        query_texts: Any,
         n_results: int = DEFAULT_TOP_K,
         where: Dict[str, Any] = None
     ) -> Dict[str, Any]:
@@ -203,7 +237,7 @@ class VectorDBClient:
         查询相似文档
         
         Args:
-            query_texts (List[str]): 查询文本列表
+            query_texts (Any): 查询文本，str 或 list[str]；嵌套列表会被扁平化
             n_results (int): 返回结果数量
             where (Dict[str, Any]): 过滤条件
             
@@ -211,6 +245,9 @@ class VectorDBClient:
             Dict[str, Any]: 查询结果
         """
         try:
+            # Chroma 只接受扁平的 list[str]
+            query_texts = normalize_query_texts(query_texts)
+
             # 限制最大返回数量
             n_results = min(n_results, MAX_TOP_K)
             
@@ -230,7 +267,7 @@ class VectorDBClient:
     
     def query_with_score(
         self,
-        query_text: str,
+        query_text: Any,
         n_results: int = DEFAULT_TOP_K,
         where: Dict[str, Any] = None
     ) -> List[Dict[str, Any]]:
@@ -238,16 +275,17 @@ class VectorDBClient:
         带分数的相似性搜索
         
         Args:
-            query_text (str): 查询文本
+            query_text (Any): 查询文本，str 或 list[str]；嵌套列表会被扁平化
             n_results (int): 返回结果数量
             where (Dict[str, Any]): 过滤条件
             
         Returns:
-            List[Dict[str, Any]]: 带分数的查询结果
+            List[Dict[str, Any]]: 带分数的查询结果（多查询时只返回第一个查询的结果）
         """
         try:
+            query_texts = normalize_query_texts(query_text)
             results = self.query(
-                query_texts=[query_text],
+                query_texts=query_texts,
                 n_results=n_results,
                 where=where
             )

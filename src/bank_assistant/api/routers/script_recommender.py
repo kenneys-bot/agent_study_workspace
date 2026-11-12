@@ -153,9 +153,11 @@ async def recommend_scripts(
         scripts = recommender.recommend_scripts(
             context=context,
             intent=intent,
-            count=request.count
+            count=request.count,
+            filters=request.filters
         )
-        
+        outcome = getattr(recommender, "last_rerank", None)
+
         return RecommendScriptsResponse(
             scripts=[
                 {
@@ -169,7 +171,10 @@ async def recommend_scripts(
                 for s in scripts
             ],
             context_summary=f"主题: {context.topic}, 阶段: {context.stage}",
-            intent_summary=f"意图: {intent.intent_type}, 置信度: {intent.confidence:.2f}"
+            intent_summary=f"意图: {intent.intent_type}, 置信度: {intent.confidence:.2f}",
+            rerank_status=getattr(outcome, "status", "skipped"),
+            rerank_error_code=getattr(outcome, "error_code", None),
+            rerank_reason=getattr(outcome, "reason", None)
         )
         
     except Exception as e:

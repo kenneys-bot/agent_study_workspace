@@ -67,6 +67,15 @@ class RecommendScriptsResponse(BaseModel):
     scripts: List[RecommendedScriptItem] = Field(..., description="推荐的话术列表")
     context_summary: str = Field(..., description="情境摘要")
     intent_summary: str = Field(..., description="意图摘要")
+    rerank_status: str = Field(
+        "skipped", description="重排状态：applied / skipped / failed"
+    )
+    rerank_error_code: Optional[str] = Field(
+        None, description="重排失败时的机器可读错误码"
+    )
+    rerank_reason: Optional[str] = Field(
+        None, description="跳过、失败或未执行重排的原因"
+    )
 
 
 class PersonalizeScriptRequest(BaseModel):
