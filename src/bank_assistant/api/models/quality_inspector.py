@@ -2,18 +2,27 @@
 质检助手API数据模型
 """
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import List, Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class DialogueTurnItem(BaseModel):
     """对话轮次项"""
+    ordinal: int = Field(..., ge=1, description="会话内轮次序号（1 起，唯一）")
     speaker: str = Field(..., description="发言者")
     content: str = Field(..., description="发言内容")
-    timestamp: Optional[str] = Field(None, description="时间戳")
+    timestamp: datetime = Field(..., description="时间戳（带时区 UTC）")
     emotion: Optional[str] = Field(None, description="情绪标签")
     intent: Optional[str] = Field(None, description="意图标签")
+
+    @field_validator("timestamp")
+    @classmethod
+    def validate_timestamp(cls, value: datetime) -> datetime:
+        """时间必须是带时区的 datetime，并统一归一化为 UTC。"""
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("timestamp 必须带时区")
+        return value.astimezone(timezone.utc)
 
 
 class ParseConversationRequest(BaseModel):
@@ -23,13 +32,14 @@ class ParseConversationRequest(BaseModel):
     session_id: Optional[str] = Field(None, description="会话ID")
 
 
-class ParsedConversationResponse(BaseModel):
-    """对话解析响应"""
+class ParseConversationResponse(BaseModel):
+    """对话解析响应：稳定轮次、稳定 session_id 与不可变原文。"""
     session_id: str = Field(..., description="会话ID")
     participants: List[str] = Field(..., description="参与者列表")
     turns: List[DialogueTurnItem] = Field(..., description="对话轮次")
     metadata: Dict[str, Any] = Field(default_factory=dict, description="元数据")
     format_detected: str = Field(..., description="检测到的格式")
+    raw_text: str = Field(..., description="原始输入文本（不可变，用于原文核对）")
 
 
 class TranscribeRequest(BaseModel):
