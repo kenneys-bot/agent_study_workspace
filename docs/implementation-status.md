@@ -1,8 +1,8 @@
 # 执行进度
 
-当前里程碑：M5（收尾）；M1–M4 已交付
-当前任务：M6 T27 评测脚本（#28）READY_FOR_ACCEPTANCE；T33 数据库迁移已执行
-当前状态：M1–M4 READY_FOR_ACCEPTANCE；M5 工单全部完成（T25 DONE，待负责人验收）；M6 IN_PROGRESS；**ADR-0006 已落地**（PostgreSQL 只在 Ubuntu，Mac 经 SSH 隧道；2026-11-12 部署已执行）
+当前里程碑：M5 已交付（待负责人验收）；M6 进行中
+当前任务：M6 T28 条件性微调（#29）进行中；T33 ADR-0006 数据库落地（#34）已执行
+当前状态：M1–M5 已交付（等待负责人验收）；M6 IN_PROGRESS（T26/T27 完成、T28 进行中）；**ADR-0006 已落地**（PostgreSQL 只在 Ubuntu，Mac 经 SSH 隧道；2026-11-12 部署已执行）
 本机代码分支：`ticket/T33`（合并后为 `feat/bank-assistant`）
 本机代码SHA：以 `git log -1` 为准（T33 合并后刷新）
 Ubuntu代码SHA：`73babc3`（服务器 checkout；数据库部署使用仓库外部署副本，未改服务器工作树）
@@ -132,6 +132,10 @@ Ubuntu 与 Mac 同 SHA；两端 `uv run pytest tests -q` 均 144 用例全过（
 - `make test-e2e`：一次性本机 compose 数据库 + 隔离后端（replay）+ 前端 preview；Playwright 1 passed，截图在 `web/e2e/screenshots/`（gitignore）。
 - `make demo-real-model-smoke`：DeepSeek chat `status=succeeded` + fastembed embedding 512 维成功，未打印密钥。
 - **ADR-0006 过渡做法**：e2e 暂用本机一次性 compose 数据库的独立 `bank_assistant_demo`，不是隧道 + `*_test`；T33 只迁移正式数据库入口，e2e 切换另立工单。
+
+## M5 验收
+
+M5 报告：`docs/milestones/M5-report.md`（T25 交付）。web 48 tests、`make test-e2e` 1 passed（回放链路）、真实云模型冒烟成功（DeepSeek chat + BGE embedding）。工单 #23/#24/#25/#26 全部 DONE。
 
 ## M6 工单状态
 
