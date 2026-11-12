@@ -42,15 +42,20 @@ SSH 别名 `my-ubuntu-server`（Wi-Fi `192.168.1.27`，有线 `192.168.5.10`，�
 | 本机 | `.local-data/`、`.local-artifacts/`、`.local-backups/`（仓库内，已 gitignore） | 只放小型合成夹具与冒烟产物；本机沙箱不允许在仓库外写文件 |
 | Ubuntu | `~/workspace/bank-assistant/{data,artifacts,backups}/` | 数据集、评测产物、模型权重、备份（仓库外，不进 Git）；本项目在服务器上只占 `~/workspace/bank-assistant/` 一个目录，与其它项目（如 `dingtalk-project-assistant/`）平级 |
 
-## 数据库（唯一实例在 Ubuntu，ADR-0006）
+## 数据库（唯一实例在 Ubuntu，ADR-0006；2026-11-12 已部署）
 
 | 项 | 内容 |
 |---|---|
-| 部署位置 | **仅 Ubuntu**：PostgreSQL 18 容器（`deploy/compose.db.yml`），宿主端口绑定 `127.0.0.1:5432`（仅回环，不暴露到局域网/公网） |
-| Mac | 不安装、不创建、不启动本地 PostgreSQL；只保留可选的 `psql` 客户端 / DBX 等查看工具 |
-| 访问方式 | SSH 本地端口转发：`ssh -N -L 15432:127.0.0.1:5432 my-ubuntu-server` |
-| 连接参数 | 主机 `127.0.0.1`、端口 `15432`、`jdbc`/libpq 均可；DBX 填同样参数。**`localhost` 指 Mac 自己**，未建转发时连不上 |
-| 连接串 | `postgresql+psycopg://<user>:<password>@127.0.0.1:15432/<database>` |
+| 部署位置 | **仅 Ubuntu**：PostgreSQL 18（`postgres:18-alpine`），compose 项目 `bank-assistant-db`，容器 `bank-assistant-db-db-1`（healthy） |
+| 宿主绑定 | `127.0.0.1:5432`（仅回环；`docker port` = `5432/tcp -> 127.0.0.1:5432`，`ss -tln` 只有 `127.0.0.1:5432`） |
+| 数据目录 | `~/workspace/bank-assistant/data/pg`（bind mount 到容器 `/var/lib/postgresql`，PGDATA 在 `/var/lib/postgresql/18/docker`；属主 uid 70） |
+| 凭据文件 | 服务器 `~/workspace/bank-assistant/.env.pg`（仓库外，chmod 600）；Mac `.env`（gitignore，600）。**本文件不记录密码** |
+| compose 文件 | 源文件 `deploy/compose.db.yml`；服务器运行副本 `~/workspace/bank-assistant/deploy/compose.db.yml`（服务器 checkout 保持干净） |
+| 角色 | `bank`（该实例的管理角色）；四个库 owner 均为 `bank` |
+| Mac | 不安装、不创建、不启动本地 PostgreSQL；保留 `psql` 18.3 客户端仅用于查看 |
+| 访问方式 | SSH 本地端口转发：`make db-tunnel`（等价 `ssh -N -L 15432:127.0.0.1:5432 my-ubuntu-server`） |
+| 连接参数 | 主机 `127.0.0.1`、端口 `15432`、DBX/libpq 同参数。**`localhost` 指 Mac 自己**，未建转发时连不上 |
+| 连接串 | `postgresql+psycopg://bank:<password>@127.0.0.1:15432/bank_assistant_dev` |
 
 数据库按用途隔离（同一实例）：
 
@@ -58,8 +63,29 @@ SSH 别名 `my-ubuntu-server`（Wi-Fi `192.168.1.27`，有线 `192.168.5.10`，�
 |---|---|---|
 | `bank_assistant_dev` | 日常开发 | 开发者显式命令 |
 | `bank_assistant_demo` | 演示数据（`make seed-demo`） | 仅 seed 幂等写入，自动化测试不得清空 |
-| `bank_assistant_test` | 集成测试 | 测试脚本 |
+| `bank_assistant_test` | 集成测试 | 测试脚本（每次只重建 `public` schema） |
 | `bank_assistant_restore_check` | 备份恢复验证目标 | 恢复演练 |
+
+常用命令（Mac）：
+
+```bash
+make db-tunnel           # 建立隧道（幂等）；db-tunnel-status / db-tunnel-stop
+make doctor              # 隧道 + bank_assistant_test SELECT 1；隧道缺失非零退出
+make test-integration    # 重建 *_test schema → alembic upgrade head → pytest -m integration
+make seed-demo           # 经隧道写入 bank_assistant_demo（幂等，拒绝非 *_demo）
+make test-unit           # 无数据库依赖
+```
+
+服务器维护命令（只读/本容器，不触碰其它项目）：
+
+```bash
+cd ~/workspace/bank-assistant
+docker compose -p bank-assistant-db --env-file .env.pg -f deploy/compose.db.yml ps
+docker compose -p bank-assistant-db --env-file .env.pg -f deploy/compose.db.yml exec db pg_isready -U bank -d bank_assistant_dev
+docker inspect -f '{{.State.Health.Status}}' bank-assistant-db-db-1
+```
+
+隔离实测（2026-11-12）：Mac 直连 `192.168.5.10:5432` 与服务器自连其两块网卡 IP 均 `Connection refused`；服务器只监听 `127.0.0.1:5432`。Wi-Fi IP `192.168.1.27` 在 Mac 上会被 Clash/Mihomo TUN 接管，不能作为 LAN 直连判据，以有线 `192.168.5.10` 与服务器侧 `ss` 为准。
 
 服务器或隧道不可达时：单元测试与前端可继续；集成测试、迁移、seed、备份恢复必须**显式失败或标记 BLOCKED**，不得静默改用 SQLite/mock 并宣称验收通过。
 
@@ -74,10 +100,11 @@ SSH 别名 `my-ubuntu-server`（Wi-Fi `192.168.1.27`，有线 `192.168.5.10`，�
 
 ## 凭据与配置
 
-- `.env`（本机，已 gitignore，权限 600）：DeepSeek 官方 key、第三方中继 key、模型标识、预算上限。
-- `.env.example`：只有占位值，随仓库提交。
-- Ubuntu 上的 `.env` 由负责人另行放置，**不进 Git**；服务器不持有 GitHub 写凭据。
-- 本文件与任何提交中**不得出现**密钥、令牌、sudo 密码。
+- `.env`（本机，已 gitignore，权限 600）：DeepSeek 官方 key、第三方中继 key、模型标识、预算上限、`DATABASE_URL`（隧道入口 + 数据库密码）。
+- `.env.example`：只有占位值，随仓库提交（`DATABASE_URL` 的密码是 `<password>` 占位）。
+- Ubuntu 上的 `.env` 由负责人另行放置，**不进 Git**；数据库密码另存 `~/workspace/bank-assistant/.env.pg`（仓库外，chmod 600），compose 用 `--env-file` 读取。
+- 服务器不持有 GitHub 写凭据。
+- 本文件与任何提交中**不得出现**密钥、令牌、sudo 密码、数据库密码。
 
 ## 已知环境限制
 

@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # make test-e2e：一次性 PostgreSQL 18 容器 + 隔离后端 + 前端 preview + Playwright。
 #
-# ADR-0006 过渡期说明（必须保留在报告里）：
-# - 正式方案是 Mac 经 SSH 隧道访问 Ubuntu 的 bank_assistant_test 库；
-# - 当前 T25 先把 e2e 跑通，使用**本机 compose 数据库**（独立项目名/端口/卷），
-#   库名固定 bank_assistant_demo，绝不接触 dev/test/restore 库；
-# - TODO(数据库访问工单)：切换为隧道 + bank_assistant_test 后移除本机 compose。
+# ADR-0006 说明（必须保留在报告里）：
+# - 正式数据库在 Ubuntu，Mac 经 SSH 隧道访问（见 scripts/pg-tunnel.sh）；
+# - e2e 仍使用**一次性本机 compose 数据库**（独立项目名/端口/数据目录），
+#   库名固定 bank_assistant_demo，绝不接触 Ubuntu 上的 dev/test/restore 库；
+# - 这是 T25 遗留的隔离做法，切到隧道需要另立工单（e2e 需要可清空的演示库）。
 #
 # 端到端全程 MODEL_MODE=replay：候选答复与质检 worker 都不调用真实云模型；
 # 真实云链路证据由独立目标 make demo-real-model-smoke 提供。
@@ -41,6 +41,8 @@ export POSTGRES_USER="bank_e2e"
 export POSTGRES_PASSWORD="bank_e2e_local_only"
 export POSTGRES_DB="bank_assistant_demo"
 export POSTGRES_PORT
+# compose.db.yml 要求显式数据目录（ADR-0006 服务器用 bind mount）。
+export PG_DATA_DIR="$REPO_ROOT/.e2e/pg"
 export DATABASE_URL="postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.0.1:${POSTGRES_PORT}/${POSTGRES_DB}"
 export APP_ENV="testing"
 export SECRET_KEY="e2e-only-not-a-real-secret-0123456789abcdef"
@@ -73,6 +75,7 @@ cleanup() {
   wait "$API_PID" >/dev/null 2>&1 || true
   wait "$WEB_PID" >/dev/null 2>&1 || true
   compose down -v --remove-orphans >/dev/null 2>&1 || true
+  rm -rf "$PG_DATA_DIR"
   exit "$status"
 }
 trap cleanup EXIT INT TERM
@@ -90,6 +93,9 @@ if ! (cd web && node -e "const {chromium}=require('@playwright/test'); const fs=
 fi
 
 mkdir -p "$DATA_ROOT"
+# 保持“一次性数据库”语义：bind mount 不会被 compose down -v 删除，这里显式清空。
+rm -rf "$PG_DATA_DIR"
+mkdir -p "$PG_DATA_DIR"
 
 echo "-- 启动一次性 PostgreSQL 18（项目 ${PROJECT_NAME}，127.0.0.1:${POSTGRES_PORT}/${POSTGRES_DB}）"
 compose up -d --wait --wait-timeout 120

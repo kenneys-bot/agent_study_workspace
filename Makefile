@@ -6,13 +6,22 @@ ENV_FILE ?= .env
 TRAIN_CONFIG ?= configs/train/qlora-intent-qwen3-0.6b.yaml
 TRAIN_ARGS ?= --dry-run
 
-.PHONY: help doctor test-unit test-integration test-e2e e2e build web-install web-dev web-build web-test up down smoke seed-demo seed-demo-accounts seed-demo-conversations demo-reset demo-real-model-smoke dataset-build dataset-verify index-rebuild index-info worker sync-check eval train backup restore-check clean
+.PHONY: help doctor db-tunnel db-tunnel-stop db-tunnel-status test-unit test-integration test-e2e e2e build web-install web-dev web-build web-test up down smoke seed-demo seed-demo-accounts seed-demo-conversations demo-reset demo-real-model-smoke dataset-build dataset-verify index-rebuild index-info worker sync-check eval train backup restore-check clean
 
 help: ## 列出可用命令
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
-doctor: ## 检查本机依赖、配置与端口（不打印任何秘密值）
+doctor: ## 检查依赖、配置、SSH 隧道与 bank_assistant_test（不打印任何秘密值）
 	@bash scripts/doctor.sh
+
+db-tunnel: ## 建立 SSH 隧道 127.0.0.1:15432 → Ubuntu PostgreSQL（ADR-0006，幂等）
+	@bash scripts/pg-tunnel.sh start
+
+db-tunnel-stop: ## 停止由 db-tunnel 启动的 SSH 隧道
+	@bash scripts/pg-tunnel.sh stop
+
+db-tunnel-status: ## 查看 SSH 隧道状态
+	@bash scripts/pg-tunnel.sh status
 
 test-unit: ## 无网络、无真实凭据的单元测试（不含 integration 标记）
 	@$(UV) run pytest tests -q -m "not integration"
@@ -37,10 +46,10 @@ web-test: ## 前端组件测试（mock fetch，不需要真实后端）
 	@cd web && npm run test
 
 # ---- 以下命令在对应里程碑实现，未实现时必须非零退出，不能假装成功 ----
-test-integration: ## [M2] PostgreSQL 空库迁移与数据库连通性集成测试
+test-integration: ## [M2] 经 SSH 隧道在 Ubuntu bank_assistant_test 上做空库迁移与集成测试
 	@bash scripts/test-integration.sh
 
-test-e2e: ## [M5] 浏览器端到端：隔离 compose 数据库 + 后端 + 前端（Playwright）
+test-e2e: ## [M5] 浏览器端到端：一次性隔离数据库 + 后端 + 前端（Playwright；见 T25 说明）
 	@bash scripts/test-e2e.sh
 
 e2e: test-e2e ## [M5] test-e2e 的别名（issue #26 使用 make e2e）
@@ -56,11 +65,8 @@ down: ## 停止并移除 API 容器
 smoke: ## [M1] 真实启动容器，断言存活、就绪与错误路径
 	@bash scripts/smoke.sh
 
-seed-demo: ## [M3/M4/M5] 幂等导入：演示账号 + 知识 + 规则 + 六段会话与待复核质检
-	@$(UV) run python scripts/seed_demo_accounts.py
-	@$(UV) run python scripts/seed_demo.py
-	@$(UV) run python scripts/seed_demo_rules.py
-	@$(UV) run python scripts/seed_demo_conversations.py
+seed-demo: ## [M3/M4/M5] 幂等导入到 bank_assistant_demo（经隧道；拒绝非 *_demo 库）
+	@bash scripts/seed-demo.sh
 
 seed-demo-conversations: ## [M5] 只导入六段合成演示会话并生成待复核质检（需先有账号/规则）
 	@$(UV) run python scripts/seed_demo_conversations.py
