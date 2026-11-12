@@ -7,9 +7,10 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_ROOT"
 
 COMPOSE_FILE="deploy/compose.db.yml"
-PROJECT_NAME="bank-assistant-test"
+# 并行 worktree 会同时跑集成测试：项目名与端口按 PID 派生，避免互相清理。
+PROJECT_NAME="bank-assistant-test-$$"
 # 测试专用端口，避免撞上本机开发用的 5432；可用 POSTGRES_PORT 覆盖。
-POSTGRES_PORT="${POSTGRES_PORT:-55432}"
+POSTGRES_PORT="${POSTGRES_PORT:-$((55432 + ($$ % 400)))}"
 
 # 一次性测试容器的凭据与占位密钥：不是任何环境的真实秘密。
 # 显式 export，优先级高于开发者本机 .env，保证测试目标确定。
