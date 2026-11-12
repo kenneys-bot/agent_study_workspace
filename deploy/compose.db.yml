@@ -1,0 +1,31 @@
+# 本机开发/测试用 PostgreSQL 18（ADR-0002）。
+# 凭据只从环境变量读取；下列默认值是明确标注的本地开发默认值，不是任何环境的秘密，
+# 也禁止在仓库里写入真实凭据。测试脚本用独立 compose 项目名复用本文件。
+name: bank-assistant-db
+
+services:
+  db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-bank}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-bank_local_dev_only}
+      POSTGRES_DB: ${POSTGRES_DB:-bank_assistant}
+    ports:
+      # 只绑本机回环，不暴露到局域网。
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      # PostgreSQL 18 起 PGDATA 在 /var/lib/postgresql/<major>/docker，
+      # 因此卷挂到父目录 /var/lib/postgresql（官方镜像的 VOLUME 位置）。
+      - db_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+    restart: unless-stopped
+
+volumes:
+  # 不写死 name，让 compose 按项目名隔离：开发项目与测试项目各自独立，
+  # 测试结束 down -v 只删除测试项目的卷。
+  db_data:
