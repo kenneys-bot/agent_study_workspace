@@ -14,6 +14,8 @@
   反馈不是正确性标签，不得作为评测的 ground-truth；
 - ``rule_sets`` / ``rule_versions``：质检规则的身份、版本内容与生命周期
   （T17，M4-01）；发布后内容不可覆盖。
+- ``inspection_runs`` / ``findings``：一次质检运行的规则快照、状态与逐规则
+  机器判断（T18，M4-03）；机器判断写入后不可覆盖。
 
 所有时间列为 ``timestamptz``，写入前统一为 UTC（契约 §1）。
 """
@@ -50,6 +52,10 @@ from bank_assistant.knowledge.lifecycle import KnowledgeStatus, PublishedContent
 from bank_assistant.rules.lifecycle import PublishedRuleImmutable, RuleStatus
 
 TASK_STATUS_CHECK = "status IN ('queued', 'running', 'succeeded', 'failed', 'cancelled')"
+INSPECTION_STATUS_CHECK = TASK_STATUS_CHECK
+FINDING_VERDICT_CHECK = (
+    "machine_verdict IN ('hit', 'clear', 'insufficient_evidence', 'not_applicable')"
+)
 
 
 class User(Base):
@@ -736,3 +742,141 @@ def _reject_published_rule_change(
         or RuleStatus.PUBLISHED.value in previous_statuses
     ):
         raise PublishedRuleImmutable(target.rule_version_id)
+
+
+# ---------------------------------------------------------------------------
+# 质检运行与机器判断（T18，M4-03；契约 §2 InspectionRun / Finding）
+# ---------------------------------------------------------------------------
+
+
+class FindingImmutable(RuntimeError):
+    """机器判断写入后不可覆盖（契约 §2「机器判断不可被人工覆盖」）。
+
+    人工复核结论由后续票的 ReviewDecision 追加保存，绝不能改写这里。
+    """
+
+    def __init__(self, finding_id: UUID) -> None:
+        self.finding_id = finding_id
+        super().__init__(f"机器判断不可覆盖: {finding_id}")
+
+
+class InspectionRun(Base):
+    """一次质检运行（契约 §2 InspectionRun、§3「质检任务」）。
+
+    - ``rule_snapshot`` 是创建时固化的已发布规则版本集合（JSON），worker 只按
+      快照判断；规则之后被退役不会改变本次质检的规则集；
+    - ``conversation_hash`` 是创建时会话原文的 SHA-256，worker 执行前复核，
+      会话不可变（T12）被破坏时显式失败而不是按新内容判断；
+    - ``status`` 只允许 ``queued → running → succeeded/failed/cancelled``；
+    - ``task_id`` 关联租约队列里的任务（唯一），``parent_run_id`` 预留重试运行
+      记录链（M4-05）；``run_id`` 指向模型运行追溯记录（契约 §1）；
+    - ``diagnostics`` 只放安全诊断信息（错误码、规则编码、校验原因），不放
+      会话正文、模型原始输出或凭据。
+    """
+
+    __tablename__ = "inspection_runs"
+    __table_args__ = (
+        CheckConstraint(
+            INSPECTION_STATUS_CHECK, name="ck_inspection_runs_status"
+        ),
+        UniqueConstraint("task_id", name="uq_inspection_runs_task_id"),
+        Index("ix_inspection_runs_conversation_id", "conversation_id"),
+        Index("ix_inspection_runs_scope_status", "scope_id", "status"),
+    )
+
+    inspection_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    conversation_id: Mapped[UUID] = mapped_column(
+        ForeignKey("conversations.conversation_id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    conversation_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    rule_snapshot: Mapped[dict[str, Any]] = mapped_column(
+        JSON, nullable=False, default=dict
+    )
+    run_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("model_runs.run_id"), nullable=True
+    )
+    status: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default="queued",
+        server_default=text("'queued'"),
+    )
+    error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    diagnostics: Mapped[dict[str, Any]] = mapped_column(
+        JSON, nullable=False, default=dict
+    )
+    started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    finished_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    parent_run_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("inspection_runs.inspection_id"), nullable=True
+    )
+    scope_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    task_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("tasks.task_id"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+
+class Finding(Base):
+    """逐规则的机器判断（契约 §2 Finding、§4 证据 JSON）。
+
+    ``machine_verdict`` 是模型 + 确定性校验后的判断，写入后不可修改；人工复核
+    只能追加 ReviewDecision，不能覆盖。``(inspection_id, rule_version_id)``
+    唯一：同一运行对同一规则版本只会有一条最终判断，重复投递不会产生重复行。
+    ``severity`` 来自规则版本，不是模型自报。
+    """
+
+    __tablename__ = "findings"
+    __table_args__ = (
+        CheckConstraint(FINDING_VERDICT_CHECK, name="ck_findings_machine_verdict"),
+        CheckConstraint(RULE_SEVERITY_CHECK, name="ck_findings_severity"),
+        UniqueConstraint(
+            "inspection_id",
+            "rule_version_id",
+            name="uq_findings_inspection_rule_version",
+        ),
+        Index("ix_findings_inspection_id", "inspection_id"),
+    )
+
+    finding_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    inspection_id: Mapped[UUID] = mapped_column(
+        ForeignKey("inspection_runs.inspection_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    rule_version_id: Mapped[UUID] = mapped_column(
+        ForeignKey("rule_versions.rule_version_id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    machine_verdict: Mapped[str] = mapped_column(String(32), nullable=False)
+    severity: Mapped[str] = mapped_column(String(16), nullable=False)
+    rationale: Mapped[str] = mapped_column(Text, nullable=False)
+    evidence: Mapped[list[Any]] = mapped_column(
+        JSON, nullable=False, default=list
+    )
+    knowledge_refs: Mapped[list[Any]] = mapped_column(
+        JSON, nullable=False, default=list
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+@event.listens_for(Finding, "before_update")
+def _reject_finding_update(
+    mapper: Any, connection: Any, target: Finding
+) -> None:
+    """ORM 层兜底：机器判断只能追加，任何 UPDATE 都显式失败。"""
+    raise FindingImmutable(target.finding_id)

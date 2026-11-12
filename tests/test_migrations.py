@@ -18,7 +18,9 @@ CHUNKS_REVISION = "0006_knowledge_chunks"
 SUGGESTIONS_REVISION = "0007_suggestions"
 RULES_REVISION = "0008_rules"
 FEEDBACK_REVISION = "0008_suggestion_feedback"
+INSPECTIONS_REVISION = "0009_inspections"
 M2_MERGE_HEAD = "cf1edc530a0c"
+M4_RULES_MERGE_HEAD = "8889f869f465"
 
 
 def _script() -> ScriptDirectory:
@@ -96,3 +98,14 @@ def test_rules_revision_extends_0007():
     assert revision is not None
     assert revision.down_revision == SUGGESTIONS_REVISION
     assert RULES_REVISION in {item.revision for item in script.walk_revisions()}
+
+
+def test_inspections_revision_extends_the_m4_merge_head():
+    """T18 的 inspection_runs/findings 只能接在 M4 合并 head 之后，保持单一 head。"""
+    script = _script()
+    revision = script.get_revision(INSPECTIONS_REVISION)
+
+    assert revision is not None
+    assert revision.down_revision == M4_RULES_MERGE_HEAD
+    assert INSPECTIONS_REVISION in {item.revision for item in script.walk_revisions()}
+    assert script.get_current_head() == INSPECTIONS_REVISION
