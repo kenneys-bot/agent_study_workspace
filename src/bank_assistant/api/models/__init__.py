@@ -26,6 +26,7 @@ from .script_recommender import (
 
 from .quality_inspector import (
     ParseConversationRequest,
+    ParseConversationResponse,
     TranscribeRequest,
     TranscribeResponse,
     InspectRequest,
@@ -55,6 +56,7 @@ __all__ = [
     "PersonalizeScriptResponse",
     # 质检助手
     "ParseConversationRequest",
+    "ParseConversationResponse",
     "TranscribeRequest",
     "TranscribeResponse",
     "InspectRequest",

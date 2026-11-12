@@ -4,12 +4,13 @@
 
 import logging
 from fastapi import APIRouter, HTTPException, Depends
+from fastapi.responses import JSONResponse
 from typing import List
 
 from bank_assistant.core.llm_client import get_llm_client, LLMClient
 from bank_assistant.api.models.quality_inspector import (
     ParseConversationRequest,
-    ParsedConversationResponse,
+    ParseConversationResponse,
     TranscribeRequest,
     TranscribeResponse,
     InspectRequest,
@@ -29,6 +30,9 @@ from bank_assistant.assistants.quality_inspector import (
     ReportGenerator,
     ReviewWorkflow,
     ParsedConversation
+)
+from bank_assistant.assistants.quality_inspector.conversation_parser import (
+    ConversationParseError,
 )
 
 logger = logging.getLogger(__name__)
@@ -62,7 +66,7 @@ def get_review_workflow() -> ReviewWorkflow:
     return ReviewWorkflow()
 
 
-@router.post("/parse-conversation", response_model=ParsedConversationResponse)
+@router.post("/parse-conversation", response_model=ParseConversationResponse)
 async def parse_conversation(
     request: ParseConversationRequest,
     parser: ConversationParser = Depends(get_conversation_parser)
@@ -77,28 +81,43 @@ async def parse_conversation(
     try:
         parsed = parser.parse_conversation(
             request.content,
-            request.format
+            request.format,
+            request.session_id
         )
         
         format_detected = parser.detect_format(request.content)
         
-        return ParsedConversationResponse(
+        return ParseConversationResponse(
             session_id=parsed.session_id,
             participants=parsed.participants,
             turns=[
                 {
+                    "ordinal": turn.ordinal,
                     "speaker": turn.speaker,
                     "content": turn.content,
-                    "timestamp": turn.timestamp.isoformat() if turn.timestamp else None,
+                    "timestamp": turn.timestamp,
                     "emotion": turn.emotion,
                     "intent": turn.intent
                 }
                 for turn in parsed.turns
             ],
             metadata=parsed.metadata,
-            format_detected=format_detected
+            format_detected=format_detected,
+            raw_text=parsed.raw_text
         )
         
+    except ConversationParseError as e:
+        # 非法输入：4xx + 稳定错误码，并在 details 中保留原文供调用方核对
+        logger.warning(f"对话解析输入非法 [{e.code}]: {e.message}")
+        return JSONResponse(
+            status_code=e.http_status,
+            content={
+                "code": e.code,
+                "message": e.message,
+                "retryable": False,
+                "details": {"raw_text": e.raw_text}
+            }
+        )
     except Exception as e:
         logger.error(f"对话解析失败: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
