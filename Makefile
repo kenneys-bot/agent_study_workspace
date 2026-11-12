@@ -10,7 +10,7 @@ REMOTE_REPO := $(REMOTE_ROOT)/repo
 TRAIN_CONFIG ?= configs/train/qlora-intent-qwen3-0.6b.yaml
 TRAIN_ARGS ?= --dry-run
 
-.PHONY: help doctor db-tunnel db-tunnel-stop db-tunnel-status test-unit test-integration test-e2e e2e build web-install web-dev web-build web-test up down smoke seed-demo seed-demo-accounts seed-demo-conversations demo-reset demo-real-model-smoke dataset-build dataset-verify index-rebuild index-info worker sync-check eval train backup restore-check deploy rollback verify-deploy deploy-index clean
+.PHONY: help doctor db-tunnel db-tunnel-stop db-tunnel-status test-unit test-integration test-e2e e2e build web-install web-dev web-build web-test up down smoke seed-demo seed-demo-accounts seed-demo-conversations demo-reset demo-real-model-smoke dataset-build dataset-verify index-rebuild index-info worker sync-check eval train backup restore-check deploy rollback verify-deploy deploy-index release-verify clean
 
 help: ## 列出可用命令
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -122,6 +122,9 @@ verify-deploy: ## [M7] 校验已部署实例：live/ready、回环端口、版�
 
 deploy-index: ## [M7] 用已部署镜像在服务器重建索引（一次性容器，不写源码树）
 	@DEPLOY_HOST=$(DEPLOY_HOST) REMOTE_ROOT=$(REMOTE_ROOT) bash scripts/deploy_index.sh
+
+release-verify: ## [M7] 对照 release.json 核对线上 image id/alembic head/索引/health/version，不一致非零退出
+	@DEPLOY_HOST=$(DEPLOY_HOST) bash scripts/release_verify.sh
 
 clean: ## 清理解释器缓存与测试缓存（不动数据与归档）
 	@find . -name '__pycache__' -type d -not -path './archive/*' -prune -exec rm -rf {} + 2>/dev/null || true

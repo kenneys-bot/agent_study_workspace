@@ -22,11 +22,36 @@
 | M1 修通后端 | READY_FOR_ACCEPTANCE | [M1 报告](docs/milestones/M1-report.md) |
 | M2 存储与权限 | READY_FOR_ACCEPTANCE | [M2 报告](docs/milestones/M2-report.md) |
 | M3 坐席辅助 | READY_FOR_ACCEPTANCE | [M3 报告](docs/milestones/M3-report.md) |
-| M4 质检闭环 / M5 工作台 | READY_FOR_ACCEPTANCE | [M5 报告](docs/milestones/M5-report.md) |
-| M6 数据集与评测 | READY_FOR_ACCEPTANCE | [M6 报告](docs/milestones/M6-report.md)、[评测说明](docs/eval/README.md)；T28 真实训练 NOT_RUN |
-| M7 部署与恢复演练 | READY_FOR_ACCEPTANCE | [M7 部署报告](docs/milestones/M7-deploy-report.md)、[运维手册](docs/ops/runbook.md) |
+| M4 质检闭环 | READY_FOR_ACCEPTANCE | [M4 报告](docs/milestones/M4-report.md) |
+| M5 工作台与演示 | READY_FOR_ACCEPTANCE | [M5 报告](docs/milestones/M5-report.md) |
+| M6 数据集与评测 | READY_FOR_ACCEPTANCE | [M6 报告](docs/milestones/M6-report.md)、[评测说明](docs/eval/README.md)；Recall@5 0.833 未达 0.85、引用支持度 NOT_MEASURED、真实训练 NOT_RUN |
+| M7 生产就绪与发布包 | READY_FOR_ACCEPTANCE（交付完整；计划 §7 门槛未全部达成） | [M7 验收报告](docs/milestones/M7-report.md)、[M7 部署](docs/milestones/M7-deploy-report.md)、[M7 观测](docs/milestones/M7-observability-report.md)、[运维手册](docs/ops/runbook.md) |
 
 唯一进度状态源是 [docs/implementation-status.md](docs/implementation-status.md)；阶段报告在 `docs/milestones/`。
+**没有任何里程碑被标为 ACCEPTED**：负责人尚未逐项签收；执行模型不代填。
+
+## Release v0.1.0
+
+首个可追溯的**个人展示发布**（不是生产部署授权）：
+
+| 项 | 值 |
+|---|---|
+| 代码 SHA | `59a586976093b2e9359fec97baec6d2f1ee4d6ad`（`59a5869`） |
+| 镜像 | `bank-assistant:api-59a5869`（`sha256:1c7dc47e…96be`，`linux/amd64`） |
+| 部署 | `my-ubuntu-server` 容器 `bank-assistant-api`，仅 `127.0.0.1:8000` |
+| Alembic head | `0011_report_exports` |
+| 索引 | `idx-20261112T110703Z-2334d03e`，校准 `136e030a…`，`BAAI/bge-small-zh-v1.5@512` |
+| 生成模型 | `deepseek` / `deepseek-chat`（`live`） |
+
+- 发布记录：[docs/releases/v0.1.0.md](docs/releases/v0.1.0.md)
+- 机器可读清单：[release.json](release.json)
+- 一条命令核对线上身份：`make release-verify`（image id、Alembic head、索引、`/health`、`/system/version`）
+- 依赖审计：[docs/ops/dependency-audit.md](docs/ops/dependency-audit.md)（`chromadb 1.5.9` 有上游未修复公告，已登记）
+- 风险清单：[docs/ops/risk-register.md](docs/ops/risk-register.md)
+
+发布边界：全部为合成数据，无银行系统接入，无生产许可；Recall@5 0.833 未达门槛、
+引用支持度未测、24h/并发压测未跑、真实训练 NOT_RUN。详见
+[M7 验收报告](docs/milestones/M7-report.md)。
 
 ## 快速开始
 
@@ -55,8 +80,9 @@ make seed-demo            # 经隧道写入 bank_assistant_demo（幂等）
 
 `localhost` 指 Mac 自己；只有建立转发后 `127.0.0.1:15432` 才指向服务器。数据库按用途隔离：`bank_assistant_dev` / `bank_assistant_demo` / `bank_assistant_test` / `bank_assistant_restore_check`——自动化测试只碰 `*_test`，`seed-demo` 只写 `*_demo`，恢复验证只写 `*_restore_check`，不明原因连不上就**显式失败**，不回退 SQLite/mock。详见 [ADR-0006](docs/adr/0006-postgres-on-ubuntu-only.md) 与 [docs/environment.md](docs/environment.md)。
 
-`eval / backup / restore-check / deploy / rollback` 均已实现；条件任务 `train` 仍未实现，
-会**非零退出**，不会假装成功。
+`eval / backup / restore-check / deploy / rollback / release-verify` 均已实现。
+条件任务 `train` 默认是 dry-run（不训练、写 NOT_RUN 报告）；真实训练需空闲 GPU 与
+安装授权，不属于本次发布，详见 [M6 微调报告](docs/milestones/M6-tuning-report.md)。
 
 ### 部署与运维（M7，Ubuntu）
 
