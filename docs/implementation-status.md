@@ -1,11 +1,11 @@
 # 执行进度
 
-当前里程碑：M5（进行中）；M1–M4 已交付
-当前任务：M6 T28 条件性微调（#29）与 T33 ADR-0006 数据库落地（#34）并行
-当前状态：M1–M5 已交付（等待负责人验收）；M6 IN_PROGRESS（T26/T27 完成、T28 进行中）；ADR-0006 数据库落地（#34）进行中
-本机代码分支：`feat/bank-assistant`
-本机代码SHA：`979b076`（后续提交见 git log）
-Ubuntu代码SHA：`2c5e0d7`（M3 期间的同步点；集成分支已前进，下次合并后刷新）
+当前里程碑：M5 已交付（待负责人验收）；M6 进行中
+当前任务：M6 T28 条件性微调（#29）进行中；T33 ADR-0006 数据库落地（#34）已执行
+当前状态：M1–M5 已交付（等待负责人验收）；M6 IN_PROGRESS（T26/T27 完成、T28 进行中）；**ADR-0006 已落地**（PostgreSQL 只在 Ubuntu，Mac 经 SSH 隧道；2026-11-12 部署已执行）
+本机代码分支：`ticket/T33`（合并后为 `feat/bank-assistant`）
+本机代码SHA：以 `git log -1` 为准（T33 合并后刷新）
+Ubuntu代码SHA：`73babc3`（服务器 checkout；数据库部署使用仓库外部署副本，未改服务器工作树）
 最近更新：2026-11-12（Asia/Shanghai）
 
 ## 任务状态
@@ -35,23 +35,42 @@ Ubuntu代码SHA：`2c5e0d7`（M3 期间的同步点；集成分支已前进，�
 | #13 T12 会话持久化与审计 | DONE | 迁移 0004 + merge revision；integration 40 passed |
 | #14 T13 幂等与任务表 | DONE | 迁移 0005；幂等/租约集成测试通过 |
 
-## 架构调整：数据库集中到 Ubuntu（2026-11-12）
+## 数据库集中到 Ubuntu（ADR-0006，2026-11-12 部署已执行）
 
-**已完成的文档修改**（本次，未执行任何数据库/容器操作）：新增 `docs/adr/0006-postgres-on-ubuntu-only.md`；`docs/adr/0002-database-and-index.md` 标记 superseded；计划书 v1.2（§4.1/§4.2/§4.3/M2 验收）、执行交接（命令前置条件与 BLOCKED 语义）、README、`docs/environment.md`、M0–M3 历史报告加注。
+**执行结果**（密码不写入任何文档/提交/日志）：
 
-**待实现的配置/脚本/测试入口调整**（属后续工单，未做）：
+| 项 | 实际值 |
+|---|---|
+| 实例 | Ubuntu `my-ubuntu-server`，PostgreSQL 18（`postgres:18-alpine`），容器 `bank-assistant-db-db-1`，状态 healthy |
+| 端口 | 宿主仅 `127.0.0.1:5432`（`ss -tln` 仅回环；`docker port` 为 `5432/tcp -> 127.0.0.1:5432`） |
+| 数据目录 | `~/workspace/bank-assistant/data/pg`（bind mount，属主 uid 70；不再用匿名卷） |
+| 凭据 | 服务器 `~/workspace/bank-assistant/.env.pg`（仓库外，chmod 600）；Mac `.env`（gitignore，600）；未进 Git/日志 |
+| 角色/库 | 角色 `bank`；库 `bank_assistant_dev` / `bank_assistant_demo` / `bank_assistant_test` / `bank_assistant_restore_check`，owner 均为 `bank` |
+| 部署文件 | 源文件 `deploy/compose.db.yml`；服务器使用仓库外部署副本 `~/workspace/bank-assistant/deploy/compose.db.yml`（服务器工作树保持干净） |
 
-| 项 | 现状（旧方案） | 目标（ADR-0006） |
-|---|---|---|
-| `scripts/doctor.sh` | 检查本机 docker 与 5432 端口 | 检查 SSH 隧道与 `*_test` 库可达性；本机不再要求数据库 |
-| `scripts/test-integration.sh` | 本机起 compose PG（`deploy/compose.db.yml`） | 连隧道 `127.0.0.1:15432` 的 `bank_assistant_test`；隧道不通则非零退出并说明 |
-| `.env.example` / `.env` | `DATABASE_URL=...@localhost:5432/...` | `...@127.0.0.1:15432/bank_assistant_dev`；新增 `*_demo`/`*_test`/`*_restore_check` 说明 |
-| `make seed-demo` | 连本机库 | 连隧道写 `bank_assistant_demo`，幂等，不触达测试库 |
-| `make backup` / `restore-check` | 未实现 | 在 Ubuntu 上 `pg_dump` 到 `~/workspace/bank-assistant/backups`；恢复到 `bank_assistant_restore_check`，不得覆盖源库 |
-| `deploy/compose.db.yml` | 本机与服务器都用 | 仅服务器使用，保持 `127.0.0.1:5432` 回环绑定 |
-| CI/复现说明 | 默认本机有 PG | 需自备服务器 + 隧道；无数据库时只跑 `make test-unit` |
+**配置/脚本迁移（已完成）**：
 
-**边界**：以上是计划调整，不代表部署已改变。服务器上的数据库、容器、凭据本次均未动。
+| 项 | 现在 |
+|---|---|
+| `scripts/pg-tunnel.sh` + `make db-tunnel` / `db-tunnel-stop` / `db-tunnel-status` | 幂等建立/停止 `127.0.0.1:15432 → 服务器 127.0.0.1:5432`，pidfile 在 `.local-data/`，不杀未知进程 |
+| `scripts/doctor.sh` | 检查隧道端口 + `SELECT 1` on `bank_assistant_test`；隧道缺失时非零退出并打印 ADR-0006 步骤；不再要求本机 Docker/PG |
+| `scripts/test-integration.sh` | 隧道 + 仅重建 `*_test` 的 public schema，`alembic upgrade head`，再跑 `pytest -m integration`；无隧道非零退出 |
+| `scripts/seed-demo.sh` + `make seed-demo` | 固定写 `bank_assistant_demo`（可由 `DEMO_DATABASE_URL` 覆盖但必须以 `_demo` 结尾），幂等，拒绝 test/dev/restore |
+| `.env.example` / `.env` | `DATABASE_URL=postgresql+psycopg://bank:<password>@127.0.0.1:15432/bank_assistant_dev`；文档说明四个库 |
+| `deploy/compose.db.yml` | 仅服务器使用；`PG_DATA_DIR` 必须显式、`POSTGRES_PASSWORD` 必须由 env-file 提供，端口保持回环 |
+| `make test-unit` | 仍为无数据库依赖（conftest 显式 sqlite 替身） |
+| `make backup` / `restore-check` | 仍属 M7，未实现（非零退出）；目标库已就绪 `bank_assistant_restore_check` |
+
+**验证证据（2026-11-12，Mac 侧经隧道）**：
+
+- `make test-integration`：`130 passed`，目标 `127.0.0.1:15432/bank_assistant_test`；迁移 head `0011_report_exports`。
+- `alembic upgrade head`：`bank_assistant_dev` 与 `bank_assistant_demo` 均到 `0011_report_exports (head)`。
+- `make seed-demo` 两次：第一次建 32 知识/32 版本/6 规则/6 会话；第二次 0 新建、全部哈希一致跳过；`bank_assistant_dev` 仍为 0 行，`bank_assistant_test` 计数不变。
+- `make doctor`：隧道建立时通过；`make db-tunnel-stop` 后非零退出并打印 ADR-0006 步骤。
+- LAN 隔离：服务器 `ss -tln` 仅 `127.0.0.1:5432`；Mac 直连 `192.168.5.10:5432` 返回 `Connection refused`（不能从局域网直连）。
+- Mac 无本项目本地 PG：`docker ps` 无 `bank-assistant-db`/`bank-assistant-test` 项目容器，本机 5432 无监听。
+
+**边界**：`make test-e2e` 仍使用一次性本机 compose 数据库（T25 遗留的隔离路径），切到隧道需另立工单；服务器上其它容器与 `dingtalk-*` 未触碰。
 
 ## 服务器目录整理（2026-11-12，已执行）
 
@@ -112,7 +131,7 @@ Ubuntu 与 Mac 同 SHA；两端 `uv run pytest tests -q` 均 144 用例全过（
 - `make demo-reset`：只允许 `DB=bank_assistant_demo CONFIRM=yes`，URL 库名必须精确匹配；拒绝 dev/test/restore 与 staging/production；dry-run 与真实清空均验证。
 - `make test-e2e`：一次性本机 compose 数据库 + 隔离后端（replay）+ 前端 preview；Playwright 1 passed，截图在 `web/e2e/screenshots/`（gitignore）。
 - `make demo-real-model-smoke`：DeepSeek chat `status=succeeded` + fastembed embedding 512 维成功，未打印密钥。
-- **ADR-0006 过渡做法**：e2e 暂用本机 compose 的独立 `bank_assistant_demo`，不是隧道 + `*_test`；TODO 指向后续数据库访问工单，落地后移除本机 compose 依赖。
+- **ADR-0006 过渡做法**：e2e 暂用本机一次性 compose 数据库的独立 `bank_assistant_demo`，不是隧道 + `*_test`；T33 只迁移正式数据库入口，e2e 切换另立工单。
 
 ## M5 验收
 
@@ -124,6 +143,7 @@ M5 报告：`docs/milestones/M5-report.md`（T25 交付）。web 48 tests、`mak
 |---|---|---|
 | #27 T26 数据集构建与冻结 | DONE | 330 检索/186 质检、按组 60/20/20、manifest 哈希两次一致 |
 | #28 T27 评测脚本与基线对比 | READY_FOR_ACCEPTANCE | `make eval` 全量 replay（50 检索/48 质检，1014 条预测）；live 20 条真实 DeepSeek（p50 1.23s、p95 1.66s、¥0.338 估算）；产物 `artifacts/evals/eval-replay-…103010Z`、`eval-live-…102704Z` |
+| #34 T33 数据库迁到 Ubuntu + SSH 隧道 | DONE（部署已执行） | PG18 容器 healthy；四库 owner=bank；`make test-integration` 130 passed；`make doctor` 隧道缺失失败/建立通过；`make seed-demo` 幂等且不触达 dev/test；LAN 直连失败 |
 | #29 T28 条件性微调 | BLOCKED | 等 #28 验收 |
 
 ## M4 验收
