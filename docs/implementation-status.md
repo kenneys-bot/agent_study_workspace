@@ -1,7 +1,7 @@
 # 执行进度
 
 当前里程碑：M1（已交付）→ M2（进行中）
-当前任务：M2 T11/T12/T13 并行（#12/#13/#14）
+当前任务：M2 T11 知识生命周期（#12）
 当前状态：M1 READY_FOR_ACCEPTANCE；M2 IN_PROGRESS
 本机代码分支：`feat/bank-assistant`
 本机代码SHA：`979b076`（后续提交见 git log）
@@ -32,8 +32,8 @@ Ubuntu代码SHA：见下方 M0-03 证据（同一 SHA）
 | #9 T08 错误码契约 | DONE | 144 passed / 0 failed |
 | #11 T10 认证 | DONE | 163 passed；integration 13 passed；alembic 0001→0002 |
 | #12 T11 知识生命周期 | IN_PROGRESS | worktree 中进行（迁移 0003） |
-| #13 T12 会话持久化与审计 | IN_PROGRESS | worktree 中进行（迁移 0004） |
-| #14 T13 幂等与任务表 | IN_PROGRESS | worktree 中进行（迁移 0005） |
+| #13 T12 会话持久化与审计 | DONE | 迁移 0004 + merge revision；integration 40 passed |
+| #14 T13 幂等与任务表 | DONE | 迁移 0005；幂等/租约集成测试通过 |
 
 ## 本次变更（2026-11-12）
 

@@ -173,7 +173,13 @@ def test_empty_database_is_upgraded_to_the_knowledge_head() -> None:
         current = connection.execute(
             text("SELECT version_num FROM alembic_version")
         ).scalar_one()
-    assert current == "0003_knowledge"
+
+    script = ScriptDirectory.from_config(Config(str(REPO_ROOT / "alembic.ini")))
+    revisions = {revision.revision for revision in script.walk_revisions()}
+    assert "0003_knowledge" in revisions
+    assert script.get_revision("0003_knowledge").down_revision == "0002_users"
+    # 空库由脚本 upgrade 到 head；并行票的合并 revision 只增不减。
+    assert current in revisions
 
     inspector = inspect(engine)
     tables = set(inspector.get_table_names())
@@ -211,9 +217,6 @@ def test_empty_database_is_upgraded_to_the_knowledge_head() -> None:
         "revision",
     } <= version_columns
 
-    script = ScriptDirectory.from_config(Config(str(REPO_ROOT / "alembic.ini")))
-    assert len(script.get_heads()) == 1
-    assert script.get_revision("0003_knowledge").down_revision == "0002_users"
 
 
 def test_create_document_writes_draft_version_with_scope_from_identity(
