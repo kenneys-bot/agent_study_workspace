@@ -106,6 +106,39 @@ live 模式必须在配置里给出 `max_items`（样本上限）与 `budget_cny
 会递归扫描键名与值，命中疑似凭据（`sk-…`、`*_API_KEY=`、`api_key` 字段等）
 直接拒绝。失败实验也保留目录，不静默覆盖。
 
+## 意图分类评测（T28 / #29，条件任务）
+
+T28 的意图分类**不复用** #28 的检索/质检 runner（那套只认
+`retrieval`/`inspection`，指标是 Recall/规则 P-R-F1），但复用同一套冻结口径、
+哈希闸门、manifest/凭据扫描约定与产物目录约定。这是有意的：意图 accuracy
+不能混进检索/质检指标表；复用"闸门"而不是复制"指标"。
+
+- 数据集先经 `bank_assistant.datasets.build.verify_dataset` 复算 manifest 与
+  文件哈希；test 文件哈希必须与 manifest 的 `frozen.test_split_sha256` 一致；
+- 训练只接受 `train` split，正式评测只接受冻结 `test`
+  （`split_guard.require_split_for` / `require_frozen_test_split`）；
+- 产物写到 `artifacts/training/<run_id>/{manifest.json,model-card.md,config.json}`，
+  manifest 记录 code sha、数据/标签 schema 哈希、超参、seed、硬件、显存峰值、
+  耗时与状态；
+- baseline 与 tuned 使用**同一基础模型、同一 prompt、同一解码参数、同一 seed**：
+  baseline 关闭 LoRA adapter（zero-shot），tuned 启用 adapter；test 只在训练后
+  评一次，不参与训练或 checkpoint 选择。
+
+指标：accuracy、macro-F1（只在有支持/预测的标签上平均）、逐标签
+Precision/Recall/F1/support、混淆矩阵、无效输出计数、困难样本子集准确率。
+样本量小（train 202 / test 50），报告只给实测值与分母，不宣称统计显著。
+
+```bash
+make train                                        # 默认 dry-run：不训练，写 NOT_RUN 报告
+make train TRAIN_ARGS=--execute                   # 真实训练（需空闲 8GB GPU）
+make train TRAIN_CONFIG=configs/train/qlora-intent-qwen3-1.7b.yaml
+uv run python -m scripts.train_intent_lora --config configs/train/qlora-intent-qwen3-0.6b.yaml --dry-run
+```
+
+dry-run 退出码 `0`（报告可以是 `NOT_RUN`）；配置/split/数据集哈希错误退出 `2`；
+真实训练因资源不足而 `NOT_RUN` 退出 `1` 并保留报告。详见
+[M6 微调报告](../milestones/M6-tuning-report.md)。
+
 ## 数据库与 ADR-0006（重要）
 
 评测与运行时共享同一份**快照口径**：应用从应用数据库读取 published 的

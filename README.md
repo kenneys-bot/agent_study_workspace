@@ -23,7 +23,7 @@
 | M2 存储与权限 | READY_FOR_ACCEPTANCE | [M2 报告](docs/milestones/M2-report.md) |
 | M3 坐席辅助 | READY_FOR_ACCEPTANCE | [M3 报告](docs/milestones/M3-report.md) |
 | M4 质检闭环 / M5 工作台 | READY_FOR_ACCEPTANCE | [M5 报告](docs/milestones/M5-report.md) |
-| M6 数据集与评测 | READY_FOR_ACCEPTANCE | [评测说明](docs/eval/README.md)；T28 微调为条件任务 BLOCKED |
+| M6 数据集与评测 | READY_FOR_ACCEPTANCE | [M6 报告](docs/milestones/M6-report.md)、[评测说明](docs/eval/README.md)；T28 真实训练 NOT_RUN |
 | M7 部署与恢复演练 | READY_FOR_ACCEPTANCE | [M7 部署报告](docs/milestones/M7-deploy-report.md)、[运维手册](docs/ops/runbook.md) |
 
 唯一进度状态源是 [docs/implementation-status.md](docs/implementation-status.md)；阶段报告在 `docs/milestones/`。

@@ -107,8 +107,8 @@ BACK_TO=bank-assistant:api-54fa344 BACK_TO_SHA=54fa344a151c314432f300c40c678aa7a
 
 | 命令 | 结果 |
 |---|---|
-| `uv run pytest tests -q`（默认排除 integration） | **554 passed, 130 deselected** |
-| `make test-integration`（隧道 + `bank_assistant_test` 空库迁移） | **130 passed**，alembic `0011_report_exports (head)` |
+| `uv run pytest tests -q`（默认排除 integration，合并 `feat/bank-assistant` 后） | **621 passed, 130 deselected** |
+| `make test-integration`（隧道 + `bank_assistant_test` 空库迁移，合并后） | **130 passed**，alembic `0011_report_exports (head)` |
 
 新增回归测试：`tests/test_deploy_config.py`（compose 回环/不可变镜像/restart/探针、
 恢复闸门只接受 `*_restore_check`）、`tests/test_system_version.py`（索引校准/模型字段）。

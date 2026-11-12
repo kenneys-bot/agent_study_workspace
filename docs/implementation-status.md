@@ -1,9 +1,9 @@
 # 执行进度
 
-当前里程碑：M7 部署与恢复演练已交付（待负责人验收）；M6 中 T26/T27 已完成，T28 条件任务 BLOCKED
-当前任务：T29 部署与恢复演练（#30）已执行；T33 ADR-0006 数据库落地（#34）已执行
-当前状态：M1–M5 已交付（等待负责人验收）；M6 部分完成；**M7-01/M7-05 已真实执行**（不可变镜像部署、备份恢复演练、回滚演练、索引重建；2026-11-12）
-本机代码分支：`ticket/T29`（合并后为 `feat/bank-assistant`）
+当前里程碑：M7 部署与恢复演练已交付（待负责人验收）；M6 已交付（T28 真实训练 NOT_RUN）
+当前任务：T29 部署与恢复演练（#30）已执行；T28 条件性微调（#29）READY_FOR_ACCEPTANCE；T33 ADR-0006 数据库落地（#34）已执行
+当前状态：M1–M5 已交付（等待负责人验收）；M6 已交付（T26/T27 完成、T28 harness 交付但真实训练 NOT_RUN）；**M7-01/M7-05 已真实执行**（不可变镜像部署、备份恢复演练、回滚演练、索引重建；2026-11-12）
+本机代码分支：`feat/bank-assistant`（集成分支）
 本机代码SHA：以 `git log -1` 为准（T29 合并后刷新）
 Ubuntu代码SHA：`f4f1346`（API 部署与备份/回滚演练使用的锁定 checkout；镜像 `bank-assistant:api-f4f1346`）
 最近更新：2026-11-12（Asia/Shanghai）
@@ -113,7 +113,7 @@ Ubuntu 与 Mac 同 SHA；两端 `uv run pytest tests -q` 均 144 用例全过（
 ## 外部依赖和负责人
 
 - Ubuntu 整机重启：需负责人逐次准许。
-- GPU 分时：M6 微调（#28）前需确认 `dingtalk-train` 空闲。
+- GPU 分时：M6 微调（#29）前需确认 `dingtalk-train` 空闲；与 `dingtalk-*` 共享需负责人明确同意。
 
 ## M5 工单状态
 
@@ -137,6 +137,20 @@ Ubuntu 与 Mac 同 SHA；两端 `uv run pytest tests -q` 均 144 用例全过（
 
 M5 报告：`docs/milestones/M5-report.md`（T25 交付）。web 48 tests、`make test-e2e` 1 passed（回放链路）、真实云模型冒烟成功（DeepSeek chat + BGE embedding）。工单 #23/#24/#25/#26 全部 DONE。
 
+## M6 验收
+
+M6 报告：`docs/milestones/M6-report.md`（READY_FOR_ACCEPTANCE，含未达门槛与 NOT_RUN 明示）。数据集 330/186 冻结；replay 全量 + live 20 条；Recall@5 replay 0.833 **未达 0.85**；引用支持度/人工相关性 NOT_MEASURED；微调 NOT_RUN（GPU 未获授权）。
+
+## M6 工单状态
+
+| 工单 | 状态 | 证据 |
+|---|---|---|
+| #27 T26 数据集构建与冻结 | DONE | 330 检索/186 质检、按组 60/20/20、manifest 哈希两次一致 |
+| #28 T27 评测脚本与基线对比 | READY_FOR_ACCEPTANCE | `make eval` 全量 replay（50 检索/48 质检，1014 条预测）；live 20 条真实 DeepSeek（p50 1.23s、p95 1.66s、¥0.338 估算）；产物 `artifacts/evals/eval-replay-…103010Z`、`eval-live-…102704Z` |
+| #34 T33 数据库迁到 Ubuntu + SSH 隧道 | DONE（部署已执行） | PG18 容器 healthy；四库 owner=bank；`make test-integration` 130 passed；`make doctor` 隧道缺失失败/建立通过；`make seed-demo` 幂等且不触达 dev/test；LAN 直连失败 |
+| #29 T28 条件性微调 | READY_FOR_ACCEPTANCE | `make train` 默认 dry-run（train 202/test 50，数据哈希校验通过）；真实训练 `NOT_RUN`（GPU 1457 MiB 被 `dingtalk-embed` 占用、模型权重未缓存）；见 [M6 微调报告](milestones/M6-tuning-report.md) |
+| #30 T29 部署与恢复演练 | READY_FOR_ACCEPTANCE | 镜像 `api-f4f1346`；备份恢复/回滚/索引重建全部实测；`docs/milestones/M7-deploy-report.md` |
+
 ## M7 部署与恢复演练（T29 / #30，2026-11-12 已执行）
 
 | 项 | 实际值 |
@@ -151,16 +165,6 @@ M5 报告：`docs/milestones/M5-report.md`（T25 交付）。web 48 tests、`mak
 | 回滚演练 | `api-f4f1346` → `api-54fa344`（live/ready/版本页通过）→ 恢复 `api-f4f1346`；未降 schema、未重启服务器 |
 | 隔离 | Mac 直连服务器 8000/5432 均拒绝；服务器仅回环监听 |
 | 报告 | `docs/milestones/M7-deploy-report.md`；手册 `docs/ops/runbook.md` |
-
-## M6 工单状态
-
-| 工单 | 状态 | 证据 |
-|---|---|---|
-| #27 T26 数据集构建与冻结 | DONE | 330 检索/186 质检、按组 60/20/20、manifest 哈希两次一致 |
-| #28 T27 评测脚本与基线对比 | READY_FOR_ACCEPTANCE | `make eval` 全量 replay（50 检索/48 质检，1014 条预测）；live 20 条真实 DeepSeek（p50 1.23s、p95 1.66s、¥0.338 估算）；产物 `artifacts/evals/eval-replay-…103010Z`、`eval-live-…102704Z` |
-| #34 T33 数据库迁到 Ubuntu + SSH 隧道 | DONE（部署已执行） | PG18 容器 healthy；四库 owner=bank；`make test-integration` 130 passed；`make doctor` 隧道缺失失败/建立通过；`make seed-demo` 幂等且不触达 dev/test；LAN 直连失败 |
-| #29 T28 条件性微调 | BLOCKED | 等 #28 验收 |
-| #30 T29 部署与恢复演练 | READY_FOR_ACCEPTANCE | 镜像 `api-f4f1346`；备份恢复/回滚/索引重建全部实测；`docs/milestones/M7-deploy-report.md` |
 
 ## M4 验收
 
