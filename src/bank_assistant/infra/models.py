@@ -18,6 +18,8 @@
   机器判断（T18，M4-03）；机器判断写入后不可覆盖。
 - ``review_cases`` / ``review_decisions``：人工复核状态与逐项结论（T20，M4-04）；
   决定追加保存、只读，同一 inspection 只允许一个未完成复核。
+- ``report_exports``：按 ``(inspection_id, review_revision)`` 固化的报告快照
+  （T21，M4-05）；产物落 ARTIFACT_ROOT，行与文件都不可改写。
 
 所有时间列为 ``timestamptz``，写入前统一为 UTC（契约 §1）。
 """
@@ -63,6 +65,7 @@ REVIEW_ACTION_CHECK = "action IN ('confirm', 'reject', 'modify')"
 REVIEW_FINAL_VERDICT_CHECK = (
     "final_verdict IN ('hit', 'clear', 'insufficient_evidence', 'not_applicable')"
 )
+REPORT_FORMAT_CHECK = "format IN ('json', 'html')"
 
 
 class User(Base):
@@ -1048,3 +1051,76 @@ def _reject_review_case_delete(
 ) -> None:
     """复核案例承载历史，不允许物理删除（重新打开用新 revision）。"""
     raise ReviewCaseImmutable(target.review_id)
+
+
+# ---------------------------------------------------------------------------
+# 报告导出（T21，M4-05；契约 §2 ReportExport / §3 / CT-12）
+# ---------------------------------------------------------------------------
+
+
+class ReportExportImmutable(RuntimeError):
+    """报告导出是固定快照：写入后不可更新、不可删除（CT-12）。"""
+
+    def __init__(self, export_id: UUID) -> None:
+        self.export_id = export_id
+        super().__init__(f"报告导出不可修改: {export_id}")
+
+
+class ReportExport(Base):
+    """一次报告导出（契约 §2 ReportExport、§3「人工复核」、§7 CT-12）。
+
+    - ``(inspection_id, review_revision)`` 固定报告对应的人工复核快照；后续
+      复核产生新 revision，旧导出的行与产物都不再变化；
+    - ``content_hash`` 是 ``artifact_ref`` 指向产物字节的 SHA-256，读取时复算
+      校验，产物被替换/损坏会显式失败；
+    - ``generated_by`` 记录导出操作者；``artifact_ref`` 是相对 ``ARTIFACT_ROOT``
+      的路径，绝不存主机绝对路径；
+    - 追加式：ORM 事件拒绝任何 UPDATE/DELETE；需要新报告只能新建导出。
+    """
+
+    __tablename__ = "report_exports"
+    __table_args__ = (
+        CheckConstraint(REPORT_FORMAT_CHECK, name="ck_report_exports_format"),
+        CheckConstraint(
+            "review_revision >= 0", name="ck_report_exports_review_revision"
+        ),
+        UniqueConstraint("artifact_ref", name="uq_report_exports_artifact_ref"),
+        Index(
+            "ix_report_exports_inspection_revision",
+            "inspection_id",
+            "review_revision",
+        ),
+        Index("ix_report_exports_created_at", "created_at"),
+    )
+
+    export_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    inspection_id: Mapped[UUID] = mapped_column(
+        ForeignKey("inspection_runs.inspection_id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    review_revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    format: Mapped[str] = mapped_column(String(8), nullable=False)
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    artifact_ref: Mapped[str] = mapped_column(String(512), nullable=False)
+    generated_by: Mapped[UUID] = mapped_column(
+        ForeignKey("users.user_id", ondelete="RESTRICT"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+@event.listens_for(ReportExport, "before_update")
+def _reject_report_export_update(
+    mapper: Any, connection: Any, target: ReportExport
+) -> None:
+    """ORM 层兜底：旧报告是固定快照，任何 UPDATE 都显式失败。"""
+    raise ReportExportImmutable(target.export_id)
+
+
+@event.listens_for(ReportExport, "before_delete")
+def _reject_report_export_delete(
+    mapper: Any, connection: Any, target: ReportExport
+) -> None:
+    """ORM 层兜底：报告导出是对外交付历史，不允许物理删除。"""
+    raise ReportExportImmutable(target.export_id)
