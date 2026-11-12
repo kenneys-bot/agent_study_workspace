@@ -3,7 +3,7 @@ SHELL := /bin/bash
 UV := uv
 COMPOSE := docker compose -f deploy/compose.yml
 
-.PHONY: help doctor test-unit test-integration test-e2e build web-install web-dev web-build web-test up down smoke seed-demo seed-demo-accounts index-rebuild index-info worker sync-check eval train backup restore-check clean
+.PHONY: help doctor test-unit test-integration test-e2e build web-install web-dev web-build web-test up down smoke seed-demo seed-demo-accounts dataset-build dataset-verify index-rebuild index-info worker sync-check eval train backup restore-check clean
 
 help: ## 列出可用命令
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -58,6 +58,12 @@ seed-demo: ## [M3/M4] 只导入合成演示数据（知识 + 规则），幂等
 
 seed-demo-accounts: ## [M3] 显式创建演示作者/审核人账号（不导入知识）
 	@$(UV) run python scripts/seed_demo_accounts.py
+
+dataset-build: ## [M6] 构建并冻结合成数据集（离线、确定性；落 ARTIFACT_ROOT/data）
+	@$(UV) run python -m scripts.build_dataset --artifact-root "$${ARTIFACT_ROOT:-artifacts}"
+
+dataset-verify: ## [M6] 复算数据集 manifest 与文件哈希（不重新构建）
+	@$(UV) run python -m scripts.build_dataset --verify "$${DATASET_DIR:-$${ARTIFACT_ROOT:-artifacts}/data/bank-cs-m6-synthetic/v1}"
 
 index-rebuild: ## [M3] 重建版本化索引，校验后原子切换活动指针
 	@$(UV) run python scripts/index_rebuild.py
