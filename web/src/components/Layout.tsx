@@ -23,6 +23,12 @@ export default function Layout() {
         </div>
         <nav className="topnav" aria-label="主导航">
           <NavLink
+            to="/console"
+            className={({ isActive }) => (isActive ? 'nav-link active' : 'nav-link')}
+          >
+            坐席工作台
+          </NavLink>
+          <NavLink
             to="/system"
             className={({ isActive }) => (isActive ? 'nav-link active' : 'nav-link')}
           >
