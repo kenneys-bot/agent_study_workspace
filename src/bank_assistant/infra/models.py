@@ -8,6 +8,7 @@
 - ``tasks`` / ``idempotency_keys``：任务租约与持久化幂等绑定（T13，M2-05）；
 - ``knowledge_documents`` / ``knowledge_versions``：知识来源、业务范围与版本
   生命周期（T11，M2-03）；发布后内容不可覆盖。
+- ``knowledge_chunks``：版本化索引的原文区间与 embedding 身份（T14，M3）。
 
 所有时间列为 ``timestamptz``，写入前统一为 UTC（契约 §1）。
 """
@@ -330,6 +331,53 @@ class KnowledgeVersion(Base):
         nullable=False,
         server_default=func.now(),
         onupdate=func.now(),
+    )
+
+
+class KnowledgeChunk(Base):
+    """知识分块：版本化索引里可引用的原文区间（契约 §2，M3）。
+
+    区间按不可变 ``knowledge_versions.content`` 的 Unicode 码点计数，
+    ``start_offset`` 含、``end_offset`` 不含（契约 §4）；``text`` 必须等于
+    ``content[start_offset:end_offset]``，索引才能回验原文。
+
+    ``index_version`` 与 ``embedding_model_version`` 一起标识这一行属于哪次
+    索引构建：同一知识版本可以在多个索引版本里各有一份分块，重建不能覆盖
+    旧索引（失败要能保留旧版本）。chunk_id 由 ``(version_id, index_version,
+    区间)`` 确定性派生，同一构建重复执行不会产生重复行。
+    """
+
+    __tablename__ = "knowledge_chunks"
+    __table_args__ = (
+        UniqueConstraint(
+            "version_id",
+            "index_version",
+            "start_offset",
+            name="uq_knowledge_chunks_version_index_start",
+        ),
+        CheckConstraint(
+            "start_offset >= 0", name="ck_knowledge_chunks_start_offset"
+        ),
+        CheckConstraint(
+            "end_offset > start_offset", name="ck_knowledge_chunks_offsets"
+        ),
+        Index("ix_knowledge_chunks_index_version", "index_version"),
+    )
+
+    chunk_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    version_id: Mapped[UUID] = mapped_column(
+        ForeignKey("knowledge_versions.version_id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    # 码点偏移：start 含、end 不含（契约 §4）。
+    start_offset: Mapped[int] = mapped_column(Integer, nullable=False)
+    end_offset: Mapped[int] = mapped_column(Integer, nullable=False)
+    embedding_model_version: Mapped[str] = mapped_column(String(128), nullable=False)
+    index_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
 

@@ -33,13 +33,33 @@ make test-unit            # 无网络、无真实凭据的单元测试
 make sync-check           # 本机与 Ubuntu 的 SHA 对比（只读）
 ```
 
-尚未实现的命令（`up/down/smoke/seed-demo/eval/train/backup/restore-check/test-e2e/test-integration`）
+尚未实现的命令（`up/down/smoke/eval/train/backup/restore-check/test-e2e`）
 会**非零退出并说明属于哪个里程碑**，不会假装成功。
+
+### 演示知识与版本化索引（M3）
+
+```bash
+make seed-demo       # 幂等导入 32 条合成演示知识（30 条在有效期内 + 2 条边界用例）
+make index-rebuild   # 用 fastembed + BAAI/bge-small-zh-v1.5（512 维）重建索引并切换指针
+make index-info      # 打印活动索引版本、校准向量哈希与清单摘要
+```
+
+- 演示知识在 `data/demo/knowledge/`：三场景各 10 条，另有 2 条「已过期 / 未生效」边界用例。
+  公开监管条文只引用公开链接（正文自行组织）；虚构制度均标注 `demo_only` 并在正文注明
+  「虚构演示制度」，不对应任何真实机构制度或话术。
+- 两个演示账号由显式脚本创建（`make seed-demo-accounts`，`make seed-demo` 会先执行它；
+  知识导入本身不建用户）：`demo-author`（agent）/ `demo-reviewer`（reviewer），
+  同一 scope `demo-bank`，演示密码 `demo-only-correct-horse-battery`（仅本地演示，不是秘密）。
+- 索引是**可重建产物**：`data/index/chroma`、`data/index/manifests/<index_version>.json`、
+  活动指针 `data/index/active.json`，全部已 gitignore；清单记录 `index_version`、
+  `embedding_model_version`、知识快照与**校准向量哈希**，加载前校验，模型漂移则拒绝使用。
+- 离线无模型时可 `EMBEDDING_PROVIDER=fake make index-rebuild`（确定性假向量）验证构建/切换/
+  失败保留路径；fake 索引没有真实语义质量，不能当作检索效果证据。
 
 ## 设计与决策
 
 - 需求与验收：[计划书 v1.1](docs/plan/bank-customer-service-plan.md)、[系统契约](docs/plan/bank-customer-service-contracts.md)、[执行交接](docs/plan/bank-customer-service-execution.md)、[现状分析](docs/plan/bank-customer-service-assessment.md)
-- 架构决策：[ADR-0001 仓库布局](docs/adr/0001-repository-layout.md)、[ADR-0002 数据库与索引](docs/adr/0002-database-and-index.md)、[ADR-0003 双机同步](docs/adr/0003-two-machine-sync.md)、[ADR-0004 模型与微调](docs/adr/0004-model-and-tuning.md)
+- 架构决策：[ADR-0001 仓库布局](docs/adr/0001-repository-layout.md)、[ADR-0002 数据库与索引](docs/adr/0002-database-and-index.md)、[ADR-0003 双机同步](docs/adr/0003-two-machine-sync.md)、[ADR-0004 模型与微调](docs/adr/0004-model-and-tuning.md)、[ADR-0005 embedding 运行时与索引版本化](docs/adr/0005-embedding-runtime-and-index-versioning.md)
 - 领域术语：[GLOSSARY.md](GLOSSARY.md)（写 issue / 测试名 / 文档一律使用其中文术语）
 
 ## 目录结构

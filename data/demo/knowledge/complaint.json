@@ -1,0 +1,126 @@
+{
+  "scenario": "投诉受理",
+  "business_type": "complaint",
+  "entries": [
+    {
+      "id": "complaint-pub-01",
+      "title": "消费投诉渠道与处理时限（公开监管要点摘要）",
+      "source_type": "public_regulation",
+      "source_uri": "https://www.gov.cn/gongbao/content/2020/content_5512564.htm",
+      "business_type": "complaint",
+      "version_no": 1,
+      "demo_only": false,
+      "valid_from": "2025-01-01T00:00:00+00:00",
+      "valid_to": null,
+      "content": "《银行业保险业消费投诉处理管理办法》公开要点摘要（自行组织，不复制条文原文）：银行应畅通投诉渠道、明确受理范围与处理流程，在规定时限内办理并告知投诉人处理结果；对不予受理的投诉应说明理由。演示知识只复述公开要点，具体时限与程序以官方公布文本和本机构公示为准。"
+    },
+    {
+      "id": "complaint-pub-02",
+      "title": "投诉处理中的个人信息保护（公开监管要点摘要）",
+      "source_type": "public_regulation",
+      "source_uri": "https://www.gov.cn/gongbao/content/2020/content_5512564.htm",
+      "business_type": "complaint",
+      "version_no": 1,
+      "demo_only": false,
+      "valid_from": "2025-01-01T00:00:00+00:00",
+      "valid_to": null,
+      "content": "《银行业保险业消费投诉处理管理办法》公开要点摘要（自行组织，不复制条文原文）：银行在处理投诉过程中收集、使用客户信息应限于处理投诉所必需，并采取保密措施；投诉材料不得用于与投诉处理无关的用途。坐席登记投诉时应只采集必要信息，避免在公开场合复述客户敏感信息。"
+    },
+    {
+      "id": "complaint-pub-03",
+      "title": "征信异议与投诉的衔接（公开监管要点摘要）",
+      "source_type": "public_regulation",
+      "source_uri": "https://www.gov.cn/zhengce/2013-01/29/content_2602614.htm",
+      "business_type": "complaint",
+      "version_no": 1,
+      "demo_only": false,
+      "valid_from": "2025-01-01T00:00:00+00:00",
+      "valid_to": null,
+      "content": "《征信业管理条例》公开要点摘要（自行组织，不复制条文原文）：客户认为信用记录有误的，应先通过征信机构或信息提供者的异议渠道提出；异议核查有公开时限要求。客户就征信问题投诉时，坐席应区分“异议核查”与“服务投诉”，分别登记并告知处理路径。演示知识不复述具体条文原文。"
+    },
+    {
+      "id": "complaint-pub-04",
+      "title": "金融消费者投诉与调解途径（公开监管要点摘要）",
+      "source_type": "public_regulation",
+      "source_uri": "https://www.gov.cn/zhengce/2020-09/15/content_5712684.htm",
+      "business_type": "complaint",
+      "version_no": 1,
+      "demo_only": false,
+      "valid_from": "2025-01-01T00:00:00+00:00",
+      "valid_to": null,
+      "content": "《中国人民银行金融消费者权益保护实施办法》公开要点摘要（自行组织，不复制条文原文）：金融消费者对银行服务有异议的，可以通过银行公示的投诉渠道提出；银行应告知处理流程与后续救济途径。坐席不得以“无法处理”为由拒绝登记，也不得阻止客户通过公开渠道主张权利。"
+    },
+    {
+      "id": "complaint-demo-01",
+      "title": "投诉受理登记要素与分级（虚构演示制度）",
+      "source_type": "demo_policy",
+      "source_uri": "https://demo.invalid/bank-assistant/complaint/demo-01",
+      "business_type": "complaint",
+      "version_no": 1,
+      "demo_only": true,
+      "valid_from": "2025-01-01T00:00:00+00:00",
+      "valid_to": null,
+      "content": "【虚构演示制度】本演示银行（虚构机构）规定：投诉登记至少包含客户联系方式、投诉事项、发生时间、涉及产品、客户诉求与期望解决方式；按演示分级规则分为一般、重要、重大三级，涉及资金安全或人身安全的直接定为重大并转演示专席。本制度仅为演示编写，不对应任何真实机构制度或话术。"
+    },
+    {
+      "id": "complaint-demo-02",
+      "title": "投诉首次响应时限（虚构演示制度）",
+      "source_type": "demo_policy",
+      "source_uri": "https://demo.invalid/bank-assistant/complaint/demo-02",
+      "business_type": "complaint",
+      "version_no": 1,
+      "demo_only": true,
+      "valid_from": "2025-01-01T00:00:00+00:00",
+      "valid_to": null,
+      "content": "【虚构演示制度】本演示银行（虚构机构）规定：一般投诉在受理后 2 小时内首次响应，重要投诉在 1 小时内响应，重大投诉立即响应并同步演示值班主管；首次响应须告知工单编号、处理人及预计答复时间。本制度中的时限为虚构演示值，不对应任何真实机构制度或话术。"
+    },
+    {
+      "id": "complaint-demo-03",
+      "title": "投诉升级与转办（虚构演示制度）",
+      "source_type": "demo_policy",
+      "source_uri": "https://demo.invalid/bank-assistant/complaint/demo-03",
+      "business_type": "complaint",
+      "version_no": 1,
+      "demo_only": true,
+      "valid_from": "2025-01-01T00:00:00+00:00",
+      "valid_to": null,
+      "content": "【虚构演示制度】本演示银行（虚构机构）规定：工单超时未结或客户二次投诉时自动升级至演示主管；涉及跨部门的在 24 小时内转办并抄送演示质检岗；升级与转办均保留原工单记录，不得新建工单覆盖历史。本制度仅为演示编写，不对应任何真实机构制度或话术。"
+    },
+    {
+      "id": "complaint-demo-04",
+      "title": "投诉回访与满意度记录（虚构演示制度）",
+      "source_type": "demo_policy",
+      "source_uri": "https://demo.invalid/bank-assistant/complaint/demo-04",
+      "business_type": "complaint",
+      "version_no": 1,
+      "demo_only": true,
+      "valid_from": "2025-01-01T00:00:00+00:00",
+      "valid_to": null,
+      "content": "【虚构演示制度】本演示银行（虚构机构）规定：工单办结后 3 个工作日内完成回访，记录客户对处理结果的满意度（满意/一般/不满意）与原因；客户明确拒绝回访的，记录拒绝时间与方式，不重复外呼。满意度只作改进依据，不用于修改原处理结论。本制度仅为演示编写，不对应任何真实机构制度或话术。"
+    },
+    {
+      "id": "complaint-demo-05",
+      "title": "重复投诉与批量投诉处理（虚构演示制度）",
+      "source_type": "demo_policy",
+      "source_uri": "https://demo.invalid/bank-assistant/complaint/demo-05",
+      "business_type": "complaint",
+      "version_no": 1,
+      "demo_only": true,
+      "valid_from": "2025-01-01T00:00:00+00:00",
+      "valid_to": null,
+      "content": "【虚构演示制度】本演示银行（虚构机构）规定：同一客户就同一事项重复投诉的，合并至原工单并在记录中标注；同一事项 5 人以上集中投诉的，按批量投诉登记并同步演示合规岗，不得逐条复制相同答复。合并与批量登记都必须保留每条投诉的来源与时间。本制度仅为演示编写，不对应任何真实机构制度或话术。"
+    },
+    {
+      "id": "complaint-demo-06",
+      "title": "投诉沟通中的禁止表述（虚构演示制度）",
+      "source_type": "demo_policy",
+      "source_uri": "https://demo.invalid/bank-assistant/complaint/demo-06",
+      "business_type": "complaint",
+      "version_no": 1,
+      "demo_only": true,
+      "valid_from": "2025-01-01T00:00:00+00:00",
+      "valid_to": null,
+      "content": "【虚构演示制度】本演示银行（虚构机构）规定：投诉沟通中禁止使用“这不是我们的问题”“你随便投诉”“系统就是这样”等推诿或对抗性表述；不得对处理结果作未经授权的承诺，不得要求客户撤回投诉作为处理条件。坐席应复述客户诉求并给出明确的下一步与时间。本制度仅为演示编写，不对应任何真实机构制度或话术。"
+    }
+  ]
+}
