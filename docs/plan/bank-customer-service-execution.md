@@ -40,7 +40,7 @@
 |---|---|---|
 | make doctor | 检查依赖、环境变量存在性、目录与端口；不打印秘密值 | 两端 |
 | make test-unit | 无网络、无真实凭据的单元测试 | 本机/Ubuntu |
-| make test-integration | 使用独立测试库验证迁移、事务、权限、索引 | 两端 |
+| make test-integration | 使用独立 `*_test` 库验证迁移、事务、权限、索引（经 SSH 隧道） | Mac（需隧道） |
 | make test-e2e | 启动隔离演示环境并验证用户路径 | 两端 |
 | make build | 锁定依赖构建应用和前端 | 两端 |
 | make up / make down | 启停指定开发/演示环境 | 两端 |
@@ -49,9 +49,18 @@
 | make sync-check | 报告双方SHA与相关未提交状态，不自动覆盖 | 本机发起 |
 | make eval EVAL_CONFIG=path | 运行固定评测并输出manifest和结果 | Ubuntu |
 | make train TRAIN_CONFIG=path | 资源检查、dry-run/训练、产物记录 | Ubuntu，条件任务 |
-| make backup / make restore-check | 备份及在独立目标恢复验证；后者不覆盖生产 | Ubuntu |
+| make backup / make restore-check | 备份及在独立目标 `*_restore_check` 恢复验证；后者不覆盖源库与演示库 | Ubuntu |
 
 云模型测试另设显式开关、费用上限与样本上限；测试失败不能无上限重试产生费用。生产发布不由通用 `make up` 隐式触发。
+
+**数据库命令的前置条件（ADR-0006）**：数据库唯一实例在 Ubuntu，Mac 不部署本地数据库。`test-integration` / `seed-demo` / `backup` / `restore-check` / `alembic` 等命令依赖 SSH 本地端口转发：
+
+```bash
+ssh -N -L 15432:127.0.0.1:5432 my-ubuntu-server   # Mac 上保持运行
+# DATABASE_URL=postgresql+psycopg://<user>:<password>@127.0.0.1:15432/<db>
+```
+
+隧道或服务器不可达时，这些命令必须非零退出并给出可读原因，或把对应验收标记 BLOCKED；禁止静默改用 SQLite/mock 后宣称通过。`make test-unit` 不依赖数据库，始终可跑。集成测试只允许连接 `*_test` 库；恢复验证只允许写入 `*_restore_check`。
 
 ## 5. 进度文件模板
 
@@ -112,6 +121,7 @@ PASS必须来自实际执行或可核查静态证据，并标明验证类型；�
 ## 7. 需要负责人输入的边界
 
 - Ubuntu连接方式、仓库访问、云模型凭据与预算：通过安全配置提供；可继续与之无关的本机任务。
+- 服务器或 SSH 隧道不可达：单元测试与前端工作可继续；集成测试、迁移、seed、备份恢复标记 BLOCKED 并说明原因，不得用 SQLite/mock 替代后宣称通过（ADR-0006）。
 - 数据来源/授权、真实银行知识与规则、业务验收负责人：在使用对应资料前取得；此前使用合成数据推进。
 - GPU和显存不足：交付资源报告及替代方案，微调可标记条件不满足，不影响已验证的云模型路线。
 - 进入真实银行环境、对外开放服务、产生超预算成本、生产迁移/发布：准备完整可审查方案后由负责人决定。
@@ -119,6 +129,6 @@ PASS必须来自实际执行或可核查静态证据，并标明验证类型；�
 
 ## 8. 可直接复制给执行模型的启动提示
 
-> 请先读取 docs/bank-customer-service-plan.md 和 docs/bank-customer-service-execution.md，按其要求执行 M0。项目原来仅为个人开发，本次是后续工程完善。代码在本机与Ubuntu通过Git同一SHA同步，数据处理、评测和微调在Ubuntu执行。先检查当前仓库与未提交修改，保留已有工作；不要假定目标命令已存在。若缺少服务器访问方式，先完成本机可做部分，列出需要我提供的信息。每个任务给出实际验证证据，更新 docs/implementation-status.md，并在M0结束交付 docs/milestones/M0-report.md 等我验收。后续修改数据/API/复核时读取系统契约，禁止以mock结果宣称真实模型效果或生产上线。
+> 请先读取 docs/plan/bank-customer-service-plan.md 和 docs/plan/bank-customer-service-execution.md，按其要求执行 M0。项目原来仅为个人开发，本次是后续工程完善。代码在本机与Ubuntu通过Git同一SHA同步，数据处理、评测和微调在Ubuntu执行。先检查当前仓库与未提交修改，保留已有工作；不要假定目标命令已存在。若缺少服务器访问方式，先完成本机可做部分，列出需要我提供的信息。每个任务给出实际验证证据，更新 docs/implementation-status.md，并在M0结束交付 docs/milestones/M0-report.md 等我验收。后续修改数据/API/复核时读取系统契约，禁止以mock结果宣称真实模型效果或生产上线。
 
 后续继续时，将提示中的M0替换成已具备前置条件的里程碑编号，并要求先读取上一阶段报告与状态文件。

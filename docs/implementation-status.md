@@ -2,7 +2,7 @@
 
 当前里程碑：M4（进行中）；M1–M3 已交付
 当前任务：M4 T19 证据定位与校验（#20）；M5 T23 坐席工作台（#24）并行
-当前状态：M1/M2 READY_FOR_ACCEPTANCE；M3 IN_PROGRESS
+当前状态：M1–M3 READY_FOR_ACCEPTANCE；M4/M5 IN_PROGRESS（数据库部署方案已于 2026-11-12 调整，见 ADR-0006；实现待办见下）
 本机代码分支：`feat/bank-assistant`
 本机代码SHA：`979b076`（后续提交见 git log）
 Ubuntu代码SHA：见下方 M0-03 证据（同一 SHA）
@@ -34,6 +34,24 @@ Ubuntu代码SHA：见下方 M0-03 证据（同一 SHA）
 | #12 T11 知识生命周期 | DONE | 迁移 0003；集成 53 passed |
 | #13 T12 会话持久化与审计 | DONE | 迁移 0004 + merge revision；integration 40 passed |
 | #14 T13 幂等与任务表 | DONE | 迁移 0005；幂等/租约集成测试通过 |
+
+## 架构调整：数据库集中到 Ubuntu（2026-11-12）
+
+**已完成的文档修改**（本次，未执行任何数据库/容器操作）：新增 `docs/adr/0006-postgres-on-ubuntu-only.md`；`docs/adr/0002-database-and-index.md` 标记 superseded；计划书 v1.2（§4.1/§4.2/§4.3/M2 验收）、执行交接（命令前置条件与 BLOCKED 语义）、README、`docs/environment.md`、M0–M3 历史报告加注。
+
+**待实现的配置/脚本/测试入口调整**（属后续工单，未做）：
+
+| 项 | 现状（旧方案） | 目标（ADR-0006） |
+|---|---|---|
+| `scripts/doctor.sh` | 检查本机 docker 与 5432 端口 | 检查 SSH 隧道与 `*_test` 库可达性；本机不再要求数据库 |
+| `scripts/test-integration.sh` | 本机起 compose PG（`deploy/compose.db.yml`） | 连隧道 `127.0.0.1:15432` 的 `bank_assistant_test`；隧道不通则非零退出并说明 |
+| `.env.example` / `.env` | `DATABASE_URL=...@localhost:5432/...` | `...@127.0.0.1:15432/bank_assistant_dev`；新增 `*_demo`/`*_test`/`*_restore_check` 说明 |
+| `make seed-demo` | 连本机库 | 连隧道写 `bank_assistant_demo`，幂等，不触达测试库 |
+| `make backup` / `restore-check` | 未实现 | 在 Ubuntu 上 `pg_dump` 到 `~/bank-assistant-backups`；恢复到 `bank_assistant_restore_check`，不得覆盖源库 |
+| `deploy/compose.db.yml` | 本机与服务器都用 | 仅服务器使用，保持 `127.0.0.1:5432` 回环绑定 |
+| CI/复现说明 | 默认本机有 PG | 需自备服务器 + 隧道；无数据库时只跑 `make test-unit` |
+
+**边界**：以上是计划调整，不代表部署已改变。服务器上的数据库、容器、凭据本次均未动。
 
 ## 本次变更（2026-11-12）
 

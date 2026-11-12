@@ -1,5 +1,7 @@
 # M1 验收报告：修复后端并消除伪成功
 
+> 历史注记（2026-11-12 追加）：本报告成文时数据库方案是「Mac 本地 Docker PG + 两机同版本」（ADR-0002）。该部署方式已被 [ADR-0006](../adr/0006-postgres-on-ubuntu-only.md) 取代：PostgreSQL 仅部署在 Ubuntu，Mac 经 SSH 隧道访问。报告内容保留原样作为历史证据，不回填改写。
+
 状态：READY_FOR_ACCEPTANCE
 实现代码SHA：`7ca525a`（分支 `feat/bank-assistant`，含 T03/T04/T05/T06/T07/T08/T09/T32）
 本机/Ubuntu一致性：本机 `7ca525a`；Ubuntu 需在 M1 收尾同步（见「遗留」）

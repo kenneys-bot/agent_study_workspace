@@ -18,8 +18,11 @@
 
 | 里程碑 | 状态 | 证据 |
 |---|---|---|
-| M0 基线与双机环境 | IN_PROGRESS | [进度文件](docs/implementation-status.md) |
-| M1–M7 | NOT_STARTED | [计划书 v1.1](docs/plan/bank-customer-service-plan.md) |
+| M0 基线与双机环境 | READY_FOR_ACCEPTANCE | [M0 报告](docs/milestones/M0-report.md) |
+| M1 修通后端 | READY_FOR_ACCEPTANCE | [M1 报告](docs/milestones/M1-report.md) |
+| M2 存储与权限 | READY_FOR_ACCEPTANCE | [M2 报告](docs/milestones/M2-report.md) |
+| M3 坐席辅助 | READY_FOR_ACCEPTANCE | [M3 报告](docs/milestones/M3-report.md) |
+| M4 质检闭环 / M5 工作台 | IN_PROGRESS | [进度文件](docs/implementation-status.md) |
 
 唯一进度状态源是 [docs/implementation-status.md](docs/implementation-status.md)；阶段报告在 `docs/milestones/`。
 
@@ -32,6 +35,17 @@ make build                # 按 uv.lock 安装依赖
 make test-unit            # 无网络、无真实凭据的单元测试
 make sync-check           # 本机与 Ubuntu 的 SHA 对比（只读）
 ```
+
+### 数据库（只在 Ubuntu 上）
+
+PostgreSQL 18 只部署在服务器；**Mac 不安装、不启动本地数据库**。需要数据库的命令，先建 SSH 隧道：
+
+```bash
+ssh -N -L 15432:127.0.0.1:5432 my-ubuntu-server   # 保持运行
+export DATABASE_URL=postgresql+psycopg://<user>:<password>@127.0.0.1:15432/bank_assistant_dev
+```
+
+`localhost` 指 Mac 自己；只有建立转发后 `127.0.0.1:15432` 才指向服务器。数据库按用途隔离：`bank_assistant_dev` / `bank_assistant_demo` / `bank_assistant_test` / `bank_assistant_restore_check`——自动化测试只碰 `*_test`，恢复验证只写 `*_restore_check`，不明原因连不上就**显式失败**，不回退 SQLite/mock。详见 [ADR-0006](docs/adr/0006-postgres-on-ubuntu-only.md)。
 
 尚未实现的命令（`up/down/smoke/eval/train/backup/restore-check/test-e2e`）
 会**非零退出并说明属于哪个里程碑**，不会假装成功。
@@ -114,7 +128,7 @@ uv run python -m bank_assistant.worker --once   # 本地验证：抽干当前队
 ## 设计与决策
 
 - 需求与验收：[计划书 v1.1](docs/plan/bank-customer-service-plan.md)、[系统契约](docs/plan/bank-customer-service-contracts.md)、[执行交接](docs/plan/bank-customer-service-execution.md)、[现状分析](docs/plan/bank-customer-service-assessment.md)
-- 架构决策：[ADR-0001 仓库布局](docs/adr/0001-repository-layout.md)、[ADR-0002 数据库与索引](docs/adr/0002-database-and-index.md)、[ADR-0003 双机同步](docs/adr/0003-two-machine-sync.md)、[ADR-0004 模型与微调](docs/adr/0004-model-and-tuning.md)、[ADR-0005 embedding 运行时与索引版本化](docs/adr/0005-embedding-runtime-and-index-versioning.md)
+- 架构决策：[ADR-0001 仓库布局](docs/adr/0001-repository-layout.md)、[ADR-0002 数据库与索引](docs/adr/0002-database-and-index.md)、[ADR-0003 双机同步](docs/adr/0003-two-machine-sync.md)、[ADR-0004 模型与微调](docs/adr/0004-model-and-tuning.md)、[ADR-0005 embedding 运行时与索引版本化](docs/adr/0005-embedding-runtime-and-index-versioning.md)、[ADR-0006 PostgreSQL 只部署在 Ubuntu（取代 ADR-0002 部署部分）](docs/adr/0006-postgres-on-ubuntu-only.md)
 - 领域术语：[GLOSSARY.md](GLOSSARY.md)（写 issue / 测试名 / 文档一律使用其中文术语）
 
 ## 目录结构

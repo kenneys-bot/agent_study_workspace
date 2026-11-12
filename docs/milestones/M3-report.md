@@ -1,5 +1,7 @@
 # M3 验收报告：有依据的坐席辅助
 
+> 历史注记（2026-11-12 追加）：本报告成文时数据库方案是「Mac 本地 Docker PG + 两机同版本」（ADR-0002）。该部署方式已被 [ADR-0006](../adr/0006-postgres-on-ubuntu-only.md) 取代：PostgreSQL 仅部署在 Ubuntu，Mac 经 SSH 隧道访问。报告内容保留原样作为历史证据，不回填改写。
+
 状态：READY_FOR_ACCEPTANCE
 实现代码SHA：见 `feat/bank-assistant` HEAD（T16 合并后为 `324 passed` 的提交）
 本机/Ubuntu一致性：本机已验证；Ubuntu 在 M3 收尾同步（M1 已证明双端 144 用例一致）
