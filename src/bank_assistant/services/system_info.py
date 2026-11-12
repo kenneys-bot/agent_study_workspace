@@ -19,6 +19,20 @@ UNKNOWN = "unknown"
 
 
 @dataclass(frozen=True, slots=True)
+class ActiveIndex:
+    """活动索引指针里的身份信息；未构建时全部为 ``None``。
+
+    T29/M7-01 要求部署版本能自证“实际用了哪个索引、哪个 embedding 模型、
+    哪个校准向量”，而不只是版本号。指针由 ``switch_active_pointer`` 原子写入，
+    构建/校验失败时旧指针保留，因此这里读到的是最近一次成功切换。
+    """
+
+    index_version: str | None = None
+    calibration_sha256: str | None = None
+    embedding_model: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class SystemVersion:
     """一次版本查询的快照；字段与 API 响应一一对应。"""
 
@@ -28,6 +42,8 @@ class SystemVersion:
     model_chat: str | None
     embedding_model: str
     index_version: str | None
+    index_calibration_sha256: str | None
+    index_embedding_model: str | None
     mode: str
     app_version: str
 
@@ -82,35 +98,53 @@ def resolve_model_chat() -> str | None:
     return settings.DEEPSEEK_MODEL or None
 
 
-def resolve_index_version() -> str | None:
-    """活动索引版本；尚未构建或指针损坏时返回 ``None``，不伪造版本号。"""
+def resolve_active_index() -> ActiveIndex:
+    """读取活动索引身份；尚未构建或指针损坏时返回空值，不伪造版本号。"""
     try:
         pointer = read_active_pointer(settings.INDEX_DIR)
     except KnowledgeIndexError:
-        return None
+        return ActiveIndex()
     if not pointer:
-        return None
-    index_version = pointer.get("index_version")
-    return str(index_version) if index_version else None
+        return ActiveIndex()
+
+    def _text(key: str) -> str | None:
+        value = pointer.get(key)
+        return str(value) if value else None
+
+    return ActiveIndex(
+        index_version=_text("index_version"),
+        calibration_sha256=_text("calibration_vector_sha256"),
+        embedding_model=_text("embedding_model_version"),
+    )
+
+
+def resolve_index_version() -> str | None:
+    """活动索引版本；尚未构建或指针损坏时返回 ``None``，不伪造版本号。"""
+    return resolve_active_index().index_version
 
 
 def build_system_version() -> SystemVersion:
     """组装版本快照；每次调用都读取当前配置与活动指针。"""
+    active_index = resolve_active_index()
     return SystemVersion(
         code_sha=resolve_code_sha(),
         git_branch=resolve_git_branch(),
         model_provider=settings.MODEL_PROVIDER,
         model_chat=resolve_model_chat(),
         embedding_model=settings.EMBEDDING_MODEL_NAME,
-        index_version=resolve_index_version(),
+        index_version=active_index.index_version,
+        index_calibration_sha256=active_index.calibration_sha256,
+        index_embedding_model=active_index.embedding_model,
         mode=settings.MODEL_MODE,
         app_version=settings.APP_VERSION,
     )
 
 
 __all__ = [
+    "ActiveIndex",
     "SystemVersion",
     "build_system_version",
+    "resolve_active_index",
     "resolve_code_sha",
     "resolve_git_branch",
     "resolve_index_version",

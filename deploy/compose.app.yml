@@ -1,0 +1,58 @@
+# API 部署（M7-01/T29）：不可变镜像、仓库外配置、仅回环端口、进程自动恢复。
+#
+# 只在 Ubuntu 服务器上使用；由 scripts/deploy.sh / scripts/rollback.sh 调用，
+# 不手工 up（手工操作会绕过镜像/SHA 记录）。用法见 docs/ops/runbook.md。
+#
+# 设计约束：
+# - image 必须带 api-<code_sha7> 标签；不使用 build:，服务器不重建源码。
+# - 配置来自仓库外 ~/workspace/bank-assistant/.env.app（600），不进 Git、不进镜像；
+#   compose 只通过 APP_ENV_FILE 读取该文件，不复制进仓库。
+# - 端口只绑 127.0.0.1，不暴露到局域网；外部访问一律经 SSH。
+# - data/artifacts 是仓库外宿主目录；索引可由知识重建，不随镜像发布。
+# - 容器以宿主项目用户 uid/gid 运行（非 root），避免为了写挂载目录而放宽权限；
+#   镜像本身仍是非 root 构建（Dockerfile 的 app 用户被 user: 覆盖是刻意的）。
+name: bank-assistant-app
+
+services:
+  api:
+    image: "${API_IMAGE:?API_IMAGE 必须是已加载的不可变镜像（bank-assistant:api-<code_sha7>）}"
+    container_name: bank-assistant-api
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${API_PORT:-8000}:8000"
+    user: "${APP_UID:-1000}:${APP_GID:-1000}"
+    env_file:
+      - path: ${APP_ENV_FILE:?APP_ENV_FILE 必须指向仓库外的 .env.app}
+        required: true
+    environment:
+      # 非秘密的部署形状；凭据与模型 key 只在 env_file 里。
+      APP_ENV: ${APP_ENV:-staging}
+      GIT_SHA: ${APP_GIT_SHA:?部署必须注入代码 SHA（不可变镜像的身份）}
+      GIT_BRANCH: ${APP_GIT_BRANCH:-integration}
+      INDEX_DIR: /app/data/index
+      DATA_ROOT: /app/data
+      ARTIFACT_ROOT: /app/artifacts
+      # 模型缓存落在数据根，重建/重启不重复下载 ~100MB。
+      FASTEMBED_CACHE_PATH: /app/data/models
+      HOME: /app/data/home
+    volumes:
+      # 索引、模型缓存、home 都在数据根下；pg 数据虽在同一父目录，但本容器不访问。
+      - "${APP_DATA_DIR:?APP_DATA_DIR 必须指向服务器数据根}:/app/data"
+      - "${APP_ARTIFACT_DIR:?APP_ARTIFACT_DIR 必须指向服务器产物根}:/app/artifacts"
+    healthcheck:
+      # 存活探针只看进程；readiness（数据库）由 verify 脚本单独检查。
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/live', timeout=2)"
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    stop_grace_period: 10s
