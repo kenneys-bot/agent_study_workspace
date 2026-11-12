@@ -89,6 +89,7 @@ class ApiError(Exception):
         code: Optional[str] = None,
         retryable: Optional[bool] = None,
         details: Optional[Mapping[str, Any]] = None,
+        headers: Optional[Mapping[str, str]] = None,
     ) -> None:
         self.status_code = status_code
         self.code = code or default_error_code(status_code)
@@ -97,6 +98,8 @@ class ApiError(Exception):
             status_code in RETRYABLE_STATUSES if retryable is None else retryable
         )
         self.details = dict(details or {})
+        # 认证错误需要带 WWW-Authenticate；其余错误通常为空。
+        self.headers = dict(headers or {})
         super().__init__(self.message)
 
 
@@ -292,6 +295,7 @@ async def _api_error_handler(request: Request, exc: ApiError) -> JSONResponse:
         request=request,
         retryable=exc.retryable,
         details=exc.details,
+        headers=exc.headers,
     )
 
 

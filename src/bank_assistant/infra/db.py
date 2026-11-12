@@ -79,3 +79,12 @@ def ping_database() -> None:
     """执行真实 ``SELECT 1``；失败时抛出 SQLAlchemy 异常，由调用方判定。"""
     with get_engine().connect() as connection:
         connection.execute(text("SELECT 1"))
+
+
+def get_db_session() -> Iterator[Session]:
+    """FastAPI 依赖：读请求使用短生命周期会话，不隐式提交任何写入。"""
+    session = get_session_factory()()
+    try:
+        yield session
+    finally:
+        session.close()

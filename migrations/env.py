@@ -19,6 +19,7 @@ for path in (REPO_ROOT, REPO_ROOT / "src"):
         sys.path.insert(0, str(path))
 
 from bank_assistant.config.settings import settings  # noqa: E402
+from bank_assistant.infra import models  # noqa: E402,F401  注册 ORM 实体到 metadata
 from bank_assistant.infra.db import Base  # noqa: E402
 
 config = context.config
