@@ -6,8 +6,14 @@
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings
 from typing import Optional
-import os
 from functools import lru_cache
+import logging
+
+logger = logging.getLogger(__name__)
+
+# 开发/测试专用的显式默认值：只用于本地启动，生产/预发布缺失 SECRET_KEY 必须失败。
+# 名称本身带 dev-only，避免被误认为可用的生产密钥。
+DEV_ONLY_SECRET_KEY = "dev-only-insecure-secret-key-change-me"
 
 
 class Settings(BaseSettings):
@@ -27,7 +33,11 @@ class Settings(BaseSettings):
     APP_PORT: int = Field(default=8000, validation_alias="APP_PORT")
     
     # 通义千问大模型配置
-    DASHSCOPE_API_KEY: str = Field(..., validation_alias="DASHSCOPE_API_KEY")
+    # 旧 DashScope 适配层不是生成主链（ADR-0004 改为 DeepSeek 官方）：
+    # 凭据可选；未配置只代表该能力不可用，不应阻止应用启动。
+    DASHSCOPE_API_KEY: Optional[str] = Field(
+        default=None, validation_alias="DASHSCOPE_API_KEY"
+    )
     DASHSCOPE_BASE_URL: str = Field(
         default="https://dashscope.aliyuncs.com/api/v1",
         validation_alias="DASHSCOPE_BASE_URL"
@@ -73,7 +83,9 @@ class Settings(BaseSettings):
     LOG_FILE: Optional[str] = Field(default=None, validation_alias="LOG_FILE")
     
     # 安全配置
-    SECRET_KEY: str = Field(..., validation_alias="SECRET_KEY")
+    # 仅在启用认证/签名的环境必填；development/testing 由下面的模型校验
+    # 填入 DEV_ONLY_SECRET_KEY 并打警告，production/staging 缺失则启动失败。
+    SECRET_KEY: Optional[str] = Field(default=None, validation_alias="SECRET_KEY")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(
         default=30,
         validation_alias="ACCESS_TOKEN_EXPIRE_MINUTES"
@@ -120,11 +132,33 @@ class Settings(BaseSettings):
             raise ValueError("DATABASE_URL必须以有效的数据库方案开头")
         return v
     
+    @field_validator("DASHSCOPE_API_KEY", "SECRET_KEY", mode="before")
+    @classmethod
+    def empty_string_as_none(cls, v):
+        """空字符串视为未配置，避免 "" 被当成有效凭据。"""
+        if isinstance(v, str) and not v.strip():
+            return None
+        return v
+
     @model_validator(mode="after")
     def validate_production_settings(self):
-        """验证生产环境配置"""
+        """验证生产环境配置，并决定 SECRET_KEY 的必填/开发默认行为。"""
         if self.APP_ENV == "production" and self.DEBUG:
             raise ValueError("生产环境不应启用DEBUG模式")
+
+        if not self.SECRET_KEY:
+            if self.APP_ENV in ("development", "testing"):
+                self.SECRET_KEY = DEV_ONLY_SECRET_KEY
+                logger.warning(
+                    "SECRET_KEY 未配置：APP_ENV=%s 使用显式 dev-only 默认值；"
+                    "生产/预发布环境必须配置真实 SECRET_KEY",
+                    self.APP_ENV,
+                )
+            else:
+                raise ValueError(
+                    f"SECRET_KEY 在 APP_ENV={self.APP_ENV} 下必须配置："
+                    "请设置环境变量 SECRET_KEY（开发/测试环境才允许 dev-only 默认值）"
+                )
         return self
 
 

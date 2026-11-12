@@ -3,9 +3,10 @@
 """
 
 import logging
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, Depends
 from typing import List
 
+from bank_assistant.api.errors import ApiError
 from bank_assistant.core.llm_client import get_llm_client, LLMClient
 from bank_assistant.core.vector_db import get_vector_db_client, VectorDBClient
 from bank_assistant.api.models.script_recommender import (
@@ -90,7 +91,7 @@ async def analyze_context(
         
     except Exception as e:
         logger.error(f"情境分析失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise ApiError(status_code=500) from e
 
 
 @router.post("/recognize-intent", response_model=RecognizeIntentResponse)
@@ -120,7 +121,7 @@ async def recognize_intent(
         
     except Exception as e:
         logger.error(f"意图识别失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise ApiError(status_code=500) from e
 
 
 @router.post("/recommend-scripts", response_model=RecommendScriptsResponse)
@@ -179,7 +180,7 @@ async def recommend_scripts(
         
     except Exception as e:
         logger.error(f"话术推荐失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise ApiError(status_code=500) from e
 
 
 @router.post("/personalize-script", response_model=PersonalizeScriptResponse)
@@ -218,7 +219,7 @@ async def personalize_script(
         
     except Exception as e:
         logger.error(f"话术个性化失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise ApiError(status_code=500) from e
 
 
 @router.post("/generate-greeting")
@@ -250,4 +251,4 @@ async def generate_greeting(
         
     except Exception as e:
         logger.error(f"问候语生成失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise ApiError(status_code=500) from e
