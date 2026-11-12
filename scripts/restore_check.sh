@@ -45,7 +45,7 @@ for dump in "$TARGET_DIR"/dumps/*.dump; do
   ops_database_exists "$source_db" || ops_fail "源库不存在：$source_db"
 
   echo
-  echo "== $source_db → $target_db（源库只读）"
+  echo "== $source_db → ${target_db}（源库只读）"
 
   expected_counts="$TARGET_DIR/counts/${source_db}.tsv"
   expected_hashes="$TARGET_DIR/hashes/${source_db}.tsv"
@@ -70,7 +70,7 @@ for dump in "$TARGET_DIR"/dumps/*.dump; do
   if ! docker exec -i "$OPS_DB_CONTAINER" \
     pg_restore -U "$OPS_DB_USER" -d "$target_db" \
     --no-owner --no-privileges --exit-on-error < "$dump"; then
-    echo "FAIL: pg_restore 失败（$source_db）" >&2
+    echo "FAIL: pg_restore 失败（${source_db}）" >&2
     fail=1
     continue
   fi
@@ -79,7 +79,7 @@ for dump in "$TARGET_DIR"/dumps/*.dump; do
   if diff -u "$expected_counts" <(ops_table_counts "$target_db"); then
     echo "   OK: $(wc -l < "$expected_counts" | tr -d ' ') 张表行数一致"
   else
-    echo "FAIL: 行数不一致（$source_db）" >&2
+    echo "FAIL: 行数不一致（${source_db}）" >&2
     fail=1
   fi
 
@@ -90,7 +90,7 @@ for dump in "$TARGET_DIR"/dumps/*.dump; do
       echo "   OK: ${table} rows=${rows} max_content_hash=${max_hash} md5=${md5}"
     done < "$expected_hashes"
   else
-    echo "FAIL: content_hash 不一致（$source_db）" >&2
+    echo "FAIL: content_hash 不一致（${source_db}）" >&2
     fail=1
   fi
 
@@ -109,7 +109,7 @@ done
 
 echo
 if [ "$fail" -ne 0 ]; then
-  echo "RESULT: FAIL（$TARGET_DIR）" >&2
+  echo "RESULT: FAIL（${TARGET_DIR}）" >&2
   exit 1
 fi
 echo "RESULT: PASS（backup=$(basename "$TARGET_DIR")，$checked 个库恢复到 *_restore_check 并核对一致）"

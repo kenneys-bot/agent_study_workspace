@@ -24,7 +24,7 @@ fail() { echo "FAIL: $*" >&2; exit 1; }
 remote() { ssh "$DEPLOY_HOST" "$@"; }
 
 STATE="$(remote "cat '$STATE_FILE' 2>/dev/null" || true)"
-[ -n "$STATE" ] || fail "没有部署状态 $STATE_FILE；先 make deploy"
+[ -n "$STATE" ] || fail "没有部署状态 ${STATE_FILE}；先 make deploy"
 field() { printf '%s\n' "$STATE" | sed -n "s/^$1=//p" | head -1; }
 IMAGE="$(field CURRENT_IMAGE)"
 CODE_SHA="$(field CURRENT_SHA)"
@@ -49,7 +49,7 @@ run_in_image() {
     -w /app/repo '$IMAGE' $*"
 }
 
-echo "== 服务器重建索引（镜像 $IMAGE，SHA $CODE_SHA）"
+echo "== 服务器重建索引（镜像 ${IMAGE}，SHA ${CODE_SHA}）"
 echo "-- 重建（fastembed 首次会下载模型到 data/models）"
 run_in_image python scripts/index_rebuild.py
 

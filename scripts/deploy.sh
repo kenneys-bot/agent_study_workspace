@@ -53,22 +53,22 @@ if [ "$BUILD_CONTEXT" = "$REPO_ROOT" ] && [ -n "$(git status --porcelain)" ]; th
   fail "工作树不干净，拒绝构建不可变镜像：先提交或 git stash"
 fi
 
-echo "== 部署 $BRANCH@$SHA7 → $DEPLOY_HOST（镜像 $IMAGE）"
+echo "== 部署 $BRANCH@$SHA7 → ${DEPLOY_HOST}（镜像 ${IMAGE}）"
 
 echo "-- 预检服务器"
-remote "test -f '$APP_ENV_FILE'" || fail "服务器缺少 $APP_ENV_FILE（见 deploy/env.app.example）"
+remote "test -f '$APP_ENV_FILE'" || fail "服务器缺少 ${APP_ENV_FILE}（见 deploy/env.app.example）"
 remote "test -f '$REMOTE_ROOT/.env.pg'" || fail "服务器缺少 $REMOTE_ROOT/.env.pg（数据库凭据）"
 remote "docker inspect bank-assistant-db-db-1 >/dev/null 2>&1" \
   || fail "数据库容器 bank-assistant-db-db-1 未运行"
 remote "test -d '$REMOTE_REPO/.git'" || fail "服务器缺少仓库 checkout：$REMOTE_REPO"
 if [ -n "$(remote "cd '$REMOTE_REPO' && git status --porcelain")" ]; then
-  fail "服务器工作树有未提交改动；拒绝覆盖（先人工处理 $REMOTE_REPO）"
+  fail "服务器工作树有未提交改动；拒绝覆盖（先人工处理 ${REMOTE_REPO}）"
 fi
 APP_UID="$(remote id -u)"
 APP_GID="$(remote id -g)"
 
 if [ "${SKIP_BUILD:-0}" != "1" ]; then
-  echo "-- docker build（上下文 $BUILD_CONTEXT，平台 $PLATFORM）"
+  echo "-- docker build（上下文 ${BUILD_CONTEXT}，平台 ${PLATFORM}）"
   if docker buildx version >/dev/null 2>&1; then
     docker buildx build --platform "$PLATFORM" --load \
       -f "$REPO_ROOT/deploy/docker/Dockerfile.api" -t "$IMAGE" "$BUILD_CONTEXT"
@@ -90,13 +90,13 @@ if [ "${SKIP_BUILD:-0}" != "1" ]; then
   remote "rm -f '$REMOTE_TAR'"
   REMOTE_IMAGE_ID="$(remote "docker image inspect --format '{{.Id}}' '$IMAGE'")"
   [ "$IMAGE_ID" = "$REMOTE_IMAGE_ID" ] \
-    || fail "两端 image id 不一致（本地 $IMAGE_ID，服务器 $REMOTE_IMAGE_ID）"
+    || fail "两端 image id 不一致（本地 ${IMAGE_ID}，服务器 ${REMOTE_IMAGE_ID}）"
   echo "   服务器 image id=$REMOTE_IMAGE_ID tar_sha256=$TRANSFER_SHA"
 else
   REMOTE_IMAGE_ID="$(remote "docker image inspect --format '{{.Id}}' '$IMAGE'" 2>/dev/null || true)"
   [ -n "$REMOTE_IMAGE_ID" ] || fail "SKIP_BUILD=1 但服务器没有镜像 $IMAGE"
   TRANSFER_SHA="skipped"
-  echo "   跳过构建/传输（服务器已有 $REMOTE_IMAGE_ID）"
+  echo "   跳过构建/传输（服务器已有 ${REMOTE_IMAGE_ID}）"
 fi
 
 echo "-- 服务器 checkout 对齐到 $CODE_SHA"
@@ -105,7 +105,7 @@ if [ "$REMOTE_HAS_SHA" != "yes" ]; then
   BUNDLE="$LOCAL_DATA/deploy-$SHA7.bundle"
   rm -f "$BUNDLE"
   git bundle create "$BUNDLE" "$BRANCH" >/dev/null \
-    || fail "无法生成 git bundle（分支 $BRANCH）"
+    || fail "无法生成 git bundle（分支 ${BRANCH}）"
   scp -q "$BUNDLE" "$DEPLOY_HOST:/tmp/bank-assistant-deploy-$SHA7.bundle"
   remote "cd '$REMOTE_REPO' && git fetch -q /tmp/bank-assistant-deploy-$SHA7.bundle 'refs/heads/$BRANCH' && rm -f /tmp/bank-assistant-deploy-$SHA7.bundle"
   remote "cd '$REMOTE_REPO' && git reset --hard FETCH_HEAD"
@@ -114,7 +114,7 @@ else
   remote "cd '$REMOTE_REPO' && git reset --hard '$CODE_SHA'"
 fi
 remote "cd '$REMOTE_REPO' && test \"\$(git rev-parse HEAD)\" = '$CODE_SHA' && test -z \"\$(git status --porcelain)\"" \
-  || fail "服务器 checkout 未能对齐到 $CODE_SHA（或有未提交文件）"
+  || fail "服务器 checkout 未能对齐到 ${CODE_SHA}（或有未提交文件）"
 echo "   服务器 HEAD=$CODE_SHA 且工作树干净"
 
 echo "-- 同步部署文件（仓库外副本，与数据库 compose 同模式）"
@@ -133,7 +133,7 @@ if [ -n "$CURRENT_IMAGE" ] && [ "$CURRENT_IMAGE" != "$IMAGE" ]; then
 fi
 [ -n "$PREVIOUS_IMAGE" ] || echo "   提示：暂无上一版镜像（首次部署，回滚点为空）"
 
-echo "-- docker compose up（restart=unless-stopped，127.0.0.1:$API_PORT）"
+echo "-- docker compose up（restart=unless-stopped，127.0.0.1:${API_PORT}）"
 remote "mkdir -p '$REMOTE_ROOT/deploy' && umask 022 && cat > '$STATE_FILE'" <<EOF
 DEPLOYED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 CURRENT_IMAGE=$IMAGE
@@ -157,5 +157,5 @@ echo "-- 校验部署"
 EXPECT_CODE_SHA="$CODE_SHA" REQUIRE_INDEX="${REQUIRE_INDEX:-0}" \
   bash "$REPO_ROOT/scripts/verify_deployment.sh"
 
-echo "OK: deployed $IMAGE（code_sha=$CODE_SHA image_id=$REMOTE_IMAGE_ID）"
+echo "OK: deployed ${IMAGE}（code_sha=$CODE_SHA image_id=${REMOTE_IMAGE_ID}）"
 echo "    rollback: make rollback（上一版 ${PREVIOUS_IMAGE:-无}）"

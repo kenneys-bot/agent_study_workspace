@@ -27,7 +27,7 @@ fail() { echo "FAIL: $*" >&2; exit 1; }
 remote() { ssh "$DEPLOY_HOST" "$@"; }
 
 STATE="$(remote "cat '$STATE_FILE' 2>/dev/null" || true)"
-[ -n "$STATE" ] || fail "没有部署状态 $STATE_FILE；先 make deploy"
+[ -n "$STATE" ] || fail "没有部署状态 ${STATE_FILE}；先 make deploy"
 
 field() { printf '%s\n' "$STATE" | sed -n "s/^$1=//p" | head -1; }
 CURRENT_IMAGE="$(field CURRENT_IMAGE)"
@@ -46,7 +46,7 @@ APP_GID="$(remote id -g)"
 
 deploy_image() { # deploy_image <image> <sha> <branch> <label> <require_index>
   local image="$1" sha="$2" branch="$3" label="$4" require_index="$5"
-  echo "-- $label：up $image"
+  echo "-- ${label}：up $image"
   remote "cd '$REMOTE_REPO' && \
     APP_ENV_FILE='$APP_ENV_FILE' \
     APP_DATA_DIR='$REMOTE_ROOT/data' \
@@ -59,7 +59,7 @@ deploy_image() { # deploy_image <image> <sha> <branch> <label> <require_index>
     bash "$REPO_ROOT/scripts/verify_deployment.sh"
 }
 
-echo "== 回滚演练：$CURRENT_IMAGE（$CURRENT_SHA）→ $PREVIOUS_IMAGE（$PREVIOUS_SHA）"
+echo "== 回滚演练：${CURRENT_IMAGE}（${CURRENT_SHA}）→ ${PREVIOUS_IMAGE}（${PREVIOUS_SHA}）"
 remote "docker inspect -f '{{.State.Health.Status}}' bank-assistant-db-db-1"
 
 # 确认 schema 未变化：回滚旧代码前检查 alembic head，不盲目降库。
@@ -71,4 +71,4 @@ deploy_image "$PREVIOUS_IMAGE" "$PREVIOUS_SHA" "rollback-to-${PREVIOUS_SHA:0:7}"
 echo "-- 2/2 恢复新版本"
 deploy_image "$CURRENT_IMAGE" "$CURRENT_SHA" "$CURRENT_BRANCH" "恢复当前版" 1
 
-echo "RESULT: PASS（已回滚到 $PREVIOUS_IMAGE 并通过 live/ready/version 校验，再恢复 $CURRENT_IMAGE）"
+echo "RESULT: PASS（已回滚到 $PREVIOUS_IMAGE 并通过 live/ready/version 校验，再恢复 ${CURRENT_IMAGE}）"

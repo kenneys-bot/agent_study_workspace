@@ -26,7 +26,7 @@ TARGET_DIR="$BACKUP_ROOT/$BACKUP_ID"
 require_db_container
 
 if [ -e "$TARGET_DIR" ]; then
-  ops_fail "备份目录已存在：$TARGET_DIR（不覆盖旧备份；换个 BACKUP_ID）"
+  ops_fail "备份目录已存在：${TARGET_DIR}（不覆盖旧备份；换个 BACKUP_ID）"
 fi
 
 mkdir -p "$TARGET_DIR"/{dumps,counts,hashes,alembic}
@@ -46,7 +46,7 @@ fi
   echo "databases=$OPS_DB_DATABASES"
 } > "$TARGET_DIR/meta.txt"
 
-echo "-- backup $BACKUP_ID → $TARGET_DIR（源库只读）"
+echo "-- backup $BACKUP_ID → ${TARGET_DIR}（源库只读）"
 
 for database in $OPS_DB_DATABASES; do
   [[ "$database" =~ ^bank_assistant_[a-z0-9_]+$ ]] \

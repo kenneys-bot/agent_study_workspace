@@ -23,7 +23,7 @@ BASE_URL="http://127.0.0.1:$API_PORT"
 fail() { echo "FAIL: $*" >&2; exit 1; }
 remote() { ssh "$DEPLOY_HOST" "$@"; }
 
-echo "== verify deployment @ $DEPLOY_HOST（$BASE_URL）"
+echo "== verify deployment @ ${DEPLOY_HOST}（${BASE_URL}）"
 
 echo "-- 1) 健康探针（服务器回环）"
 LIVE="$(remote "curl -fsS --max-time 5 '$BASE_URL/health/live'")" \
