@@ -58,6 +58,9 @@ class Settings(BaseSettings):
     MODEL_FALLBACK_PROVIDER: Optional[str] = Field(
         default=None, validation_alias="MODEL_FALLBACK_PROVIDER"
     )
+    # 运行模式：live 调用真实模型；replay 只用于显式回放。版本页如实展示，
+    # 不允许把回放结果伪装成真实模型结论。
+    MODEL_MODE: str = Field(default="live", validation_alias="MODEL_MODE")
     LLM_TIMEOUT_SECONDS: float = Field(default=60.0, validation_alias="LLM_TIMEOUT_SECONDS")
     LLM_MAX_RETRIES: int = Field(default=2, validation_alias="LLM_MAX_RETRIES")
     LLM_MAX_TOKENS_CHAT: int = Field(default=3000, validation_alias="LLM_MAX_TOKENS_CHAT")
@@ -143,6 +146,15 @@ class Settings(BaseSettings):
         if v.upper() not in allowed_levels:
             raise ValueError(f"LOG_LEVEL必须为以下值之一: {allowed_levels}")
         return v.upper()
+
+    @field_validator("MODEL_MODE")
+    @classmethod
+    def validate_model_mode(cls, v: str) -> str:
+        """运行模式只允许 live / replay，避免版本页展示无法解释的值。"""
+        allowed_modes = ["live", "replay"]
+        if v.lower() not in allowed_modes:
+            raise ValueError(f"MODEL_MODE必须为以下值之一: {allowed_modes}")
+        return v.lower()
     
     @field_validator("DATABASE_URL")
     @classmethod

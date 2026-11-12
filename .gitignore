@@ -43,6 +43,8 @@ web/dist/
 
 # uv 本地缓存（沙箱内）
 .uv-cache/
+# npm 本地缓存（沙箱内 HOME 不可写时使用）
+.npm-cache/
 
 # implement-spec 并行 worktree
 .worktrees/

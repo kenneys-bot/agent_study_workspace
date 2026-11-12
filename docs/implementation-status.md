@@ -68,7 +68,7 @@ Ubuntu 与 Mac 同 SHA；两端 `uv run pytest tests -q` 均 144 用例全过（
 | 工单 | 状态 | 证据 |
 |---|---|---|
 | #18 T17 规则版本与演示规则集 | IN_PROGRESS | worktree 中进行 |
-| #19 T18 质检任务执行 | READY_FOR_ACCEPTANCE | inspection_runs/findings + 0009 迁移；202+幂等、worker 租约/条件最终化、失败 error_code；371 unit / 94 integration |
+| #19 T18 质检任务执行 | READY_FOR_ACCEPTANCE | inspection_runs/findings + 0009 迁移；202+幂等、worker 租约/条件最终化、失败 error_code；379 unit / 94 integration |
 | #20 T19 证据定位与校验 | BLOCKED | 等 #19 |
 | #21 T20 人工复核闭环 | BLOCKED | 等 #20 |
 | #22 T21 报告导出 | BLOCKED | 等 #21 |

@@ -32,6 +32,7 @@ from bank_assistant.api.routers import (
     quality_inspector_router,
     rules_router,
     suggestions_router,
+    system_router,
     tasks_router,
 )
 
@@ -102,6 +103,7 @@ app.include_router(quality_inspector_router, prefix=API_PREFIX)
 app.include_router(tasks_router, prefix=API_PREFIX)
 app.include_router(inspections_router, prefix=API_PREFIX)
 app.include_router(suggestions_router, prefix=API_PREFIX)
+app.include_router(system_router, prefix=API_PREFIX)
 
 
 # 根路径
