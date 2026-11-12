@@ -1,0 +1,36 @@
+# M6 固定评测：回放模式（流水线校验，无网络、无模型调用、无成本）
+#
+# 用法：make dataset-build && make eval
+# 产物：artifacts/evals/<run_id>/{manifest.json,metrics.json,predictions.jsonl}
+mode: replay
+split: test
+
+dataset_id: bank-cs-m6-synthetic
+dataset_version: v1
+dataset_dir: artifacts/data/bank-cs-m6-synthetic/v1
+artifact_root: artifacts
+seed: 42
+
+top_k: 5
+# 回放用确定性词法 embedding。0.10 是流水线校验阈值，不是生产语义阈值；
+# live 配置使用生产默认 0.55。
+min_similarity: 0.10
+max_items: null
+budget_cny: 0.0
+
+model:
+  provider: deepseek
+  model: deepseek-chat
+embedding:
+  provider: replay_lexical
+
+pricing: []
+
+scope_id: demo-bank
+tasks:
+  - retrieval
+  - inspection
+
+notes:
+  purpose: "replay：只验证流水线与产物，不产生质量门槛结论"
+  embedding: "replay-lexical-char2gram-v1，不是生产 BGE"

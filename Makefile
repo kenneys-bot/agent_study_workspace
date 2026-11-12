@@ -74,8 +74,8 @@ index-info: ## [M3] 打印当前活动索引版本与清单摘要
 worker: ## [M4] 启动质检 worker（领取租约任务、按规则快照执行）
 	@$(UV) run python -m bank_assistant.worker
 
-eval: ## [M6] 固定评测（Ubuntu）
-	@echo "NOT_IMPLEMENTED: eval 在 M6 实现；需要 EVAL_CONFIG=path" >&2; exit 2
+eval: ## [M6] 固定评测：默认 replay；用 EVAL_CONFIG=path 覆盖（live 需样本/预算上限）
+	@$(UV) run python -m scripts.run_eval --config "$${EVAL_CONFIG:-configs/eval/replay.yaml}"
 
 train: ## [M6] 条件任务：4-bit QLoRA 微调（Ubuntu）
 	@echo "NOT_IMPLEMENTED: train 为 M6 条件任务；需先冻结测试集" >&2; exit 2
