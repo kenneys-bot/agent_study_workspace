@@ -9,6 +9,7 @@ from .knowledge import router as knowledge_router
 from .knowledge_base import router as knowledge_base_router
 from .script_recommender import router as script_recommender_router
 from .quality_inspector import router as quality_inspector_router
+from .suggestions import router as suggestions_router
 from .tasks import router as tasks_router
 
 __all__ = [
@@ -19,5 +20,6 @@ __all__ = [
     "knowledge_router",
     "script_recommender_router",
     "quality_inspector_router",
+    "suggestions_router",
     "tasks_router",
 ]
