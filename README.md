@@ -78,6 +78,25 @@ make seed-demo       # 幂等导入：演示账号 + 32 条演示知识 + 6 条�
 - 接口（`/api/v1`）：`POST /rules`、`POST /rules/versions/{id}/submit|publish|retire`、
   `GET /rules/{rule_id}`（返回生效的 published 版本 + applicability）。
 
+### 质检任务执行（M4-03，T18）
+
+```bash
+make worker          # 常驻 worker：领取租约任务、按规则快照执行质检（需要模型凭据 + PostgreSQL）
+uv run python -m bank_assistant.worker --once   # 本地验证：抽干当前队列后退出
+```
+
+- `POST /api/v1/inspections`（需 `Idempotency-Key`）返回 **202 + inspection_id + task_id**；
+  创建时把当前范围内**已发布且在有效期**的规则版本固化为 `rule_snapshot`，可按
+  `business_type` 与 `rule_ids` 收窄规则范围。没有适用规则时返回 422，不创建空跑质检。
+- `GET /api/v1/inspections/{id}` 返回状态、逐规则判断（`hit / clear /
+  insufficient_evidence / not_applicable`）、证据 JSON、知识引用与失败原因；跨范围与
+  不存在统一 404。机器判断 `machine_verdict` 写入后不可覆盖，人工复核（后续票）只能追加。
+- worker 使用既有租约队列：处理前续租，模型调用在事务外；收尾用
+  `UPDATE ... WHERE status IN ('queued','running')` 条件更新 + findings
+  `(inspection_id, rule_version_id)` 唯一约束，保证**同一质检只有一个最终结果**、重复投递
+  不产生重复判断（CT-11）。模型/校验失败写稳定 `error_code` 与安全诊断，重试上限
+  `TASK_MAX_ATTEMPTS`（默认 3）后终结为 `failed`；不会用空 findings 冒充“无问题”。
+
 ## 设计与决策
 
 - 需求与验收：[计划书 v1.1](docs/plan/bank-customer-service-plan.md)、[系统契约](docs/plan/bank-customer-service-contracts.md)、[执行交接](docs/plan/bank-customer-service-execution.md)、[现状分析](docs/plan/bank-customer-service-assessment.md)
