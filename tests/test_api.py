@@ -8,9 +8,22 @@ from fastapi.testclient import TestClient
 
 @pytest.fixture
 def client():
-    """创建测试客户端"""
+    """创建测试客户端（M1 原型端点现要求认证，测试用固定身份放行）。"""
     from bank_assistant.main import app
-    return TestClient(app)
+
+    from uuid import uuid4
+
+    from bank_assistant.security.authorization import get_current_identity
+    from bank_assistant.security.identity import Identity
+
+    app.dependency_overrides[get_current_identity] = lambda: Identity(
+        user_id=uuid4(),
+        username="legacy-api-test",
+        role="agent",
+        scope_id="legacy-api-scope",
+    )
+    yield TestClient(app)
+    app.dependency_overrides.clear()
 
 
 @pytest.fixture

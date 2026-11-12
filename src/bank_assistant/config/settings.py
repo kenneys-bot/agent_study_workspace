@@ -101,6 +101,41 @@ class Settings(BaseSettings):
     ARTIFACT_ROOT: str = Field(
         default="artifacts", validation_alias="ARTIFACT_ROOT"
     )
+
+    # ---- M7-02 观测（T30） ----
+    # /metrics 只绑服务器回环（compose 的 --host 127.0.0.1）即可视为内部端点；
+    # 若将来需要跨主机抓取，再配置这个可选令牌（Authorization: Bearer）。
+    METRICS_TOKEN: Optional[str] = Field(default=None, validation_alias="METRICS_TOKEN")
+
+    # ---- M7-03 限流（T30） ----
+    # 单进程内存令牌桶；当前部署是一个 uvicorn worker，多实例时需要换成共享存储。
+    RATE_LIMIT_ENABLED: bool = Field(default=True, validation_alias="RATE_LIMIT_ENABLED")
+    RATE_LIMIT_LOGIN_PER_MINUTE: int = Field(
+        default=30, ge=1, validation_alias="RATE_LIMIT_LOGIN_PER_MINUTE"
+    )
+    RATE_LIMIT_LOGIN_BURST: int = Field(
+        default=10, ge=1, validation_alias="RATE_LIMIT_LOGIN_BURST"
+    )
+    RATE_LIMIT_EXPENSIVE_PER_MINUTE: int = Field(
+        default=60, ge=1, validation_alias="RATE_LIMIT_EXPENSIVE_PER_MINUTE"
+    )
+    RATE_LIMIT_EXPENSIVE_BURST: int = Field(
+        default=20, ge=1, validation_alias="RATE_LIMIT_EXPENSIVE_BURST"
+    )
+
+    # ---- M7-03 输入上限（T30） ----
+    # 请求体字节上限（客户端通常带 Content-Length；分块上传由字段上限兜底）。
+    MAX_REQUEST_BYTES: int = Field(
+        default=2_000_000, ge=1024, validation_alias="MAX_REQUEST_BYTES"
+    )
+    # 单次会话原文上限（码点）；超限显式 413，不静默截断后当成完整会话。
+    MAX_CONVERSATION_CHARS: int = Field(
+        default=200_000, ge=1, validation_alias="MAX_CONVERSATION_CHARS"
+    )
+    # 单次候选答复问题上限（码点）；超限显式 422，避免把整段材料塞进模型。
+    MAX_PROMPT_CHARS: int = Field(
+        default=4_000, ge=1, validation_alias="MAX_PROMPT_CHARS"
+    )
     
     # Redis配置
     REDIS_HOST: str = Field(default="localhost", validation_alias="REDIS_HOST")

@@ -31,8 +31,10 @@ class ConversationCreateRequest(BaseModel):
     content: str = Field(
         ...,
         min_length=1,
-        max_length=200_000,
-        description="会话原文（text 或 JSON 字符串），按原样保存且不可变",
+        description=(
+            "会话原文（text 或 JSON 字符串），按原样保存且不可变；"
+            "上限由 MAX_CONVERSATION_CHARS 配置，超限显式 413"
+        ),
     )
     format: Literal["text", "json"] = Field(
         "text", description="内容格式：text 或 json"

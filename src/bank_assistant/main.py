@@ -3,23 +3,34 @@
 基于FastAPI的Web服务
 """
 
+import hmac
 import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import PlainTextResponse
 
 from bank_assistant.config.settings import settings
 from bank_assistant.config.constants import API_PREFIX
 from bank_assistant.infra.db import ping_database
 from bank_assistant.utils.logger import LoggerConfig
 from bank_assistant.api.errors import (
+    ApiError,
     TraceIdMiddleware,
     error_response,
     install_error_handlers,
     resolve_trace_id,
 )
+from bank_assistant.observability.http import RequestObservabilityMiddleware
+from bank_assistant.observability.metrics import (
+    METRICS,
+    TASK_QUEUE_DEPTH,
+    collect_task_queue_depth,
+    record_db_probe,
+)
+from bank_assistant.security.input_limits import RequestSizeLimitMiddleware
 from bank_assistant.api.routers import (
     auth_router,
     conversations_router,
@@ -83,6 +94,12 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["x-trace-id"],
 )
+# add_middleware 是“后加的更靠外”。目标顺序（由外到内）：
+# TraceId → 请求观测（指标/结构化日志）→ 大小上限 → CORS → 路由。
+# 观测层放在 TraceId 内层才能读到 trace_id；大小上限放在观测层内层，使 413
+# 也会被计数和记录（但不读取 body）。
+app.add_middleware(RequestSizeLimitMiddleware)
+app.add_middleware(RequestObservabilityMiddleware)
 app.add_middleware(TraceIdMiddleware)
 
 
@@ -148,6 +165,7 @@ async def health_ready(request: Request):
     try:
         await run_in_threadpool(ping_database)
     except Exception as exc:  # 连接失败、超时、驱动错误都视为不可用
+        record_db_probe(False)
         logger.warning("readiness 检查失败: %s", type(exc).__name__)
         return error_response(
             status_code=503,
@@ -157,11 +175,52 @@ async def health_ready(request: Request):
             retryable=True,
             details={"dependency": "postgresql"},
         )
+    record_db_probe(True)
     return {
         "status": "ready",
         "checks": {"database": "ok"},
         "trace_id": trace_id,
     }
+
+
+# 指标抓取：Prometheus 文本格式。只绑服务器回环（compose 的 --host 127.0.0.1），
+# 默认是内部端点；需要跨主机抓取时配置 METRICS_TOKEN 并要求 Bearer 令牌。
+# 指标只含聚合计数/延迟/队列深度/数据库就绪，不含会话内容、用户 id 或凭据。
+@app.get("/metrics")
+async def metrics(request: Request):
+    """Prometheus 文本指标；数据库不可达时仍可抓取（bank_db_ready=0）。"""
+    if settings.METRICS_TOKEN:
+        supplied = request.headers.get("authorization", "")
+        if not hmac.compare_digest(
+            supplied, f"Bearer {settings.METRICS_TOKEN}"
+        ):
+            raise ApiError(
+                status_code=401,
+                code="UNAUTHENTICATED",
+                message="指标端点需要令牌",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+    try:
+        await run_in_threadpool(ping_database)
+    except Exception:  # 不因数据库故障让监控端点失败
+        record_db_probe(False)
+    else:
+        record_db_probe(True)
+
+    depth = await run_in_threadpool(collect_task_queue_depth)
+    # 固定输出契约 §3 的全部状态，队列为空时也暴露 0，便于告警区分
+    # “没有任务”和“指标缺失”。
+    for status_name in ("queued", "running", "succeeded", "failed", "cancelled"):
+        TASK_QUEUE_DEPTH.set(
+            depth.get(status_name, 0),
+            {"task_type": "inspection", "status": status_name},
+        )
+
+    return PlainTextResponse(
+        METRICS.render(),
+        media_type="text/plain; version=0.0.4; charset=utf-8",
+    )
 
 
 # 应用信息

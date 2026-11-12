@@ -12,6 +12,7 @@ from pythonjsonlogger import jsonlogger
 
 from bank_assistant.config.settings import settings
 from bank_assistant.config.constants import LOG_FORMAT, LOG_ROTATION, LOG_RETENTION, LOG_COMPRESSION
+from bank_assistant.observability.redaction import install_redacting_filter
 
 
 class LoggerConfig:
@@ -56,6 +57,9 @@ class LoggerConfig:
         """配置标准日志记录器"""
         standard_logger = logging.getLogger()
         standard_logger.setLevel(settings.LOG_LEVEL)
+        # M7-02：所有 stdlib 日志（含 caplog/文件/stdout）先经过脱敏过滤器，
+        # 兜底清除连接串密码、API key、Bearer 令牌等已知秘密形态。
+        install_redacting_filter(standard_logger)
         
         # 清除现有处理器
         standard_logger.handlers.clear()

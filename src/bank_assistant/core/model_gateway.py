@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Callable, Mapping, Optional, Sequence, Type
@@ -24,6 +25,11 @@ from pydantic import BaseModel, ValidationError
 
 from bank_assistant.config.settings import settings
 from bank_assistant.core.errors import CapabilityUnavailableError
+from bank_assistant.observability.metrics import (
+    MODEL_CALLS,
+    MODEL_LATENCY,
+    MODEL_TOKENS,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -96,6 +102,9 @@ class ModelResult:
     error: Optional[str] = None
     attempts: int = 1
     fallback_used: bool = False
+    # 真实调用返回的 usage；回放/失败调用为 0。只用于聚合指标，不含内容。
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
 
     @property
     def ok(self) -> bool:
@@ -226,10 +235,19 @@ class ModelGateway:
         max_tokens: Optional[int] = None,
         temperature: float = 0.0,
     ) -> ModelResult:
-        """调用模型；可选地把 content 解析并按 `schema` 校验。"""
+        """调用模型；可选地把 content 解析并按 `schema` 校验。
+
+        所有路径都在这里统一记录最终结果与耗时指标（失败也计数），回放同样
+        计入，但 ``mode`` 标签会如实区分 live/replay。
+        """
+        started = time.perf_counter()
         if self._replay:
-            return self._complete_replay(messages, schema)
-        return self._complete_live(messages, schema, max_tokens, temperature)
+            result = self._complete_replay(messages, schema)
+        else:
+            result = self._complete_live(messages, schema, max_tokens, temperature)
+        self._record_result(result, time.perf_counter() - started)
+        self._log_result(result)
+        return result
 
     def structured(
         self,
@@ -323,7 +341,6 @@ class ModelGateway:
                             status.value,
                         )
                         break
-                    self._log_result(result)
                     return result
 
                 finish_reason = None
@@ -331,6 +348,9 @@ class ModelGateway:
                 if response.choices:
                     finish_reason = response.choices[0].finish_reason
                     content = response.choices[0].message.content or ""
+                usage = getattr(response, "usage", None)
+                prompt_tokens = int(getattr(usage, "prompt_tokens", 0) or 0)
+                completion_tokens = int(getattr(usage, "completion_tokens", 0) or 0)
                 result = self._interpret_text(
                     content,
                     finish_reason,
@@ -340,8 +360,9 @@ class ModelGateway:
                     "live",
                     attempts,
                     fallback_used,
+                    prompt_tokens=prompt_tokens,
+                    completion_tokens=completion_tokens,
                 )
-                self._log_result(result)
                 return result
 
         return ModelResult(
@@ -363,6 +384,9 @@ class ModelGateway:
         mode: str,
         attempts: int,
         fallback_used: bool,
+        *,
+        prompt_tokens: int = 0,
+        completion_tokens: int = 0,
     ) -> ModelResult:
         """把模型输出变成成功或显式失败。非 JSON / 不合 schema / 空内容均为失败。"""
         base = {
@@ -372,6 +396,8 @@ class ModelGateway:
             "finish_reason": finish_reason,
             "attempts": attempts,
             "fallback_used": fallback_used,
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
         }
         if not content or not content.strip():
             # ADR-0004：finish_reason=length 且 content 为空必须判失败，
@@ -437,10 +463,36 @@ class ModelGateway:
         self._clients[provider] = client
         return client
 
+    def _record_result(self, result: ModelResult, duration_seconds: float) -> None:
+        """记录聚合指标；标签只含供应商/模型/状态/模式，不含 prompt 或内容。"""
+        provider = result.provider.value if result.provider else "none"
+        model = result.model or "none"
+        MODEL_CALLS.inc(
+            {
+                "provider": provider,
+                "model": model,
+                "status": result.status.value,
+                "mode": result.mode,
+            }
+        )
+        if result.prompt_tokens:
+            MODEL_TOKENS.inc(
+                {"provider": provider, "model": model, "kind": "prompt"},
+                result.prompt_tokens,
+            )
+        if result.completion_tokens:
+            MODEL_TOKENS.inc(
+                {"provider": provider, "model": model, "kind": "completion"},
+                result.completion_tokens,
+            )
+        MODEL_LATENCY.observe(
+            duration_seconds, {"provider": provider, "mode": result.mode}
+        )
+
     def _log_result(self, result: ModelResult) -> None:
         logger.info(
             "model_call provider=%s model=%s mode=%s status=%s finish_reason=%s "
-            "attempts=%d fallback_used=%s",
+            "attempts=%d fallback_used=%s prompt_tokens=%d completion_tokens=%d",
             result.provider.value if result.provider else "none",
             result.model,
             result.mode,
@@ -448,6 +500,8 @@ class ModelGateway:
             result.finish_reason,
             result.attempts,
             result.fallback_used,
+            result.prompt_tokens,
+            result.completion_tokens,
         )
 
 

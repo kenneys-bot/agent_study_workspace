@@ -14,7 +14,19 @@ API = "/api/v1/quality-inspector"
 def client():
     from bank_assistant.main import app
 
-    return TestClient(app)
+    from uuid import uuid4
+
+    from bank_assistant.security.authorization import get_current_identity
+    from bank_assistant.security.identity import Identity
+
+    app.dependency_overrides[get_current_identity] = lambda: Identity(
+        user_id=uuid4(),
+        username="legacy-api-test",
+        role="agent",
+        scope_id="legacy-api-scope",
+    )
+    yield TestClient(app)
+    app.dependency_overrides.clear()
 
 
 def assert_not_implemented(response) -> dict:

@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, Request
 
 from bank_assistant.core.llm_client import get_llm_client
 from bank_assistant.api.errors import ApiError, ErrorResponse, not_implemented_response
+from bank_assistant.security.authorization import get_current_identity
 from bank_assistant.api.models.quality_inspector import (
     ParseConversationRequest,
     ParseConversationResponse,
@@ -30,7 +31,12 @@ from bank_assistant.assistants.quality_inspector.conversation_parser import (
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/quality-inspector", tags=["质检助手"])
+# M7-03/T30：旧版 M1 原型端点也必须认证，不能成为未授权入口。
+router = APIRouter(
+    prefix="/quality-inspector",
+    tags=["质检助手"],
+    dependencies=[Depends(get_current_identity)],
+)
 
 
 def get_conversation_parser() -> ConversationParser:

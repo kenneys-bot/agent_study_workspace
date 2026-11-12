@@ -22,12 +22,17 @@ from bank_assistant.infra.db import get_db_session
 from bank_assistant.security.authentication import authenticate
 from bank_assistant.security.authorization import get_current_identity
 from bank_assistant.security.identity import Identity
+from bank_assistant.security.rate_limit import enforce_login_rate_limit
 from bank_assistant.security.tokens import create_access_token
 
 router = APIRouter(tags=["auth"])
 
 
-@router.post("/auth/login", response_model=TokenResponse)
+@router.post(
+    "/auth/login",
+    response_model=TokenResponse,
+    dependencies=[Depends(enforce_login_rate_limit)],
+)
 def login(
     payload: LoginRequest,
     session: Session = Depends(get_db_session),

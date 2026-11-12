@@ -33,6 +33,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from bank_assistant.config.settings import settings
 from bank_assistant.infra.db import get_session_factory
 from bank_assistant.infra.models import Task
+from bank_assistant.observability.metrics import TASK_EVENTS
 
 __all__ = [
     "LeaseLostError",
@@ -166,7 +167,7 @@ class TaskQueue:
         覆盖两类：租约已过期的 ``running``（worker 崩溃在最后一次尝试）和
         无租约的 ``queued``（异常数据，防御性终结）。
         """
-        session.execute(
+        result = session.execute(
             update(Task)
             .where(
                 Task.type == task_type,
@@ -189,6 +190,10 @@ class TaskQueue:
                 updated_at=now,
             )
         )
+        if result.rowcount:
+            TASK_EVENTS.inc(
+                {"event": "sweep", "task_type": task_type}, result.rowcount
+            )
 
     def claim_next(
         self,
@@ -234,6 +239,7 @@ class TaskQueue:
             )
             if task is None:
                 return None
+            reclaimed = task.status == TaskStatus.RUNNING.value
             # 与 SQL 谓词同一套规则；行锁后复核，防止谓词与判定漂移。
             if not can_claim(
                 TaskStatus(task.status),
@@ -250,6 +256,12 @@ class TaskQueue:
             task.error_code = None
             task.updated_at = now
             session.flush()
+            TASK_EVENTS.inc(
+                {
+                    "event": "reclaim" if reclaimed else "claim",
+                    "task_type": task_type,
+                }
+            )
             return task
 
     def _load_locked(self, session: Session, task_id: UUID) -> Task | None:
@@ -266,6 +278,7 @@ class TaskQueue:
             or task.lease_owner != owner
             or not is_lease_active(task.lease_expires_at, now)
         ):
+            TASK_EVENTS.inc({"event": "lease_lost", "task_type": task.type})
             raise LeaseLostError("租约已失效：任务可能已过期、完成或转由其他 worker 持有")
         return task
 
@@ -291,6 +304,7 @@ class TaskQueue:
             task.lease_expires_at = deadline
             task.updated_at = now
             session.flush()
+            TASK_EVENTS.inc({"event": "renew", "task_type": task.type})
             return task
 
     def complete(
@@ -313,7 +327,11 @@ class TaskQueue:
             task = self._load_locked(session, task_id)
             if task is not None and task.status == TaskStatus.SUCCEEDED.value:
                 if task.result_ref == result_ref:
+                    TASK_EVENTS.inc(
+                        {"event": "success_idempotent", "task_type": task.type}
+                    )
                     return task
+                TASK_EVENTS.inc({"event": "lease_lost", "task_type": task.type})
                 raise LeaseLostError("任务已完成，拒绝覆盖最终结果")
             task = self._ensure_lease(task, owner, now)
             task.status = TaskStatus.SUCCEEDED.value
@@ -322,6 +340,7 @@ class TaskQueue:
             task.lease_expires_at = None
             task.updated_at = now
             session.flush()
+            TASK_EVENTS.inc({"event": "success", "task_type": task.type})
             return task
 
     def fail(
@@ -348,6 +367,7 @@ class TaskQueue:
                 and task.error_code == error_code
             ):
                 # 同一失败报告的重试：幂等返回，不覆盖其他终态。
+                TASK_EVENTS.inc({"event": "fail_idempotent", "task_type": task.type})
                 return task
             task = self._ensure_lease(task, owner, now)
             next_status = next_status_after_failure(
@@ -360,4 +380,10 @@ class TaskQueue:
                 task.lease_owner = None
             task.updated_at = now
             session.flush()
+            TASK_EVENTS.inc(
+                {
+                    "event": "retry" if next_status is TaskStatus.QUEUED else "fail",
+                    "task_type": task.type,
+                }
+            )
             return task

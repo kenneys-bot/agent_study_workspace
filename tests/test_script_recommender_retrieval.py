@@ -161,12 +161,22 @@ def test_rerank_failure_is_exposed_with_machine_readable_code():
 def _post_recommend(recommender, payload):
     from fastapi.testclient import TestClient
 
+    from uuid import uuid4
+
     from bank_assistant.api.routers.script_recommender import (
         get_script_recommender,
     )
     from bank_assistant.main import app
+    from bank_assistant.security.authorization import get_current_identity
+    from bank_assistant.security.identity import Identity
 
     app.dependency_overrides[get_script_recommender] = lambda: recommender
+    app.dependency_overrides[get_current_identity] = lambda: Identity(
+        user_id=uuid4(),
+        username="legacy-api-test",
+        role="agent",
+        scope_id="legacy-api-scope",
+    )
     try:
         return TestClient(app).post(
             "/api/v1/script-recommender/recommend-scripts", json=payload

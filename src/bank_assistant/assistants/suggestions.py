@@ -52,11 +52,13 @@ from bank_assistant.assistants.candidate_answer import (
     CandidateAnswerStatus,
     Citation,
 )
+from bank_assistant.config.settings import settings
 from bank_assistant.core.model_gateway import (
     ModelCallStatus,
     ModelGateway,
     ModelResult,
 )
+from bank_assistant.security.input_limits import truncate_text
 from bank_assistant.infra.models import (
     Conversation,
     KnowledgeChunk,
@@ -1156,7 +1158,9 @@ def build_suggestion_messages(
         for chunk in chunks
     ]
     user_payload = {
-        "query": query,
+        # 防御性截断：即使调用方绕过 HTTP 入口，也不把无界问题塞给模型。
+        "query": truncate_text(query, settings.MAX_PROMPT_CHARS),
+        "query_truncated": len(query) > settings.MAX_PROMPT_CHARS,
         "business_type": business_type,
         "knowledge": knowledge,
     }

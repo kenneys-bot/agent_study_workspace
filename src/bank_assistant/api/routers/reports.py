@@ -42,12 +42,18 @@ from bank_assistant.reports.service import (
     create_report_export,
     load_report_export,
 )
-from bank_assistant.security.authorization import get_current_identity
+from bank_assistant.security.authorization import get_current_identity, require_role
+from bank_assistant.security.identity import Role
+from bank_assistant.security.rate_limit import enforce_expensive_rate_limit
 from bank_assistant.security.identity import Identity
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/reports", tags=["报告导出"])
+
+# 导出是可审计的对外交付动作，只允许复核/管理员角色；普通坐席可读取授权范围内的
+# 既有导出（GET），但不能生成新快照。
+_EXPORT_ROLES = (Role.REVIEWER, Role.ADMIN)
 
 
 def _not_found() -> ApiError:
@@ -84,7 +90,15 @@ def _artifact_error(exc: ReportArtifactError) -> ApiError:
     )
 
 
-@router.post("", response_model=ReportExportSummary, status_code=201)
+@router.post(
+    "",
+    response_model=ReportExportSummary,
+    status_code=201,
+    dependencies=[
+        Depends(enforce_expensive_rate_limit),
+        Depends(require_role(*_EXPORT_ROLES)),
+    ],
+)
 def create_report_endpoint(
     payload: ReportExportRequest,
     request: Request,

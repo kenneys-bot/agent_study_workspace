@@ -23,6 +23,8 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
+from sqlalchemy.exc import InterfaceError, OperationalError
+from sqlalchemy.exc import TimeoutError as SATimeoutError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
@@ -341,6 +343,29 @@ async def _http_exception_handler(
     )
 
 
+async def _database_unavailable_handler(
+    request: Request, exc: Exception
+) -> JSONResponse:
+    """数据库/连接池不可用 → 503，不把连接细节或 SQL 回给调用方（CT-04/可恢复性）。
+
+    只注册连接级异常（OperationalError/InterfaceError/pool Timeout）；完整性约束
+    等业务型 DBAPI 错误仍走 500，避免把可以修复的输入问题伪装成依赖故障。
+    """
+    logger.warning(
+        "database_unavailable trace_id=%s error=%s",
+        resolve_trace_id(request),
+        type(exc).__name__,
+    )
+    return error_response(
+        status_code=503,
+        code="DEPENDENCY_UNAVAILABLE",
+        message="数据库暂不可用",
+        request=request,
+        retryable=True,
+        details={"dependency": "postgresql"},
+    )
+
+
 async def _validation_error_handler(
     request: Request, exc: RequestValidationError
 ) -> JSONResponse:
@@ -395,6 +420,10 @@ def install_error_handlers(app: FastAPI) -> None:
     app.add_exception_handler(
         CapabilityUnavailableError, _capability_unavailable_handler
     )
+    # 依赖不可用必须显式 503，不能 200 + 假成功，也不能把连接串/SQL 回给调用方。
+    app.add_exception_handler(OperationalError, _database_unavailable_handler)
+    app.add_exception_handler(InterfaceError, _database_unavailable_handler)
+    app.add_exception_handler(SATimeoutError, _database_unavailable_handler)
 
 
 __all__ = [

@@ -38,6 +38,7 @@ from bank_assistant.inspections.service import (
     load_inspection,
 )
 from bank_assistant.security.authorization import get_current_identity
+from bank_assistant.security.rate_limit import enforce_expensive_rate_limit
 from bank_assistant.security.identity import Identity
 
 router = APIRouter(tags=["质检"])
@@ -63,6 +64,7 @@ def _input_error(exc: InspectionInputError) -> ApiError:
     "/inspections",
     response_model=InspectionAccepted,
     status_code=202,
+    dependencies=[Depends(enforce_expensive_rate_limit)],
 )
 def create_inspection_endpoint(
     payload: InspectionCreateRequest,

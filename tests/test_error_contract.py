@@ -24,6 +24,25 @@ from bank_assistant.core.model_gateway import (
 ERROR_KEYS = {"code", "message", "trace_id", "retryable", "details"}
 
 
+@pytest.fixture(autouse=True)
+def _authenticate_main_app():
+    """旧版 M1 原型端点现要求认证；本模块的 4xx/5xx 契约用例使用固定身份。"""
+    from uuid import uuid4
+
+    from bank_assistant.main import app
+    from bank_assistant.security.authorization import get_current_identity
+    from bank_assistant.security.identity import Identity
+
+    app.dependency_overrides[get_current_identity] = lambda: Identity(
+        user_id=uuid4(),
+        username="contract-test",
+        role="agent",
+        scope_id="contract-scope",
+    )
+    yield
+    app.dependency_overrides.clear()
+
+
 def build_app(register_routes, *, raise_server_exceptions: bool = True) -> TestClient:
     """构造仅用于验证错误契约的最小应用（与 main.py 使用同一套安装函数）。"""
     app = FastAPI()
