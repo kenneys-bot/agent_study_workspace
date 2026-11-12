@@ -29,3 +29,7 @@ artifacts/
 # 前端
 web/node_modules/
 web/dist/
+
+# 归档目录里历史误提交的构建产物（保留在工作区，不入 Git）
+.langgraph_api/
+*.pckl
