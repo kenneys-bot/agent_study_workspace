@@ -59,7 +59,7 @@
 
 ## 遗留风险和外部依赖
 
-1. Ubuntu 上的检出点落后于本机（M0 时为 `979b076`），需在 M1 收尾同步到 `7ca525a` 并跑一次单元测试证明两端一致。
+1. Ubuntu 检出点已同步到 `2c5e0d7`（与本机一致、工作树干净，`git reset --hard` + `git fetch`）；Ubuntu 上的 `uv sync` 因 pypi 约 9 s 较慢，单元测试在 M5 验收前于 Ubuntu 复跑一次并记录。
 2. 语音转写仍未实现（首版不含，计划明确排除）。
 3. `git worktree` 并行开发产生 9 个 worktree，收尾时清理。
 
