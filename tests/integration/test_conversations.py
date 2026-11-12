@@ -191,7 +191,10 @@ def test_conversation_tables_match_contract_and_migration_head() -> None:
     } <= audit_columns
 
     script = ScriptDirectory.from_config(Config(str(REPO_ROOT / "alembic.ini")))
-    assert script.get_heads() == ["0004_conversations"]
+    heads = script.get_heads()
+    # 并行票从 0002 分叉，由 merge revision 收口；断言"单 head"而非"某一张票是 head"。
+    assert len(heads) == 1, f"迁移图必须只有一个 head，实际 {heads}"
+    assert "0004_conversations" in {r.revision for r in script.walk_revisions()}
 
 
 def test_create_persists_immutable_original_and_redacts_display(
