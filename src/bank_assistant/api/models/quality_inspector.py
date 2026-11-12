@@ -103,26 +103,11 @@ class GenerateReportRequest(BaseModel):
     report_type: str = Field("detailed", description="报告类型: detailed/summary")
 
 
-class GenerateReportResponse(BaseModel):
-    """生成报告响应"""
-    report_id: str = Field(..., description="报告ID")
-    content: str = Field(..., description="报告内容")
-    format: str = Field(..., description="报告格式")
-    size: int = Field(0, description="内容大小")
-
-
 class SubmitReviewRequest(BaseModel):
     """提交复核请求"""
     report_id: str = Field(..., description="报告ID")
     reviewer: str = Field(..., description="复核人")
     comments: Optional[str] = Field(None, description="复核意见")
-
-
-class SubmitReviewResponse(BaseModel):
-    """提交复核响应"""
-    review_id: str = Field(..., description="复核ID")
-    status: str = Field(..., description="状态")
-    submitted_at: str = Field(..., description="提交时间")
 
 
 class ApproveRejectRequest(BaseModel):
@@ -131,16 +116,3 @@ class ApproveRejectRequest(BaseModel):
     approver: str = Field(..., description="操作人")
     comments: Optional[str] = Field(None, description="意见")
     reasons: Optional[List[str]] = Field(None, description="拒绝原因")
-
-
-class ApproveRejectResponse(BaseModel):
-    """批准/拒绝响应"""
-    review_id: str = Field(..., description="复核ID")
-    status: str = Field(..., description="状态")
-    updated_at: str = Field(..., description="更新时间")
-
-
-class PendingReviewsResponse(BaseModel):
-    """待复核列表响应"""
-    count: int = Field(..., description="数量")
-    reviews: List[Dict[str, Any]] = Field(default_factory=list, description="复核列表")
