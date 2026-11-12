@@ -41,12 +41,12 @@ for p in 8000 5173 5432; do
 done
 
 echo "== 数据目录（仓库外） =="
-# 本机用仓库内忽略目录（沙箱内可写）；Ubuntu 用仓库外的 ~/bank-assistant-*
+# 本机用仓库内忽略目录（沙箱内可写）；Ubuntu 用仓库外的 ~/workspace/bank-assistant-*
 for d in .local-data .local-artifacts .local-backups; do
   if [ -d "$d" ]; then ok "$d 存在"; else warn "$d 不存在（mkdir -p $d）"; fi
 done
 if ssh -o BatchMode=yes -o ConnectTimeout=5 my-ubuntu-server true >/dev/null 2>&1; then
-  ok "Ubuntu 可达（数据目录在远端 ~/bank-assistant-*，见 docs/environment.md）"
+  ok "Ubuntu 可达（数据目录在远端 ~/workspace/bank-assistant-*，见 docs/environment.md）"
 else
   warn "Ubuntu 不可达（不影响本机任务）"
 fi

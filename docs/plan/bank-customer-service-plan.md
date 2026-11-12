@@ -112,15 +112,15 @@ Git 中的单一仓库和提交 SHA 是核心代码事实源。应用、前端�
 Ubuntu 实测（2026-11-12，只读探测）：Ubuntu 24.04.3、Ryzen 7 5800X3D 8C/16T、62 GiB RAM、RTX 3060 Ti 8GB、`/` 剩 149G、Docker 29.0.1 免 sudo、**无 node/npm**、GitHub HTTPS 可用而 SSH 不可用；GPU 常态被另一训练任务占用，视为分时借用。以下为默认布局：
 
 ```text
-~/projects/agent_study_workspace/       # Git checkout
-~/bank-assistant-data/                 # DATA_ROOT
+~/workspace/agent_study_workspace/     # Git checkout
+~/workspace/bank-assistant-data/       # DATA_ROOT
   raw/ curated/ splits/ manifests/     # 数据与拆分记录
-~/bank-assistant-artifacts/            # ARTIFACT_ROOT
+~/workspace/bank-assistant-artifacts/  # ARTIFACT_ROOT
   evals/ runs/ models/ exports/        # 评测、训练、权重、导出
-~/bank-assistant-backups/              # 独立备份；生产还需独立故障域副本
+~/workspace/bank-assistant-backups/    # 独立备份；生产还需独立故障域副本
 ```
 
-本机仅保留小型合成测试夹具、脱敏报告和展示所需内容。批量抓取/清洗、标注集构建、embedding建库、正式评测、微调和推理压测均在Ubuntu运行。本机单元测试与少量演示调用不受此限制。大型模型、生产数据和训练数据不得提交Git。
+服务器上所有本项目内容（仓库、数据、产物、备份）统一放在 `~/workspace/` 下，不散落在 home 根目录。本机仅保留小型合成测试夹具、脱敏报告和展示所需内容。批量抓取/清洗、标注集构建、embedding建库、正式评测、微调和推理压测均在Ubuntu运行。本机单元测试与少量演示调用不受此限制。大型模型、生产数据和训练数据不得提交Git。
 
 ### 4.3 未知条件的处理
 

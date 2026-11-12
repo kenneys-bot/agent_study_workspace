@@ -29,7 +29,7 @@
 | 两端报告同一 SHA | PASS | 本机 `979b076e…`；Ubuntu `979b076e…`（`make sync-check` 输出「两端 SHA 一致」） |
 | 没有覆盖现存改动 | PASS | 用户未提交的 `constants.py` 重命名按原样单独提交（`1524ee7`），未 reset、未改写 |
 | 凭据不在 Git | PASS | `git check-ignore -v .env` 命中；全仓 grep 两把 key 仅存在于本地 `.env`（600 权限）；`git status` 不含 `.env` |
-| Ubuntu 数据目录可读写 | PASS | `~/bank-assistant-{data,artifacts,backups}` → `WRITABLE`；`/` 剩 149 G。本机改用仓库内忽略目录 `.local-{data,artifacts,backups}`（沙箱禁止写仓库外） |
+| Ubuntu 数据目录可读写 | PASS | `~/bank-assistant-{data,artifacts,backups}` → `WRITABLE`（2026-11-12 起迁移到 `~/workspace/bank-assistant-*`，见 `docs/environment.md`）；`/` 剩 149 G。本机改用仓库内忽略目录 `.local-{data,artifacts,backups}`（沙箱禁止写仓库外） |
 | 未知条件有负责人与影响范围 | PASS | `docs/environment.md`「已知环境限制」4 条（GPU 分时、无 node、pypi 慢、重启需逐次准许） |
 | 锁定依赖方案 | PASS | `uv sync --locked` 成功；两份历史 `requirements.txt` 已合并后删除 |
 | 统一运行入口 | PASS | `make doctor` 通过；README 命令与 Makefile 一致 |
