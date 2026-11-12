@@ -41,7 +41,7 @@ if [ "$NETWORK_MODE" = "host" ]; then
   CMD_JSON="$(remote "docker inspect -f '{{json .Config.Cmd}}' bank-assistant-api")"
   echo "   network_mode: host；command=$CMD_JSON"
   case "$CMD_JSON" in
-    *"--host","127.0.0.1"*) ;;
+    *--host*127.0.0.1*) ;;
     *) fail "host 网络下 command 未显式绑定 127.0.0.1：$CMD_JSON" ;;
   esac
   case "$CMD_JSON" in

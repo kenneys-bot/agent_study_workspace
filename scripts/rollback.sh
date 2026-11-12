@@ -9,7 +9,7 @@
 # - 结束时必须回到部署前记录的当前镜像，服务恢复新版本。
 #
 # 回滚点来自部署脚本写入的 $REMOTE_ROOT/deploy/state.env（非秘密）。
-# 可通过 BACK_TO=<镜像> 显式指定目标，但默认使用 state 里的 PREVIOUS_IMAGE。
+# 可通过 BACK_TO=<镜像> / BACK_TO_SHA=<sha> 显式指定目标，默认使用 state 里的上一版。
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -35,7 +35,7 @@ CURRENT_SHA="$(field CURRENT_SHA)"
 CURRENT_BRANCH="$(field CURRENT_BRANCH)"
 [ -n "$CURRENT_BRANCH" ] || CURRENT_BRANCH="integration"
 PREVIOUS_IMAGE="${BACK_TO:-$(field PREVIOUS_IMAGE)}"
-PREVIOUS_SHA="$(field PREVIOUS_SHA)"
+PREVIOUS_SHA="${BACK_TO_SHA:-$(field PREVIOUS_SHA)}"
 [ -n "$PREVIOUS_IMAGE" ] || fail "没有上一版镜像可回滚（首次部署）；用 BACK_TO=<镜像> 指定"
 remote "docker image inspect '$PREVIOUS_IMAGE' >/dev/null 2>&1" \
   || fail "上一版镜像不在服务器上：$PREVIOUS_IMAGE"
