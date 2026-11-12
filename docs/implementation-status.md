@@ -137,6 +137,14 @@ Ubuntu 与 Mac 同 SHA；两端 `uv run pytest tests -q` 均 144 用例全过（
 
 M5 报告：`docs/milestones/M5-report.md`（T25 交付）。web 48 tests、`make test-e2e` 1 passed（回放链路）、真实云模型冒烟成功（DeepSeek chat + BGE embedding）。工单 #23/#24/#25/#26 全部 DONE。
 
+## M7 工单状态
+
+| 工单 | 状态 | 证据 |
+|---|---|---|
+| #30 T29 部署与恢复演练 | DONE | 服务器 bank-assistant-api healthy、仅 127.0.0.1:8000；备份恢复行数与哈希一致；回滚演练通过 |
+| #31 T30 监控/日志/安全测试 | IN_PROGRESS | worktree 中进行 |
+| #32 T31 发布包与运维手册 | BLOCKED | 等 #31 |
+
 ## M6 验收
 
 M6 报告：`docs/milestones/M6-report.md`（READY_FOR_ACCEPTANCE，含未达门槛与 NOT_RUN 明示）。数据集 330/186 冻结；replay 全量 + live 20 条；Recall@5 replay 0.833 **未达 0.85**；引用支持度/人工相关性 NOT_MEASURED；微调 NOT_RUN（GPU 未获授权）。
