@@ -1,6 +1,17 @@
-# 本机开发/测试用 PostgreSQL 18（ADR-0002）。
-# 凭据只从环境变量读取；下列默认值是明确标注的本地开发默认值，不是任何环境的秘密，
-# 也禁止在仓库里写入真实凭据。测试脚本用独立 compose 项目名复用本文件。
+# PostgreSQL 18：唯一实例部署在 Ubuntu（ADR-0006）。
+#
+# 用法（服务器）：
+#   docker compose -p bank-assistant-db \
+#     --env-file ~/workspace/bank-assistant/.env.pg \
+#     -f deploy/compose.db.yml up -d
+#
+# 约束：
+# - 端口只绑 127.0.0.1:5432（仅回环），不暴露到局域网/公网；远程访问一律走 SSH 隧道。
+# - 数据目录由 PG_DATA_DIR 显式指定（服务器为 ~/workspace/bank-assistant/data/pg），
+#   不再使用匿名/项目私有卷，避免 `down -v` 误删数据。
+# - 凭据只从 env-file 读取，文件在仓库外、chmod 600；仓库里没有任何真实凭据。
+# - Mac 不再用本文件起数据库；本文件只用于 Ubuntu。`make test-e2e` 的历史隔离路径
+#   仍会临时复用，但它显式提供自己的 PG_DATA_DIR/凭据，见 scripts/test-e2e.sh。
 name: bank-assistant-db
 
 services:
@@ -8,15 +19,17 @@ services:
     image: postgres:18-alpine
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-bank}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-bank_local_dev_only}
-      POSTGRES_DB: ${POSTGRES_DB:-bank_assistant}
+      # 没有 env-file 时直接拒绝启动，避免退回任何内置弱口令。
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD 必须由 --env-file 或环境变量提供}
+      POSTGRES_DB: ${POSTGRES_DB:-bank_assistant_dev}
     ports:
-      # 只绑本机回环，不暴露到局域网。
+      # 只绑服务器回环，不暴露到局域网。
       - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
       # PostgreSQL 18 起 PGDATA 在 /var/lib/postgresql/<major>/docker，
-      # 因此卷挂到父目录 /var/lib/postgresql（官方镜像的 VOLUME 位置）。
-      - db_data:/var/lib/postgresql
+      # 因此挂到父目录 /var/lib/postgresql（官方镜像的 VOLUME 位置）。
+      # 宿主目录必须存在且属主为容器用户（postgres:18-alpine 为 uid 70）。
+      - "${PG_DATA_DIR:?PG_DATA_DIR 必须指向服务器数据目录}:/var/lib/postgresql"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 2s
@@ -24,8 +37,3 @@ services:
       retries: 30
       start_period: 10s
     restart: unless-stopped
-
-volumes:
-  # 不写死 name，让 compose 按项目名隔离：开发项目与测试项目各自独立，
-  # 测试结束 down -v 只删除测试项目的卷。
-  db_data:

@@ -30,7 +30,7 @@
 
 ```bash
 cp .env.example .env      # 填入自己的模型 key；.env 已被 gitignore
-make doctor               # 检查依赖、配置、端口（不打印秘密值）
+make doctor               # 检查依赖、配置、SSH 隧道与目标库（不打印秘密值）
 make build                # 按 uv.lock 安装依赖
 make test-unit            # 无网络、无真实凭据的单元测试
 make sync-check           # 本机与 Ubuntu 的 SHA 对比（只读）
@@ -38,14 +38,20 @@ make sync-check           # 本机与 Ubuntu 的 SHA 对比（只读）
 
 ### 数据库（只在 Ubuntu 上）
 
-PostgreSQL 18 只部署在服务器；**Mac 不安装、不启动本地数据库**。需要数据库的命令，先建 SSH 隧道：
+PostgreSQL 18 只部署在服务器；**Mac 不安装、不启动本地数据库**。需要数据库的命令，先建立 SSH 隧道：
 
 ```bash
-ssh -N -L 15432:127.0.0.1:5432 my-ubuntu-server   # 保持运行
-export DATABASE_URL=postgresql+psycopg://<user>:<password>@127.0.0.1:15432/bank_assistant_dev
+make db-tunnel            # 幂等：127.0.0.1:15432 → my-ubuntu-server:127.0.0.1:5432
+make db-tunnel-status     # 查看状态；make db-tunnel-stop 停止
+make doctor               # 隧道 + bank_assistant_test 可达性
+make test-integration     # 经隧道在 bank_assistant_test 上做空库迁移 + 集成测试
+make seed-demo            # 经隧道写入 bank_assistant_demo（幂等）
 ```
 
-`localhost` 指 Mac 自己；只有建立转发后 `127.0.0.1:15432` 才指向服务器。数据库按用途隔离：`bank_assistant_dev` / `bank_assistant_demo` / `bank_assistant_test` / `bank_assistant_restore_check`——自动化测试只碰 `*_test`，恢复验证只写 `*_restore_check`，不明原因连不上就**显式失败**，不回退 SQLite/mock。详见 [ADR-0006](docs/adr/0006-postgres-on-ubuntu-only.md)。
+`DATABASE_URL=postgresql+psycopg://bank:<password>@127.0.0.1:15432/bank_assistant_dev` 写在
+本机 `.env`（gitignore，600）；密码同时只存在服务器 `~/workspace/bank-assistant/.env.pg`。
+
+`localhost` 指 Mac 自己；只有建立转发后 `127.0.0.1:15432` 才指向服务器。数据库按用途隔离：`bank_assistant_dev` / `bank_assistant_demo` / `bank_assistant_test` / `bank_assistant_restore_check`——自动化测试只碰 `*_test`，`seed-demo` 只写 `*_demo`，恢复验证只写 `*_restore_check`，不明原因连不上就**显式失败**，不回退 SQLite/mock。详见 [ADR-0006](docs/adr/0006-postgres-on-ubuntu-only.md) 与 [docs/environment.md](docs/environment.md)。
 
 尚未实现的命令（`eval/train/backup/restore-check`）会**非零退出并说明属于哪个里程碑**，
 不会假装成功；`up/down/smoke/test-e2e` 已实现。
