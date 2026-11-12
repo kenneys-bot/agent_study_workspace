@@ -36,6 +36,20 @@ make sync-check           # 本机与 Ubuntu 的 SHA 对比（只读）
 尚未实现的命令（`up/down/smoke/eval/train/backup/restore-check/test-e2e`）
 会**非零退出并说明属于哪个里程碑**，不会假装成功。
 
+### 本地界面（M5）
+
+先让 API 在 `http://localhost:8000` 运行（可用 `make up`），再启动前端：
+
+```bash
+make web-install   # 安装 web/ 依赖（npm ci / npm install）
+make web-dev       # 启动 Vite 开发服务器 → http://localhost:5173
+```
+
+登录使用后端已创建的账号；系统版本页展示真实的代码 SHA、模型、嵌入模型、索引版本与
+运行模式，不内置静态假数据。接口基地址默认 `http://localhost:8000`，可在
+`web/.env.local` 用 `VITE_API_BASE_URL` 覆盖（模板见 `web/.env.example`）。
+前端组件测试用 mock fetch，不需要后端：`make web-test`。
+
 ### 演示知识与版本化索引（M3）
 
 ```bash
