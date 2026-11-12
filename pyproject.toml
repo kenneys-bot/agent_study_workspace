@@ -47,8 +47,11 @@ where = ["src"]
 testpaths = ["tests"]
 pythonpath = ["src"]
 asyncio_mode = "auto"
-addopts = "-q"
+addopts = "-q -m 'not integration'"
 norecursedirs = ["archive", ".venv", "web", "node_modules"]
+markers = [
+    "integration: 需要真实 PostgreSQL 容器，由 make test-integration 运行（默认排除）",
+]
 
 [tool.uv]
 package = true

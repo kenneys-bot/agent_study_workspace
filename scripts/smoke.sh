@@ -11,7 +11,6 @@ IMAGE="${SMOKE_IMAGE:-bank-assistant:dev}"
 PORT="${SMOKE_PORT:-${API_PORT:-8000}}"
 BASE="http://127.0.0.1:${PORT}"
 TMP_DIR="$(mktemp -d)"
-READY_CODE=""
 
 pass() { printf '  PASS  %s\n' "$1"; }
 fail() { printf '  FAIL  %s\n' "$1" >&2; exit 1; }
@@ -25,7 +24,9 @@ trap cleanup EXIT
 # 冒烟只验证进程与路由，不调用真实模型；假值不是可用凭据。
 export DASHSCOPE_API_KEY="${DASHSCOPE_API_KEY:-smoke-placeholder-not-a-secret}"
 export SECRET_KEY="${SECRET_KEY:-smoke-placeholder-not-a-secret}"
-export DATABASE_URL="${DATABASE_URL:-sqlite:///:memory:}"
+# 默认指向关闭的端口：稳定验证 readiness 的 503 失败路径（真实 PostgreSQL 由
+# `make test-integration` 覆盖）。若调用方显式导出可用 DATABASE_URL，则验证 200 路径。
+export DATABASE_URL="${DATABASE_URL:-postgresql+psycopg://smoke:smoke@127.0.0.1:1/smoke}"
 export APP_ENV="${APP_ENV:-testing}"
 export API_PORT="$PORT"
 
@@ -58,32 +59,38 @@ fi
 if ! python3 - "$TMP_DIR/live.json" <<'PY'
 import json, sys
 data = json.load(open(sys.argv[1], encoding="utf-8"))
-assert data.get("status") == "live", f"/health/live 状态应为 live，实际 {data!r}"
+assert data.get("status") == "alive", f"/health/live 状态应为 alive，实际 {data!r}"
 PY
 then
   fail "/health/live 响应体不诚实"
 fi
-pass "GET /health/live -> 200，status=live"
+pass "GET /health/live -> 200，status=alive"
 
-# 4) 就绪探针：只接受 200（并如实披露检查项）或 503（依赖不可用），其它都是故障。
-READY_CODE="$(curl -s -o "$TMP_DIR/ready.json" -w '%{http_code}' --max-time 5 "$BASE/health/ready" || true)"
+# 4) 就绪探针：只接受 200（依赖可用）或 503（标准错误结构），其它都是故障；
+#    两个分支都必须如实反映 PostgreSQL 状态，不能空口声明就绪。
+READY_CODE="$(curl -s -o "$TMP_DIR/ready.json" -w '%{http_code}' --max-time 8 "$BASE/health/ready" || true)"
 if ! python3 - "$TMP_DIR/ready.json" "$READY_CODE" <<'PY'
 import json, sys
 code = int(sys.argv[2])
 data = json.load(open(sys.argv[1], encoding="utf-8"))
 if code == 200:
     assert data.get("status") == "ready", f"200 时 status 应为 ready，实际 {data!r}"
-    assert "checks" in data, "200 时必须给出 checks（无检查项则为空数组），不能空口声明就绪"
+    assert data.get("checks", {}).get("database") == "ok", \
+        f"200 时必须声明 database 检查通过，实际 {data!r}"
 elif code == 503:
-    assert data.get("status") != "ready", f"503 时不能声称 ready，实际 {data!r}"
-    assert data.get("checks"), "503 时必须说明失败项"
+    assert data.get("code") == "DEPENDENCY_UNAVAILABLE", f"503 错误码不符：{data!r}"
+    assert data.get("retryable") is True, f"503 必须标记 retryable：{data!r}"
+    assert data.get("details", {}).get("dependency") == "postgresql", \
+        f"503 必须指明失败依赖：{data!r}"
+    assert data.get("trace_id"), f"503 必须带 trace_id：{data!r}"
+    assert data.get("status") != "ready", f"503 时不能声称 ready：{data!r}"
 else:
     raise AssertionError(f"/health/ready 只允许 200 或 503，实际 {code}：{data!r}")
 PY
 then
   fail "/health/ready 行为不诚实"
 fi
-pass "GET /health/ready -> ${READY_CODE}（200 或 503，且响应体自洽）"
+pass "GET /health/ready -> ${READY_CODE}（与 PostgreSQL 实际可用性一致）"
 
 # 5) 失败路径：不存在的路由必须是 4xx（FastAPI 默认 404），不能 200/5xx。
 NOT_FOUND_CODE="$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$BASE/definitely-not-a-route" || true)"

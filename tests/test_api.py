@@ -42,22 +42,6 @@ class TestHealthEndpoints:
         data = response.json()
         assert data["status"] == "healthy"
 
-    def test_health_live(self, client):
-        """存活探针只报告进程活着"""
-        response = client.get("/health/live")
-        assert response.status_code == 200
-        data = response.json()
-        assert data["status"] == "live"
-
-    def test_health_ready(self, client):
-        """就绪探针必须如实说明尚未检查任何外部依赖"""
-        response = client.get("/health/ready")
-        assert response.status_code == 200
-        data = response.json()
-        assert data["status"] == "ready"
-        assert data["checks"] == []
-        assert "postgresql" in data["not_checked"]
-
     def test_app_info(self, client):
         """测试应用信息"""
         response = client.get("/info")

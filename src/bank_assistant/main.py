@@ -5,12 +5,16 @@
 
 import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from uuid import uuid4
+
+from fastapi import FastAPI, Request
+from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from bank_assistant.config.settings import settings
 from bank_assistant.config.constants import API_PREFIX
+from bank_assistant.infra.db import ping_database
 from bank_assistant.utils.logger import LoggerConfig
 from bank_assistant.api.routers import (
     knowledge_base_router,
@@ -96,7 +100,7 @@ async def root():
     }
 
 
-# 健康检查（保留既有行为，供旧调用方使用）
+# 健康检查
 @app.get("/health")
 async def health_check():
     """健康检查"""
@@ -107,27 +111,36 @@ async def health_check():
     }
 
 
-# 存活探针：只表示进程可响应，不检查任何外部依赖（容器 healthcheck 用这个）
+# 存活探针：只看进程，不依赖数据库等外部资源（T09）
 @app.get("/health/live")
 async def health_live():
-    """存活探针"""
-    return {
-        "status": "live",
-        "app": settings.APP_NAME,
-        "version": settings.APP_VERSION
-    }
+    """进程存活"""
+    return {"status": "alive"}
 
 
-# 就绪探针：M1 没有已声明的外部依赖，因此如实报告“未检查”，不伪装成已完成依赖校验。
-# M2 接入 PostgreSQL 后，这里检查数据库并在失败时返回 503（且不得调用付费 LLM）。
+# 就绪探针：真实 SELECT 1 成功才 200，依赖不可用返回标准 503 错误结构（T09）
 @app.get("/health/ready")
-async def health_ready():
-    """就绪探针（当前未检查任何外部依赖）"""
+async def health_ready(request: Request):
+    """必需依赖（PostgreSQL）是否可用"""
+    trace_id = request.headers.get("x-trace-id") or uuid4().hex
+    try:
+        await run_in_threadpool(ping_database)
+    except Exception as exc:  # 连接失败、超时、驱动错误都视为不可用
+        logger.warning("readiness 检查失败: %s", type(exc).__name__)
+        return JSONResponse(
+            status_code=503,
+            content={
+                "code": "DEPENDENCY_UNAVAILABLE",
+                "message": "数据库暂不可用",
+                "trace_id": trace_id,
+                "retryable": True,
+                "details": {"dependency": "postgresql"},
+            },
+        )
     return {
         "status": "ready",
-        "checks": [],
-        "not_checked": ["postgresql"],
-        "detail": "M1：尚未配置外部依赖检查；M2 接入 PostgreSQL 后失败返回 503"
+        "checks": {"database": "ok"},
+        "trace_id": trace_id,
     }
 
 

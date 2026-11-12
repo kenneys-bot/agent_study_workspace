@@ -11,8 +11,8 @@ help: ## 列出可用命令
 doctor: ## 检查本机依赖、配置与端口（不打印任何秘密值）
 	@bash scripts/doctor.sh
 
-test-unit: ## 无网络、无真实凭据的单元测试
-	@$(UV) run pytest tests -q
+test-unit: ## 无网络、无真实凭据的单元测试（不含 integration 标记）
+	@$(UV) run pytest tests -q -m "not integration"
 
 sync-check: ## 报告本机与 Ubuntu 的 SHA 及未提交状态，不自动覆盖
 	@bash scripts/sync-check.sh
@@ -22,8 +22,8 @@ build: ## 锁定依赖安装（M5 起追加前端构建）
 	@echo "build: 后端依赖已按 uv.lock 安装（前端构建在 M5 加入）"
 
 # ---- 以下命令在对应里程碑实现，未实现时必须非零退出，不能假装成功 ----
-test-integration: ## [M2] PostgreSQL 迁移/事务/权限测试
-	@echo "NOT_IMPLEMENTED: test-integration 在 M2 实现" >&2; exit 2
+test-integration: ## [M2] PostgreSQL 空库迁移与数据库连通性集成测试
+	@bash scripts/test-integration.sh
 
 test-e2e: ## [M5] 隔离演示环境端到端测试
 	@echo "NOT_IMPLEMENTED: test-e2e 在 M5 实现" >&2; exit 2
