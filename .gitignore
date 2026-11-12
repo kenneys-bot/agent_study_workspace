@@ -44,3 +44,6 @@ web/dist/
 
 # implement-spec 并行 worktree
 .worktrees/
+
+# docker buildx 沙箱缓存
+.docker-config/
