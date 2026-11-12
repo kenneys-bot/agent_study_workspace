@@ -239,6 +239,9 @@ forward/backward）全部实际执行；`--execute` 在 GPU 忙碌/缺失时写 
   数据集细粒度 `intent_cluster` 在 train/dev/test 之间**不重叠**，不能作为
   跨 split 的监督目标；三分类是唯一无泄漏的监督信号。
 - train 202 / test 50，样本量小；即使真实训练，统计区间也很宽。
+- dry-run 的 test 分词统计只用于报告长度诊断；`max_seq_length` 在实验前固定，
+  没有根据 test 调整超参。true 训练只用 train split 拟合，test 仅用于训练后的
+  最终评测与多数类参考下限。
 - dry-run 的 tokenizer 统计是完整训练序列（prompt+标签+EOS），但只在 Mac
   本地缓存上做；Ubuntu 真实运行时应用同一代码再测一次。
 - 本报告不包含任何真实客户数据；数据集 `contains_real_customer_data=false`。
