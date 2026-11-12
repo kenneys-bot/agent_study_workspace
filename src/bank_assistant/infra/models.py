@@ -8,7 +8,8 @@
 - ``tasks`` / ``idempotency_keys``：任务租约与持久化幂等绑定（T13，M2-05）；
 - ``knowledge_documents`` / ``knowledge_versions``：知识来源、业务范围与版本
   生命周期（T11，M2-03）；发布后内容不可覆盖。
-- ``knowledge_chunks``：版本化索引的原文区间与 embedding 身份（T14，M3）。
+- ``knowledge_chunks``：版本化索引的原文区间与 embedding 身份（T14，M3）；
+- ``model_runs`` / ``suggestions``：候选答复运行追溯与业务状态（T15，M3）。
 
 所有时间列为 ``timestamptz``，写入前统一为 UTC（契约 §1）。
 """
@@ -378,6 +379,96 @@ class KnowledgeChunk(Base):
     index_version: Mapped[str] = mapped_column(String(64), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+SUGGESTION_STATUS_CHECK = (
+    "status IN ('answered', 'needs_clarification', 'needs_human', 'failed')"
+)
+
+
+class ModelRun(Base):
+    """一次候选答复运行的追溯记录（契约 §1、§2 的 run_id 最低字段）。
+
+    契约 §1 要求“每次模型运行有 run_id，记录模型、提示词、规则、知识快照、
+    索引版本和代码 SHA”。本表只保存这些元数据；会话正文与候选答复在
+    ``suggestions``，两者用 ``run_id`` 关联。
+
+    没有发生模型调用的业务短路（无证据、业务类型不明确、知识冲突）也写一行
+    ``model='none'`` 的运行记录：一次请求仍是一次可追溯的运行，run_id 不为空。
+    """
+
+    __tablename__ = "model_runs"
+
+    run_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    provider: Mapped[str] = mapped_column(String(32), nullable=False, default="none")
+    model: Mapped[str] = mapped_column(String(128), nullable=False, default="none")
+    model_version: Mapped[str] = mapped_column(
+        String(128), nullable=False, default="none"
+    )
+    prompt_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    # 索引清单里的知识快照（version_id + content_hash）；无索引时为空列表。
+    knowledge_snapshot: Mapped[list[Any]] = mapped_column(
+        JSON, nullable=False, default=list
+    )
+    index_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    code_sha: Mapped[str] = mapped_column(String(64), nullable=False)
+    # live / replay；回放必须显式标记，不能混入真实模型结论。
+    mode: Mapped[str] = mapped_column(String(16), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class Suggestion(Base):
+    """候选答复（契约 §2）：供坐席检查/编辑，不表示已发送或已办理。
+
+    ``citations`` 只保存后端校验通过的引用：必须来自本次召回，且版本仍为
+    published、在有效期内、属于当前访问范围。``retrieval_snapshot`` 保存
+    本次检索的索引版本、校准哈希、召回 chunk/version 与分数，以及被拒绝的
+    模型引用；``mode`` 记录 live / replay。
+    """
+
+    __tablename__ = "suggestions"
+    __table_args__ = (
+        CheckConstraint(SUGGESTION_STATUS_CHECK, name="ck_suggestions_status"),
+        Index("ix_suggestions_conversation_id", "conversation_id"),
+        Index("ix_suggestions_scope_created", "scope_id", "created_at"),
+        Index("ix_suggestions_run_id", "run_id"),
+    )
+
+    suggestion_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    conversation_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("conversations.conversation_id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    run_id: Mapped[UUID] = mapped_column(
+        ForeignKey("model_runs.run_id"), nullable=False
+    )
+    scope_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    query: Mapped[str] = mapped_column(Text, nullable=False)
+    rewritten_query: Mapped[str | None] = mapped_column(Text, nullable=True)
+    business_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    answer: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", server_default=text("''")
+    )
+    citations: Mapped[list[Any]] = mapped_column(JSON, nullable=False, default=list)
+    missing_information: Mapped[list[Any]] = mapped_column(
+        JSON, nullable=False, default=list
+    )
+    retrieval_snapshot: Mapped[dict[str, Any]] = mapped_column(
+        JSON, nullable=False, default=dict
+    )
+    mode: Mapped[str] = mapped_column(String(16), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
     )
 
 
