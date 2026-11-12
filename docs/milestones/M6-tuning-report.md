@@ -134,6 +134,9 @@ manifest 字段（节选）：`status=NOT_RUN`、`mode=dry_run`、`code_sha=22ff
 `vram_peak_gib=null`（未训练，如实为空）、`evaluation.available=false`。
 
 复现：`make train`（默认就是 dry-run）；`make dataset-build` 先构建冻结数据集。
+若未安装可选 `train` 组，`make train` 会把 tokenization / tiny smoke 如实记为
+`SKIPPED` 并继续写 `NOT_RUN` 报告；上表证据是在
+`uv sync --frozen --group train` 之后运行得到的。
 
 ---
 
