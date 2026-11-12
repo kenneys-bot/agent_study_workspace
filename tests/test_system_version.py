@@ -35,6 +35,8 @@ CONTRACT_KEYS = {
     "model_chat",
     "embedding_model",
     "index_version",
+    "index_calibration_sha256",
+    "index_embedding_model",
     "mode",
     "app_version",
 }
@@ -57,6 +59,8 @@ def write_active_pointer(index_dir: Path, index_version: str = "idx-test") -> No
                 "schema_version": 1,
                 "index_version": index_version,
                 "collection": f"knowledge_{index_version}",
+                "embedding_model_version": "BAAI/bge-small-zh-v1.5@512",
+                "calibration_vector_sha256": "cal-" + index_version,
             }
         ),
         encoding="utf-8",
@@ -102,6 +106,8 @@ def test_system_version_returns_real_settings_and_index_pointer(
         "model_chat": "deepseek-chat",
         "embedding_model": "BAAI/bge-small-zh-v1.5",
         "index_version": "idx-20261112T000000Z-abcdef12",
+        "index_calibration_sha256": "cal-idx-20261112T000000Z-abcdef12",
+        "index_embedding_model": "BAAI/bge-small-zh-v1.5@512",
         "mode": "live",
         "app_version": "1.0.0",
     }
@@ -159,6 +165,10 @@ def test_missing_index_pointer_is_null(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "INDEX_DIR", str(tmp_path))
 
     assert system_info.resolve_index_version() is None
+    active = system_info.resolve_active_index()
+    assert active.index_version is None
+    assert active.calibration_sha256 is None
+    assert active.embedding_model is None
 
 
 def test_corrupt_index_pointer_is_null(tmp_path, monkeypatch):

@@ -3,10 +3,14 @@ SHELL := /bin/bash
 UV := uv
 COMPOSE := docker compose -f deploy/compose.yml
 ENV_FILE ?= .env
+# 部署目标（M7/T29）：服务器 repo 与仓库外目录；脚本本身在服务器侧或经 SSH 执行。
+DEPLOY_HOST ?= my-ubuntu-server
+REMOTE_ROOT ?= /home/jack/workspace/bank-assistant
+REMOTE_REPO := $(REMOTE_ROOT)/repo
 TRAIN_CONFIG ?= configs/train/qlora-intent-qwen3-0.6b.yaml
 TRAIN_ARGS ?= --dry-run
 
-.PHONY: help doctor db-tunnel db-tunnel-stop db-tunnel-status test-unit test-integration test-e2e e2e build web-install web-dev web-build web-test up down smoke seed-demo seed-demo-accounts seed-demo-conversations demo-reset demo-real-model-smoke dataset-build dataset-verify index-rebuild index-info worker sync-check eval train backup restore-check clean
+.PHONY: help doctor db-tunnel db-tunnel-stop db-tunnel-status test-unit test-integration test-e2e e2e build web-install web-dev web-build web-test up down smoke seed-demo seed-demo-accounts seed-demo-conversations demo-reset demo-real-model-smoke dataset-build dataset-verify index-rebuild index-info worker sync-check eval train backup restore-check deploy rollback verify-deploy deploy-index clean
 
 help: ## 列出可用命令
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -101,11 +105,23 @@ eval: ## [M6] 固定评测：默认 replay；用 EVAL_CONFIG=path 覆盖（live 
 train: ## [M6] 条件任务：4-bit QLoRA 意图分类（默认 dry-run；TRAIN_ARGS=--execute 才训练）
 	@$(UV) run python -m scripts.train_intent_lora --config "$(TRAIN_CONFIG)" $(TRAIN_ARGS)
 
-backup: ## [M7] 备份数据库与产物
-	@echo "NOT_IMPLEMENTED: backup 在 M7 实现" >&2; exit 2
+backup: ## [M7] 在服务器备份 dev/demo 数据库与产物（仓库外 backups/<ts>/）
+	@ssh $(DEPLOY_HOST) 'cd $(REMOTE_REPO) && bash scripts/backup.sh'
 
-restore-check: ## [M7] 在独立目标恢复验证，不覆盖生产
-	@echo "NOT_IMPLEMENTED: restore-check 在 M7 实现" >&2; exit 2
+restore-check: ## [M7] 只恢复到 *_restore_check 并核对行数/哈希，不覆盖源库
+	@ssh $(DEPLOY_HOST) 'cd $(REMOTE_REPO) && bash scripts/restore_check.sh'
+
+deploy: ## [M7] 构建不可变镜像 → 传输 → 服务器精确 SHA → compose up（回环 8000）
+	@DEPLOY_HOST=$(DEPLOY_HOST) REMOTE_ROOT=$(REMOTE_ROOT) bash scripts/deploy.sh
+
+rollback: ## [M7] 回滚演练：切上一版 → 校验 → 恢复当前版（不降 schema、不重启服务器）
+	@DEPLOY_HOST=$(DEPLOY_HOST) REMOTE_ROOT=$(REMOTE_ROOT) bash scripts/rollback.sh
+
+verify-deploy: ## [M7] 校验已部署实例：live/ready、回环端口、版本页真实字段
+	@DEPLOY_HOST=$(DEPLOY_HOST) bash scripts/verify_deployment.sh
+
+deploy-index: ## [M7] 用已部署镜像在服务器重建索引（一次性容器，不写源码树）
+	@DEPLOY_HOST=$(DEPLOY_HOST) REMOTE_ROOT=$(REMOTE_ROOT) bash scripts/deploy_index.sh
 
 clean: ## 清理解释器缓存与测试缓存（不动数据与归档）
 	@find . -name '__pycache__' -type d -not -path './archive/*' -prune -exec rm -rf {} + 2>/dev/null || true

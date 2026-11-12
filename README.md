@@ -23,6 +23,8 @@
 | M2 存储与权限 | READY_FOR_ACCEPTANCE | [M2 报告](docs/milestones/M2-report.md) |
 | M3 坐席辅助 | READY_FOR_ACCEPTANCE | [M3 报告](docs/milestones/M3-report.md) |
 | M4 质检闭环 / M5 工作台 | READY_FOR_ACCEPTANCE | [M5 报告](docs/milestones/M5-report.md) |
+| M6 数据集与评测 | READY_FOR_ACCEPTANCE | [M6 报告](docs/milestones/M6-report.md)、[评测说明](docs/eval/README.md)；T28 真实训练 NOT_RUN |
+| M7 部署与恢复演练 | READY_FOR_ACCEPTANCE | [M7 部署报告](docs/milestones/M7-deploy-report.md)、[运维手册](docs/ops/runbook.md) |
 
 唯一进度状态源是 [docs/implementation-status.md](docs/implementation-status.md)；阶段报告在 `docs/milestones/`。
 
@@ -53,8 +55,28 @@ make seed-demo            # 经隧道写入 bank_assistant_demo（幂等）
 
 `localhost` 指 Mac 自己；只有建立转发后 `127.0.0.1:15432` 才指向服务器。数据库按用途隔离：`bank_assistant_dev` / `bank_assistant_demo` / `bank_assistant_test` / `bank_assistant_restore_check`——自动化测试只碰 `*_test`，`seed-demo` 只写 `*_demo`，恢复验证只写 `*_restore_check`，不明原因连不上就**显式失败**，不回退 SQLite/mock。详见 [ADR-0006](docs/adr/0006-postgres-on-ubuntu-only.md) 与 [docs/environment.md](docs/environment.md)。
 
-尚未实现的命令（`eval/train/backup/restore-check`）会**非零退出并说明属于哪个里程碑**，
-不会假装成功；`up/down/smoke/test-e2e` 已实现。
+`eval / backup / restore-check / deploy / rollback` 均已实现；条件任务 `train` 仍未实现，
+会**非零退出**，不会假装成功。
+
+### 部署与运维（M7，Ubuntu）
+
+部署是**个人项目的生产就绪演练**，不是任何机构的生产上线。完整步骤见
+[docs/ops/runbook.md](docs/ops/runbook.md)，要点：
+
+```bash
+make deploy          # 构建 bank-assistant:api-<sha7> → 传输 → 服务器精确 SHA → up
+make deploy-index    # 用已部署镜像在服务器重建索引（fastembed，模型缓存复用）
+make backup          # 服务器 pg_dump dev/demo 到仓库外 backups/<ts>/
+make restore-check   # 只恢复到 *_restore_check，核对行数/alembic/关键哈希
+make rollback        # 回滚演练：切上一版 → 校验 → 恢复当前版
+make verify-deploy   # live/ready、回环端口、版本页真实 SHA/索引/模型
+```
+
+- API 容器 `bank-assistant-api` 只绑服务器 `127.0.0.1:8000`，不暴露局域网；
+  配置在仓库外 `.env.app`（600），镜像不可变，服务器不重建源码。
+- `/api/v1/system/version` 返回代码 SHA、模型、活动 `index_version`、
+  索引校准 `sha256` 与索引实际 embedding 模型，部署身份可核对。
+- 数据库仍只在服务器回环 `127.0.0.1:5432`；Mac 开发走 SSH 隧道。
 
 ### 本地界面（M5）
 
