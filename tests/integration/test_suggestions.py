@@ -1,13 +1,16 @@
-"""候选答复在真实 PostgreSQL + 演示知识上的端到端验证（T15，M3-04）。
+"""候选答复在真实 PostgreSQL + 演示知识上的端到端验证（T15/T16，M3-04/M3-05）。
 
 由 ``make test-integration`` 在空库迁移后运行。本文件验证：
 
-- ``0007_suggestions`` 迁移后 ``suggestions`` / ``model_runs`` 真实存在；
+- ``0007_suggestions`` / ``0008_suggestion_feedback`` 迁移后
+  ``suggestions`` / ``model_runs`` / ``suggestion_feedback`` 真实存在；
 - 使用 T14 的 32 条演示知识与版本化 Chroma 索引，``POST /api/v1/suggestions``
   返回 answered 且引用来自本次召回；
 - 无效引用/无证据/模型失败/生成期间退役分别落到正确状态，失败不会被伪装成
   业务状态；
-- 每次请求都留下 ``model_runs`` 与 ``suggestions`` 记录。
+- 每次请求都留下 ``model_runs`` 与 ``suggestions`` 记录；
+- 坐席采纳/编辑/拒绝反馈可追加、可读回；反馈不是正确性标签，adopt 不改写
+  建议状态；二次反馈不改写历史。
 """
 
 from __future__ import annotations
@@ -40,6 +43,7 @@ from bank_assistant.infra.models import (
     KnowledgeVersion,
     ModelRun,
     Suggestion,
+    SuggestionFeedback,
     User,
 )
 from bank_assistant.knowledge.demo_seed import import_demo_knowledge, load_demo_entries
@@ -459,3 +463,174 @@ def test_post_suggestion_knowledge_retired_during_generation(
     assert body["retrieval_snapshot"]["error"] == (
         "knowledge_retired_during_generation"
     )
+
+
+# ---------------------------------------------------------------- T16 反馈记录
+
+def _create_suggestion(client: TestClient, actors, index: SimpleNamespace) -> dict:
+    _use_gateway(client, model_gateway(_respond(_answer_citing(index.chunk))))
+    response = client.post(
+        "/api/v1/suggestions",
+        json={"query": index.chunk.text, "business_type": "lost_card"},
+        headers=_headers(actors),
+    )
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
+def test_suggestion_feedback_table_exists_after_migration() -> None:
+    tables = set(inspect(get_engine()).get_table_names())
+    assert "suggestion_feedback" in tables
+    columns = {
+        column["name"]
+        for column in inspect(get_engine()).get_columns("suggestion_feedback")
+    }
+    assert {
+        "feedback_id",
+        "suggestion_id",
+        "actor_id",
+        "action",
+        "edited_text",
+        "reason",
+        "created_at",
+    } <= columns
+
+
+def test_feedback_adopt_edit_reject_is_recorded_and_history_readable(
+    client: TestClient, actors, index: SimpleNamespace
+) -> None:
+    suggestion = _create_suggestion(client, actors, index)
+    suggestion_id = suggestion["suggestion_id"]
+    url = f"/api/v1/suggestions/{suggestion_id}/feedback"
+
+    adopt = client.post(
+        url, json={"action": "adopt", "reason": "坐席确认可直接使用"},
+        headers=_headers(actors),
+    )
+    assert adopt.status_code == 201, adopt.text
+    assert adopt.json()["action"] == "adopt"
+    assert adopt.json()["reason"] == "坐席确认可直接使用"
+
+    edit = client.post(
+        url,
+        json={
+            "action": "edit",
+            "edited_text": "请在五个工作日内携带身份证件补卡。",
+            "reason": "补充演示制度时限",
+        },
+        headers=_headers(actors),
+    )
+    assert edit.status_code == 201, edit.text
+    assert edit.json()["edited_text"] == "请在五个工作日内携带身份证件补卡。"
+
+    reject = client.post(
+        url, json={"action": "reject", "reason": "引用的制度已过期"},
+        headers=_headers(actors),
+    )
+    assert reject.status_code == 201, reject.text
+    assert reject.json()["reason"] == "引用的制度已过期"
+
+    detail = client.get(f"/api/v1/suggestions/{suggestion_id}", headers=_headers(actors))
+    assert detail.status_code == 200, detail.text
+    body = detail.json()
+    assert body["suggestion_id"] == suggestion_id
+    # 采纳没有把建议改写成“正确”：状态与答复保持生成时的值。
+    assert body["status"] == suggestion["status"] == "answered"
+    assert body["answer"] == suggestion["answer"]
+    assert [item["action"] for item in body["feedback"]] == [
+        "adopt",
+        "edit",
+        "reject",
+    ]
+    assert body["feedback"][1]["edited_text"] == "请在五个工作日内携带身份证件补卡。"
+    assert body["feedback"][2]["reason"] == "引用的制度已过期"
+    assert "is_correct" not in body
+
+    with session_scope() as session:
+        rows = list(
+            session.scalars(
+                select(SuggestionFeedback)
+                .where(SuggestionFeedback.suggestion_id == UUID(suggestion_id))
+                .order_by(SuggestionFeedback.created_at)
+            )
+        )
+        assert [row.action for row in rows] == ["adopt", "edit", "reject"]
+        assert rows[0].actor_id is not None
+
+
+def test_second_feedback_appends_without_mutating_the_first(
+    client: TestClient, actors, index: SimpleNamespace
+) -> None:
+    suggestion = _create_suggestion(client, actors, index)
+    url = f"/api/v1/suggestions/{suggestion['suggestion_id']}/feedback"
+
+    first = client.post(
+        url, json={"action": "adopt", "reason": "第一次采纳"},
+        headers=_headers(actors),
+    ).json()
+    client.post(
+        url,
+        json={"action": "reject", "reason": "复核后认为引用过期"},
+        headers=_headers(actors),
+    )
+
+    detail = client.get(
+        f"/api/v1/suggestions/{suggestion['suggestion_id']}",
+        headers=_headers(actors),
+    ).json()
+    by_id = {item["feedback_id"]: item for item in detail["feedback"]}
+    assert by_id[first["feedback_id"]]["action"] == "adopt"
+    assert by_id[first["feedback_id"]]["reason"] == "第一次采纳"
+    assert len(detail["feedback"]) == 2
+
+
+def test_feedback_validation_and_scope_are_enforced(
+    client: TestClient, actors, index: SimpleNamespace
+) -> None:
+    suggestion = _create_suggestion(client, actors, index)
+    url = f"/api/v1/suggestions/{suggestion['suggestion_id']}/feedback"
+
+    edit_without_text = client.post(
+        url, json={"action": "edit"}, headers=_headers(actors)
+    )
+    assert edit_without_text.status_code == 422
+    assert edit_without_text.json()["code"] == "FEEDBACK_INVALID_INPUT"
+
+    reject_without_reason = client.post(
+        url, json={"action": "reject"}, headers=_headers(actors)
+    )
+    assert reject_without_reason.status_code == 422
+    assert reject_without_reason.json()["code"] == "FEEDBACK_INVALID_INPUT"
+
+    invalid_action = client.post(
+        url, json={"action": "approve"}, headers=_headers(actors)
+    )
+    assert invalid_action.status_code == 422
+
+    foreign = client.post(
+        url, json={"action": "adopt"}, headers=_headers(actors, "outsider")
+    )
+    missing = client.post(
+        f"/api/v1/suggestions/{uuid4()}/feedback",
+        json={"action": "adopt"},
+        headers=_headers(actors),
+    )
+    assert foreign.status_code == 404
+    assert missing.status_code == 404
+    assert foreign.json()["code"] == missing.json()["code"] == "NOT_FOUND"
+
+    foreign_detail = client.get(
+        f"/api/v1/suggestions/{suggestion['suggestion_id']}",
+        headers=_headers(actors, "outsider"),
+    )
+    assert foreign_detail.status_code == 404
+
+    with session_scope() as session:
+        rows = list(
+            session.scalars(
+                select(SuggestionFeedback).where(
+                    SuggestionFeedback.suggestion_id == UUID(suggestion["suggestion_id"])
+                )
+            )
+        )
+    assert rows == []
