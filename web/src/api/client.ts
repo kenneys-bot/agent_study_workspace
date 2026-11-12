@@ -10,7 +10,15 @@
 import { getToken } from '../auth/tokenStore'
 import type {
   ApiErrorPayload,
+  ConversationCreateInput,
+  ConversationPublic,
+  KnowledgeVersion,
   LoginResponse,
+  SuggestionCreateInput,
+  SuggestionDetail,
+  SuggestionFeedbackInput,
+  SuggestionFeedbackPublic,
+  SuggestionPublic,
   SystemVersion,
   UserPublic,
 } from './types'
@@ -165,4 +173,64 @@ export function fetchMe(): Promise<UserPublic> {
 
 export function fetchSystemVersion(): Promise<SystemVersion> {
   return request<SystemVersion>('/api/v1/system/version')
+}
+
+/* ---------------------------------------------------------------------------
+ * 坐席工作台（T23 #24）：会话导入、候选答复、引用原文与反馈。
+ * 状态字段原样展示，不在客户端把反馈或答复“改写”成正确性标签。
+ * ------------------------------------------------------------------------- */
+
+export function createConversation(
+  input: ConversationCreateInput,
+): Promise<ConversationPublic> {
+  return request<ConversationPublic>('/api/v1/conversations', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+}
+
+export function fetchConversation(
+  conversationId: string,
+): Promise<ConversationPublic> {
+  return request<ConversationPublic>(
+    `/api/v1/conversations/${encodeURIComponent(conversationId)}`,
+  )
+}
+
+export function createSuggestion(
+  input: SuggestionCreateInput,
+): Promise<SuggestionPublic> {
+  return request<SuggestionPublic>('/api/v1/suggestions', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+}
+
+export function fetchSuggestion(
+  suggestionId: string,
+): Promise<SuggestionDetail> {
+  return request<SuggestionDetail>(
+    `/api/v1/suggestions/${encodeURIComponent(suggestionId)}`,
+  )
+}
+
+export function submitSuggestionFeedback(
+  suggestionId: string,
+  input: SuggestionFeedbackInput,
+): Promise<SuggestionFeedbackPublic> {
+  return request<SuggestionFeedbackPublic>(
+    `/api/v1/suggestions/${encodeURIComponent(suggestionId)}/feedback`,
+    {
+      method: 'POST',
+      body: JSON.stringify(input),
+    },
+  )
+}
+
+export function fetchKnowledgeVersion(
+  versionId: string,
+): Promise<KnowledgeVersion> {
+  return request<KnowledgeVersion>(
+    `/api/v1/knowledge/versions/${encodeURIComponent(versionId)}`,
+  )
 }
