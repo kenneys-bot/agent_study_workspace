@@ -4,7 +4,13 @@
 
 from .context_analyzer import ContextAnalyzer, ConversationContext, EmotionAnalysis
 from .intent_recognizer import IntentRecognizer, UserIntent
-from .script_recommender import ScriptRecommender, RecommendedScript
+from .script_recommender import (
+    ScriptRecommender,
+    RecommendedScript,
+    DeterministicReranker,
+    RerankError,
+    RerankOutcome,
+)
 from .personalization_adapter import PersonalizationAdapter, CustomerProfile
 
 __all__ = [
@@ -15,6 +21,9 @@ __all__ = [
     "UserIntent",
     "ScriptRecommender",
     "RecommendedScript",
+    "DeterministicReranker",
+    "RerankError",
+    "RerankOutcome",
     "PersonalizationAdapter",
     "CustomerProfile"
 ]
