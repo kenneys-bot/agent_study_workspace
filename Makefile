@@ -3,7 +3,7 @@ SHELL := /bin/bash
 UV := uv
 COMPOSE := docker compose -f deploy/compose.yml
 
-.PHONY: help doctor test-unit test-integration test-e2e build up down smoke seed-demo seed-demo-accounts index-rebuild index-info sync-check eval train backup restore-check clean
+.PHONY: help doctor test-unit test-integration test-e2e build web-install web-dev web-build web-test up down smoke seed-demo seed-demo-accounts index-rebuild index-info sync-check eval train backup restore-check clean
 
 help: ## 列出可用命令
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -17,9 +17,21 @@ test-unit: ## 无网络、无真实凭据的单元测试（不含 integration �
 sync-check: ## 报告本机与 Ubuntu 的 SHA 及未提交状态，不自动覆盖
 	@bash scripts/sync-check.sh
 
-build: ## 锁定依赖安装（M5 起追加前端构建）
+build: ## 锁定依赖安装（前端构建用 make web-build）
 	@$(UV) sync --locked
-	@echo "build: 后端依赖已按 uv.lock 安装（前端构建在 M5 加入）"
+	@echo "build: 后端依赖已按 uv.lock 安装；前端构建请用 make web-build"
+
+web-install: ## 安装前端依赖（web/ 下有 package-lock.json 时用 npm ci）
+	@cd web && if [ -f package-lock.json ]; then npm ci; else npm install; fi
+
+web-dev: ## 启动前端开发服务器（Vite，默认 http://localhost:5173）
+	@cd web && npm run dev
+
+web-build: ## 类型检查并构建前端产物（web/dist）
+	@cd web && npm run build
+
+web-test: ## 前端组件测试（mock fetch，不需要真实后端）
+	@cd web && npm run test
 
 # ---- 以下命令在对应里程碑实现，未实现时必须非零退出，不能假装成功 ----
 test-integration: ## [M2] PostgreSQL 空库迁移与数据库连通性集成测试

@@ -12,6 +12,7 @@ from .quality_inspector import router as quality_inspector_router
 from .rules import install_rules_error_handler
 from .rules import router as rules_router
 from .suggestions import router as suggestions_router
+from .system import router as system_router
 from .tasks import router as tasks_router
 
 __all__ = [
@@ -23,5 +24,6 @@ __all__ = [
     "script_recommender_router",
     "quality_inspector_router",
     "suggestions_router",
+    "system_router",
     "tasks_router",
 ]
