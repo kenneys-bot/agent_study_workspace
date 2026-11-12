@@ -1,8 +1,8 @@
 # 执行进度
 
 当前里程碑：M5（进行中）；M1–M4 已交付
-当前任务：M5 收尾（T25 已完成）；M6 T27 评测脚本（#28）READY_FOR_ACCEPTANCE
-当前状态：M1–M4 READY_FOR_ACCEPTANCE；M5 工单全部完成（T25 DONE，待负责人验收）；M6 IN_PROGRESS（数据库部署方案已于 2026-11-12 调整，见 ADR-0006；实现待办见下）
+当前任务：M6 T28 条件性微调（#29）与 T33 ADR-0006 数据库落地（#34）并行
+当前状态：M1–M5 已交付（等待负责人验收）；M6 IN_PROGRESS（T26/T27 完成、T28 进行中）；ADR-0006 数据库落地（#34）进行中
 本机代码分支：`feat/bank-assistant`
 本机代码SHA：`979b076`（后续提交见 git log）
 Ubuntu代码SHA：`2c5e0d7`（M3 期间的同步点；集成分支已前进，下次合并后刷新）
@@ -113,6 +113,10 @@ Ubuntu 与 Mac 同 SHA；两端 `uv run pytest tests -q` 均 144 用例全过（
 - `make test-e2e`：一次性本机 compose 数据库 + 隔离后端（replay）+ 前端 preview；Playwright 1 passed，截图在 `web/e2e/screenshots/`（gitignore）。
 - `make demo-real-model-smoke`：DeepSeek chat `status=succeeded` + fastembed embedding 512 维成功，未打印密钥。
 - **ADR-0006 过渡做法**：e2e 暂用本机 compose 的独立 `bank_assistant_demo`，不是隧道 + `*_test`；TODO 指向后续数据库访问工单，落地后移除本机 compose 依赖。
+
+## M5 验收
+
+M5 报告：`docs/milestones/M5-report.md`（T25 交付）。web 48 tests、`make test-e2e` 1 passed（回放链路）、真实云模型冒烟成功（DeepSeek chat + BGE embedding）。工单 #23/#24/#25/#26 全部 DONE。
 
 ## M6 工单状态
 
