@@ -1,10 +1,10 @@
 # 执行进度
 
 当前里程碑：M5 已交付（待负责人验收）；M6 进行中
-当前任务：M6 T28 条件性微调（#29）进行中；T33 ADR-0006 数据库落地（#34）已执行
-当前状态：M1–M5 已交付（等待负责人验收）；M6 IN_PROGRESS（T26/T27 完成、T28 进行中）；**ADR-0006 已落地**（PostgreSQL 只在 Ubuntu，Mac 经 SSH 隧道；2026-11-12 部署已执行）
+当前任务：M6 T28 条件性微调（#29）READY_FOR_ACCEPTANCE（harness 已交付，真实训练 NOT_RUN）；T33 ADR-0006 数据库落地（#34）已执行
+当前状态：M1–M5 已交付（等待负责人验收）；M6 IN_PROGRESS（T26/T27 完成、T28 已交付但真实训练 NOT_RUN）；**ADR-0006 已落地**（PostgreSQL 只在 Ubuntu，Mac 经 SSH 隧道；2026-11-12 部署已执行）
 本机代码分支：`feat/bank-assistant`（集成分支）
-本机代码SHA：以 `git log -1` 为准（T33 合并后刷新）
+本机代码SHA：以 `git log -1` 为准（T28/T33 合并后刷新）
 Ubuntu代码SHA：`73babc3`（服务器 checkout；数据库部署使用仓库外部署副本，未改服务器工作树）
 最近更新：2026-11-12（Asia/Shanghai）
 
@@ -113,7 +113,7 @@ Ubuntu 与 Mac 同 SHA；两端 `uv run pytest tests -q` 均 144 用例全过（
 ## 外部依赖和负责人
 
 - Ubuntu 整机重启：需负责人逐次准许。
-- GPU 分时：M6 微调（#28）前需确认 `dingtalk-train` 空闲。
+- GPU 分时：M6 微调（#29）前需确认 `dingtalk-train` 空闲；与 `dingtalk-*` 共享需负责人明确同意。
 
 ## M5 工单状态
 
@@ -144,7 +144,7 @@ M5 报告：`docs/milestones/M5-report.md`（T25 交付）。web 48 tests、`mak
 | #27 T26 数据集构建与冻结 | DONE | 330 检索/186 质检、按组 60/20/20、manifest 哈希两次一致 |
 | #28 T27 评测脚本与基线对比 | READY_FOR_ACCEPTANCE | `make eval` 全量 replay（50 检索/48 质检，1014 条预测）；live 20 条真实 DeepSeek（p50 1.23s、p95 1.66s、¥0.338 估算）；产物 `artifacts/evals/eval-replay-…103010Z`、`eval-live-…102704Z` |
 | #34 T33 数据库迁到 Ubuntu + SSH 隧道 | DONE（部署已执行） | PG18 容器 healthy；四库 owner=bank；`make test-integration` 130 passed；`make doctor` 隧道缺失失败/建立通过；`make seed-demo` 幂等且不触达 dev/test；LAN 直连失败 |
-| #29 T28 条件性微调 | BLOCKED | 等 #28 验收 |
+| #29 T28 条件性微调 | READY_FOR_ACCEPTANCE | `make train` 默认 dry-run（train 202/test 50，数据哈希校验通过）；真实训练 `NOT_RUN`（GPU 1457 MiB 被 `dingtalk-embed` 占用、模型权重未缓存）；617 unit passed；见 [M6 微调报告](milestones/M6-tuning-report.md) |
 
 ## M4 验收
 
