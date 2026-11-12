@@ -72,6 +72,14 @@ class Settings(BaseSettings):
     
     # PostgreSQL数据库配置
     DATABASE_URL: str = Field(..., validation_alias="DATABASE_URL")
+
+    # 任务队列（契约 §3）：重试上限默认 3；worker 租约默认 60 秒。
+    TASK_MAX_ATTEMPTS: int = Field(
+        default=3, ge=1, validation_alias="TASK_MAX_ATTEMPTS"
+    )
+    TASK_DEFAULT_LEASE_SECONDS: int = Field(
+        default=60, ge=1, validation_alias="TASK_DEFAULT_LEASE_SECONDS"
+    )
     
     # Redis配置
     REDIS_HOST: str = Field(default="localhost", validation_alias="REDIS_HOST")
