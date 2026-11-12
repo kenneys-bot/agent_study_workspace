@@ -12,6 +12,7 @@ from alembic.script import ScriptDirectory
 REPO_ROOT = Path(__file__).resolve().parents[1]
 BASELINE = "0001_schema_meta"
 AUTH_REVISION = "0002_users"
+KNOWLEDGE_REVISION = "0003_knowledge"
 
 
 def _script() -> ScriptDirectory:
@@ -20,6 +21,18 @@ def _script() -> ScriptDirectory:
 
 def test_migration_graph_has_exactly_one_head():
     assert len(_script().get_heads()) == 1
+
+
+def test_knowledge_revision_is_the_single_head_and_follows_users():
+    script = _script()
+    revision = script.get_revision(KNOWLEDGE_REVISION)
+
+    assert revision is not None
+    assert revision.down_revision == AUTH_REVISION
+    assert script.get_current_head() == KNOWLEDGE_REVISION
+    # 0001 → 0002 → 0003 必须是完整线性链，空库才能一次 upgrade 到 head。
+    chain = [item.revision for item in script.walk_revisions()]
+    assert chain[:3] == [KNOWLEDGE_REVISION, AUTH_REVISION, BASELINE]
 
 
 def test_users_revision_extends_the_baseline_and_is_reachable():

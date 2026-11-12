@@ -22,7 +22,9 @@ from bank_assistant.api.errors import (
 )
 from bank_assistant.api.routers import (
     auth_router,
+    install_knowledge_error_handler,
     knowledge_base_router,
+    knowledge_router,
     script_recommender_router,
     quality_inspector_router
 )
@@ -77,10 +79,13 @@ app.add_middleware(TraceIdMiddleware)
 
 # 异常处理：所有端点统一使用契约 §1 的错误结构（T08）
 install_error_handlers(app)
+# 知识生命周期领域错误（状态冲突、自审、revision 冲突）也走同一错误契约。
+install_knowledge_error_handler(app)
 
 
 # 注册路由
 app.include_router(auth_router, prefix=API_PREFIX)
+app.include_router(knowledge_router, prefix=API_PREFIX)
 app.include_router(knowledge_base_router, prefix=API_PREFIX)
 app.include_router(script_recommender_router, prefix=API_PREFIX)
 app.include_router(quality_inspector_router, prefix=API_PREFIX)
