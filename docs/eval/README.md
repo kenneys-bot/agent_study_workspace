@@ -41,6 +41,10 @@ cloud/local_model/replay）。**replay 结果不得混进 live 报告**；replay
 `metrics.acceptance.gates_applied=false`，分数由词法 embedding 与替身模型产生，
 只用于流程验证，不代表模型质量。
 
+live 模式的 `max_items` 采用**分层抽样**：按场景轮转、场景内困难/正常交替，
+保证三场景都进入子集且优先覆盖无答案/信息不足等困难样本；抽样确定性只依赖
+`item_id`，不使用随机数。样本 ID 会写进 `metrics.run.sample`。
+
 live 模式必须在配置里给出 `max_items`（样本上限）与 `budget_cny`（预算上限），
 且价目表必须能匹配 `provider/model`。预算在每次调用前按估算 token 拦截、
 调用后再按实际估算累计；触发上限时停止后续调用，manifest 记为

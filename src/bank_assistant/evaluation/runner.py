@@ -63,6 +63,7 @@ from bank_assistant.evaluation.metrics import (
     summarize_inspection,
     summarize_retrieval,
 )
+from bank_assistant.evaluation.sampling import stratified_sample
 from bank_assistant.evaluation.replay import (
     CostTracker,
     MeteredGateway,
@@ -272,9 +273,12 @@ def _build_runtime(
 
 
 def _cap(items: list[Any], max_items: int | None) -> list[Any]:
-    if max_items is None:
-        return items
-    return items[:max_items]
+    return stratified_sample(
+        items,
+        max_items,
+        scenario_of=lambda item: item.scenario,
+        is_hard=lambda item: bool(item.hard_categories),
+    )
 
 
 def _retrieval_failures(records: list[RetrievalRecord]) -> list[dict[str, Any]]:
@@ -621,6 +625,8 @@ def run_eval(
                 "inspection_items": len(capped_inspection),
                 "retrieval_judgments": len(retrieval_records),
                 "inspection_judgments": len(inspection_records),
+                "retrieval_sample_ids": [item.item_id for item in capped_retrieval],
+                "inspection_sample_ids": [item.item_id for item in capped_inspection],
             },
         },
         "retrieval": (
