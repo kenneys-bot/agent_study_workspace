@@ -41,7 +41,7 @@ class TestHealthEndpoints:
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "healthy"
-
+    
     def test_app_info(self, client):
         """测试应用信息"""
         response = client.get("/info")
