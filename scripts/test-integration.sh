@@ -20,7 +20,8 @@ export POSTGRES_PORT
 # 不沿用外部 DATABASE_URL，避免误连开发库。
 export DATABASE_URL="postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.0.1:${POSTGRES_PORT}/${POSTGRES_DB}"
 export DASHSCOPE_API_KEY="${DASHSCOPE_API_KEY:-integration-test-placeholder}"
-export SECRET_KEY="${SECRET_KEY:-integration-test-placeholder}"
+# 一次性测试密钥：长度 >= 32 字节，满足 HS256 最小建议长度；不是任何环境的秘密。
+export SECRET_KEY="${SECRET_KEY:-integration-test-only-not-a-real-secret-0123456789}"
 export APP_ENV="${APP_ENV:-testing}"
 
 compose() { docker compose -p "$PROJECT_NAME" -f "$COMPOSE_FILE" "$@"; }

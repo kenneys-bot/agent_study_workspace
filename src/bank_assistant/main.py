@@ -16,7 +16,9 @@ from bank_assistant.config.settings import settings
 from bank_assistant.config.constants import API_PREFIX
 from bank_assistant.infra.db import ping_database
 from bank_assistant.utils.logger import LoggerConfig
+from bank_assistant.api.errors import install_error_handlers
 from bank_assistant.api.routers import (
+    auth_router,
     knowledge_base_router,
     script_recommender_router,
     quality_inspector_router
@@ -68,6 +70,9 @@ app.add_middleware(
 
 
 # 异常处理
+install_error_handlers(app)
+
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request, exc):
     """全局异常处理器"""
@@ -83,6 +88,7 @@ async def global_exception_handler(request, exc):
 
 
 # 注册路由
+app.include_router(auth_router, prefix=API_PREFIX)
 app.include_router(knowledge_base_router, prefix=API_PREFIX)
 app.include_router(script_recommender_router, prefix=API_PREFIX)
 app.include_router(quality_inspector_router, prefix=API_PREFIX)
