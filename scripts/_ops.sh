@@ -71,10 +71,11 @@ SQL
 ops_content_hashes() {
   local database="$1" select_sql
   select_sql="$(_ops_psql_stdin "$database" <<'SQL'
-select format($fmt$select %L as table_name, count(*) as rows, coalesce(max(content_hash), '') as max_content_hash, md5(coalesce(string_agg(content_hash, '|' order by content_hash), '')) as content_hash_md5 from %I$fmt$, table_name, table_name)
+select string_agg(
+         format($fmt$select %L as table_name, count(*) as rows, coalesce(max(content_hash), '') as max_content_hash, md5(coalesce(string_agg(content_hash, '|' order by content_hash), '')) as content_hash_md5 from %I$fmt$, table_name, table_name),
+         ' union all ' order by table_name)
 from information_schema.columns
-where table_schema = 'public' and column_name = 'content_hash'
-order by table_name;
+where table_schema = 'public' and column_name = 'content_hash';
 SQL
 )"
   [ -n "$select_sql" ] || return 0
