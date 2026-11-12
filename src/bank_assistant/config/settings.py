@@ -95,6 +95,12 @@ class Settings(BaseSettings):
     TASK_DEFAULT_LEASE_SECONDS: int = Field(
         default=60, ge=1, validation_alias="TASK_DEFAULT_LEASE_SECONDS"
     )
+
+    # 报告导出产物根目录（计划书 ARTIFACT_ROOT；仓库内 artifacts/ 已被忽略）。
+    # 只存相对 artifact_ref；macOS 与 Ubuntu 用同一套相对布局，不写死绝对路径。
+    ARTIFACT_ROOT: str = Field(
+        default="artifacts", validation_alias="ARTIFACT_ROOT"
+    )
     
     # Redis配置
     REDIS_HOST: str = Field(default="localhost", validation_alias="REDIS_HOST")
