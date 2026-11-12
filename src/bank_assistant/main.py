@@ -96,7 +96,7 @@ async def root():
     }
 
 
-# 健康检查
+# 健康检查（保留既有行为，供旧调用方使用）
 @app.get("/health")
 async def health_check():
     """健康检查"""
@@ -104,6 +104,30 @@ async def health_check():
         "status": "healthy",
         "app": settings.APP_NAME,
         "version": settings.APP_VERSION
+    }
+
+
+# 存活探针：只表示进程可响应，不检查任何外部依赖（容器 healthcheck 用这个）
+@app.get("/health/live")
+async def health_live():
+    """存活探针"""
+    return {
+        "status": "live",
+        "app": settings.APP_NAME,
+        "version": settings.APP_VERSION
+    }
+
+
+# 就绪探针：M1 没有已声明的外部依赖，因此如实报告“未检查”，不伪装成已完成依赖校验。
+# M2 接入 PostgreSQL 后，这里检查数据库并在失败时返回 503（且不得调用付费 LLM）。
+@app.get("/health/ready")
+async def health_ready():
+    """就绪探针（当前未检查任何外部依赖）"""
+    return {
+        "status": "ready",
+        "checks": [],
+        "not_checked": ["postgresql"],
+        "detail": "M1：尚未配置外部依赖检查；M2 接入 PostgreSQL 后失败返回 503"
     }
 
 

@@ -1,6 +1,7 @@
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
 UV := uv
+COMPOSE := docker compose -f deploy/compose.yml
 
 .PHONY: help doctor test-unit test-integration test-e2e build up down smoke seed-demo sync-check eval train backup restore-check clean
 
@@ -27,14 +28,16 @@ test-integration: ## [M2] PostgreSQL 迁移/事务/权限测试
 test-e2e: ## [M5] 隔离演示环境端到端测试
 	@echo "NOT_IMPLEMENTED: test-e2e 在 M5 实现" >&2; exit 2
 
-up: ## [M5] 启动开发/演示环境
-	@echo "NOT_IMPLEMENTED: up 在 M5 实现" >&2; exit 2
+up: ## 构建并启动 API 容器（需要 .env 或环境变量提供必填配置）
+	@$(COMPOSE) up -d --build api
+	@echo "up: API 容器已启动 → http://127.0.0.1:$${API_PORT:-8000}/health/live"
 
-down: ## [M5] 停止开发/演示环境
-	@echo "NOT_IMPLEMENTED: down 在 M5 实现" >&2; exit 2
+down: ## 停止并移除 API 容器
+	@$(COMPOSE) down --remove-orphans
+	@echo "down: 已停止"
 
-smoke: ## [M1] 存活/就绪/正常与异常路径冒烟
-	@echo "NOT_IMPLEMENTED: smoke 在 M1 实现" >&2; exit 2
+smoke: ## [M1] 真实启动容器，断言存活、就绪与错误路径
+	@bash scripts/smoke.sh
 
 seed-demo: ## [M3] 只导入合成演示数据，幂等
 	@echo "NOT_IMPLEMENTED: seed-demo 在 M3 实现" >&2; exit 2

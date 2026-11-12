@@ -1,0 +1,37 @@
+# 本机开发/演示：单个 API 服务。
+# - 镜像由 deploy/docker/Dockerfile.api 构建（依赖按 uv.lock 锁定）。
+# - 真实凭据只从仓库根 .env 读取；.env 不存在时 compose 仍然可用（required: false）。
+# - 这里不写任何密钥/占位密钥：Settings 的必填项由调用方环境变量提供，
+#   例如 `make smoke` 会注入仅用于冒烟的假值。
+
+name: bank-assistant
+
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: deploy/docker/Dockerfile.api
+    image: bank-assistant:dev
+    ports:
+      - "${API_PORT:-8000}:8000"
+    env_file:
+      - path: ../.env
+        required: false
+    environment:
+      # 透传宿主环境变量；未提供时由 Settings 默认值/必填校验决定（不伪造凭据）。
+      - APP_ENV
+      - DASHSCOPE_API_KEY
+      - DATABASE_URL
+      - SECRET_KEY
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/live', timeout=2)"
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+    restart: unless-stopped
+    stop_grace_period: 10s

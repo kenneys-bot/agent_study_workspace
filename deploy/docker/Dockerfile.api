@@ -1,0 +1,48 @@
+# syntax=docker/dockerfile:1
+# API 镜像：依赖层按 uv.lock 安装，源码层后置；运行时非 root、只带虚拟环境。
+# 构建：docker build -f deploy/docker/Dockerfile.api -t bank-assistant:dev .
+
+# ---- 构建阶段：uv + Python 3.13，按锁定版本安装依赖与项目 ----
+FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim AS builder
+
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_PYTHON_DOWNLOADS=0
+
+WORKDIR /app
+
+# 依赖层：只复制锁文件与项目元数据，源码变化不会让这一层失效。
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev --no-install-project
+
+# 源码层：必须在依赖之后复制，才能复用上面的缓存。
+COPY . .
+RUN uv sync --frozen --no-dev --no-editable
+
+# ---- 运行阶段：不带 uv/构建工具，非 root 用户 ----
+FROM python:3.13-slim-bookworm AS runtime
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PATH="/app/.venv/bin:${PATH}"
+
+# onnxruntime（chromadb 依赖）在 slim 镜像里需要 libgomp1。
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libgomp1 \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --system --gid 10001 app \
+    && useradd --system --uid 10001 --gid app --home-dir /app --shell /usr/sbin/nologin app
+
+WORKDIR /app
+
+COPY --from=builder --chown=app:app /app/.venv /app/.venv
+
+USER app
+
+EXPOSE 8000
+
+# 容器自身的存活检查；compose 使用同一路径。
+HEALTHCHECK --interval=10s --timeout=3s --start-period=15s --retries=3 \
+    CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/live', timeout=2)"]
+
+CMD ["uvicorn", "bank_assistant.main:app", "--host", "0.0.0.0", "--port", "8000"]
