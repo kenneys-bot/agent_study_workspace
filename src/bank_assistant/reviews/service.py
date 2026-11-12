@@ -31,6 +31,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from bank_assistant.infra.models import (
+    AuditEvent,
     Finding,
     InspectionRun,
     ReviewCase,
@@ -144,6 +145,7 @@ class ReviewView:
     inspection_view: InspectionView
     findings: tuple[ReviewFindingView, ...]
     decisions: tuple[ReviewDecision, ...]
+    status_history: tuple[AuditEvent, ...]
     completion: CompletionCheck
 
 
@@ -323,6 +325,19 @@ def build_review_view(
     for decision in decisions:
         decisions_by_finding[decision.finding_id].append(decision)
 
+    # 状态历史来自追加式审计（review.created / decision_recorded / completed /
+    # reopened），不另建可覆盖的状态表；detail 只暴露安全摘要。
+    status_history = tuple(
+        session.scalars(
+            select(AuditEvent)
+            .where(
+                AuditEvent.resource_type == RESOURCE_TYPE_REVIEW,
+                AuditEvent.resource_id == str(review.review_id),
+            )
+            .order_by(AuditEvent.timestamp.asc(), AuditEvent.event_id.asc())
+        ).all()
+    )
+
     ordered_findings = sorted(
         inspection_view.findings,
         key=lambda finding: (
@@ -373,6 +388,7 @@ def build_review_view(
         inspection_view=inspection_view,
         findings=tuple(finding_views),
         decisions=decisions,
+        status_history=status_history,
         completion=completion,
     )
 
