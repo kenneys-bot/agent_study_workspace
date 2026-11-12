@@ -1,0 +1,48 @@
+# M6 固定评测：live 小样本（真实 DeepSeek 调用，用于真实延迟/token/成本）
+#
+# 前置：.env 提供 DEEPSEEK_API_KEY / DEEPSEEK_MODEL=deepseek-chat；
+#       embedding 使用本机 fastembed + BAAI/bge-small-zh-v1.5（首次需下载/缓存）。
+# 用法：make eval EVAL_CONFIG=configs/eval/live-subset.yaml
+mode: live
+split: test
+
+dataset_id: bank-cs-m6-synthetic
+dataset_version: v1
+dataset_dir: artifacts/data/bank-cs-m6-synthetic/v1
+artifact_root: artifacts
+seed: 42
+
+top_k: 5
+# 生产默认相似度门槛：suggestions.DEFAULT_MAX_DISTANCE=0.55（距离）→ 相似度 0.45。
+min_similarity: 0.45
+# 硬性样本上限与预算上限：live 运行必须两者齐全。
+max_items: 20
+budget_cny: 2.0
+
+model:
+  provider: deepseek
+  model: deepseek-chat
+embedding:
+  provider: fastembed
+
+# DeepSeek 官方历史价目快照（2025-02-09 生效）。注意：
+# - 价格是公开价目页的旧快照，2026 年可能已调整；
+# - 本表只用于“估算成本”，不是供应商账单；
+# - 中继（relay）没有公开价目表，故意不配置，避免编造成本。
+pricing:
+  - provider: deepseek
+    model: deepseek-chat
+    input_cny_per_mtok: 2.0
+    output_cny_per_mtok: 8.0
+    source: https://api-docs.deepseek.com/zh-cn/quick_start/pricing/
+    as_of: "2025-02-09"
+    note: "官方历史价目快照；运行前请核对当前官方页面"
+
+scope_id: demo-bank
+tasks:
+  - retrieval
+  - inspection
+
+notes:
+  purpose: "live 小样本：只报告实测延迟/token/成本，不判定 §7 质量门槛"
+  relay_pricing: "第三方中继无公开价目表，未配置价格；不得编造中继成本"

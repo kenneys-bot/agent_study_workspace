@@ -68,3 +68,13 @@ def test_guard_cli_exits_nonzero_for_test_split_training() -> None:
     )
     assert blocked.returncode != 0
     assert "train" in blocked.stderr.lower()
+
+
+def test_frozen_test_eval_refuses_dev_and_train() -> None:
+    """T27：正式评测只允许冻结 test；dev 是开发集，train 更不能用于评测。"""
+    from bank_assistant.datasets.split_guard import require_frozen_test_split
+
+    assert require_frozen_test_split("test") == "test"
+    for split in ("dev", "train", "TEST"):
+        with pytest.raises(SplitLeakageError):
+            require_frozen_test_split(split)

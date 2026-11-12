@@ -19,6 +19,7 @@ __all__ = [
     "SplitLeakageError",
     "SplitPurpose",
     "main",
+    "require_frozen_test_split",
     "require_split_for",
 ]
 
@@ -26,6 +27,9 @@ __all__ = [
 class SplitPurpose(StrEnum):
     TRAIN = "train"
     EVAL = "eval"
+    # T27 正式评测：M6-04 的基线与门槛必须在冻结 test 上报告；
+    # dev 是调参/开发集，不能混进正式评测结论。
+    FROZEN_TEST = "frozen_test"
 
 
 class SplitLeakageError(ValueError):
@@ -35,6 +39,7 @@ class SplitLeakageError(ValueError):
 ALLOWED_SPLITS: dict[str, frozenset[str]] = {
     SplitPurpose.TRAIN.value: frozenset({"train"}),
     SplitPurpose.EVAL.value: frozenset({"dev", "test"}),
+    SplitPurpose.FROZEN_TEST.value: frozenset({"test"}),
 }
 
 
@@ -49,6 +54,16 @@ def require_split_for(purpose: str, split: str) -> str:
         raise SplitLeakageError(
             f"{purpose} 不允许使用 {split!r} split；允许：{sorted(allowed)}。"
             "冻结测试集不能用于训练，train 也不能当作留出评测集。"
+        )
+    return split
+
+
+def require_frozen_test_split(split: str) -> str:
+    """正式评测只接受冻结 ``test``；``dev`` 是开发集，``train`` 更不能评测。"""
+    if split != "test":
+        raise SplitLeakageError(
+            f"正式评测只允许冻结 test split，收到 {split!r}；"
+            "dev 用于调参、train 用于训练，都不能产出正式评测结论。"
         )
     return split
 

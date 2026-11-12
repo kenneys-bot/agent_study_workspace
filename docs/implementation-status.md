@@ -1,8 +1,8 @@
 # 执行进度
 
 当前里程碑：M5（进行中）；M1–M4 已交付
-当前任务：M5 T25 演示脚本与端到端（#26）已完成；M6 T27 评测脚本（#28）并行
-当前状态：M1–M4 READY_FOR_ACCEPTANCE；M5 T25 DONE（待负责人验收）；M6 IN_PROGRESS（数据库部署方案已于 2026-11-12 调整，见 ADR-0006；实现待办见下）
+当前任务：M5 收尾（T25 已完成）；M6 T27 评测脚本（#28）READY_FOR_ACCEPTANCE
+当前状态：M1–M4 READY_FOR_ACCEPTANCE；M5 工单全部完成（T25 DONE，待负责人验收）；M6 IN_PROGRESS（数据库部署方案已于 2026-11-12 调整，见 ADR-0006；实现待办见下）
 本机代码分支：`feat/bank-assistant`
 本机代码SHA：`979b076`（后续提交见 git log）
 Ubuntu代码SHA：`2c5e0d7`（M3 期间的同步点；集成分支已前进，下次合并后刷新）
@@ -119,8 +119,8 @@ Ubuntu 与 Mac 同 SHA；两端 `uv run pytest tests -q` 均 144 用例全过（
 | 工单 | 状态 | 证据 |
 |---|---|---|
 | #27 T26 数据集构建与冻结 | DONE | 330 检索/186 质检、按组 60/20/20、manifest 哈希两次一致 |
-| #28 T27 评测脚本与基线对比 | IN_PROGRESS | worktree 中进行 |
-| #29 T28 条件性微调 | BLOCKED | 等 #28 |
+| #28 T27 评测脚本与基线对比 | READY_FOR_ACCEPTANCE | `make eval` 全量 replay（50 检索/48 质检，1014 条预测）；live 20 条真实 DeepSeek（p50 1.23s、p95 1.66s、¥0.338 估算）；产物 `artifacts/evals/eval-replay-…103010Z`、`eval-live-…102704Z` |
+| #29 T28 条件性微调 | BLOCKED | 等 #28 验收 |
 
 ## M4 验收
 
