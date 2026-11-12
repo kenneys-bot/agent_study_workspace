@@ -29,6 +29,12 @@ export default function Layout() {
             坐席工作台
           </NavLink>
           <NavLink
+            to="/reviews"
+            className={({ isActive }) => (isActive ? 'nav-link active' : 'nav-link')}
+          >
+            质检复核
+          </NavLink>
+          <NavLink
             to="/system"
             className={({ isActive }) => (isActive ? 'nav-link active' : 'nav-link')}
           >

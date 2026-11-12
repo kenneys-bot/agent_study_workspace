@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  buildHighlightSegments,
   codePointLength,
   codePointRangeToUtf16Range,
   codePointToUtf16Offset,
@@ -49,5 +50,33 @@ describe('evidence code point helpers (CT-08)', () => {
   it('maps a backend evidence range onto a DOM selection range', () => {
     // “免了😀\n不用” start=7 end=13（码点）→ DOM [7,14)（UTF-16）。
     expect(codePointRangeToUtf16Range(EMOJI_TEXT, 2, 5)).toEqual({ start: 2, end: 6 })
+  })
+
+  it('builds highlight segments that preserve emoji and newline text', () => {
+    const text = '客户😀：\n年费已免'
+    // 码点：0客 1户 2😀 3： 4\n 5年 6费 7已 8免
+    const segments = buildHighlightSegments(text, [
+      { start: 2, end: 3 },
+      { start: 5, end: 9 },
+    ])
+    expect(segments).toEqual([
+      { text: '客户', highlighted: false },
+      { text: '😀', highlighted: true },
+      { text: '：\n', highlighted: false },
+      { text: '年费已免', highlighted: true },
+    ])
+    expect(segments.map((segment) => segment.text).join('')).toBe(text)
+    expect(segments.filter((segment) => segment.highlighted)).toHaveLength(2)
+  })
+
+  it('merges overlapping evidence ranges instead of duplicating text', () => {
+    const segments = buildHighlightSegments(EMOJI_TEXT, [
+      { start: 2, end: 5 },
+      { start: 1, end: 4 },
+    ])
+    expect(segments).toEqual([
+      { text: '年', highlighted: false },
+      { text: '费😀已免', highlighted: true },
+    ])
   })
 })

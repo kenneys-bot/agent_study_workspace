@@ -17,7 +17,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from bank_assistant.infra.models import ReviewCase, ReviewDecision
+from bank_assistant.infra.models import AuditEvent, ReviewCase, ReviewDecision
 from bank_assistant.inspections.evidence import annotate_evidence
 from bank_assistant.reviews.service import ReviewFindingView, ReviewPage, ReviewView
 
@@ -112,6 +112,22 @@ class ReviewFindingPublic(BaseModel):
     decision_count: int = 0
 
 
+class ReviewStatusEvent(BaseModel):
+    """一次复核状态/版本变化（来自追加式审计，只读）。
+
+    字段只取审计摘要里的短元数据（动作、迁移前后状态、接受后的 revision），
+    不包含会话正文、模型原始输出或决定理由全文。
+    """
+
+    event_id: UUID
+    action: str
+    previous_status: str | None = None
+    status: str | None = None
+    revision: int | None = None
+    actor_id: UUID
+    timestamp: datetime
+
+
 class ReviewDetail(BaseModel):
     """复核详情：原判断、人工决定历史、完成门禁事实与 revision。"""
 
@@ -132,6 +148,10 @@ class ReviewDetail(BaseModel):
     findings: list[ReviewFindingPublic] = Field(default_factory=list)
     decisions: list[ReviewDecisionPublic] = Field(
         default_factory=list, description="追加式决定历史，按 accepted_revision 升序"
+    )
+    status_history: list[ReviewStatusEvent] = Field(
+        default_factory=list,
+        description="追加式状态历史（创建/逐项决定/完成/重开），按时间升序",
     )
 
 
@@ -211,6 +231,24 @@ def _finding_public(
     )
 
 
+def _status_event(event: AuditEvent) -> ReviewStatusEvent:
+    """把审计行的安全摘要投影成状态历史条目（缺字段就留空，不猜测）。"""
+    before = dict(event.before_summary or {})
+    after = dict(event.after_summary or {})
+    previous = before.get("status")
+    status = after.get("status", previous)
+    revision = after.get("revision", before.get("revision"))
+    return ReviewStatusEvent(
+        event_id=event.event_id,
+        action=event.action,
+        previous_status=previous if isinstance(previous, str) else None,
+        status=status if isinstance(status, str) else None,
+        revision=revision if isinstance(revision, int) else None,
+        actor_id=event.actor_id,
+        timestamp=event.timestamp,
+    )
+
+
 def to_detail(view: ReviewView) -> ReviewDetail:
     review = view.review
     completion = view.completion
@@ -234,6 +272,7 @@ def to_detail(view: ReviewView) -> ReviewDetail:
         ),
         findings=[_finding_public(finding, view) for finding in view.findings],
         decisions=[to_decision(decision) for decision in view.decisions],
+        status_history=[_status_event(event) for event in view.status_history],
     )
 
 
@@ -279,6 +318,7 @@ __all__ = [
     "ReviewFindingPublic",
     "ReviewList",
     "ReviewReopenRequest",
+    "ReviewStatusEvent",
     "ReviewStatusLiteral",
     "ReviewSummary",
     "ReviewVerdictLiteral",

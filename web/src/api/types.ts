@@ -157,3 +157,163 @@ export interface KnowledgeVersion {
   updated_at: string
   document: KnowledgeDocumentSummary
 }
+
+/* ---------------------------------------------------------------------------
+ * 质检与人工复核（T24 #25 / M5-02）：机器判断、证据坐标与追加式决定。
+ * 机器判断只读；人工结论只追加到 decisions，前端不覆盖也不改写。
+ * ------------------------------------------------------------------------- */
+
+export type ReviewStatus = 'pending' | 'in_review' | 'completed'
+export type ReviewAction = 'confirm' | 'reject' | 'modify'
+export type ReviewVerdict =
+  | 'hit'
+  | 'clear'
+  | 'insufficient_evidence'
+  | 'not_applicable'
+
+/** 后端 annotate_evidence 的输出：码点坐标 + 轮次序号 + 回验结果。 */
+export interface ReviewEvidenceSpan {
+  turn_id: string
+  turn_ordinal: number | null
+  start: number | null
+  end: number | null
+  quote: string | null
+  validated: boolean
+  validation_error?: string
+}
+
+export interface ReviewFinding {
+  finding_id: string
+  rule_version_id: string
+  rule_id: string | null
+  rule_code: string | null
+  version_no: number | null
+  severity: string
+  machine_verdict: string
+  effective_machine_verdict: string
+  evidence_valid: boolean
+  rationale: string
+  evidence: ReviewEvidenceSpan[]
+  knowledge_refs: Record<string, unknown>[]
+  applicable: boolean
+  final_verdict: string | null
+  latest_action: string | null
+  latest_decision_id: string | null
+  decision_count: number
+}
+
+export interface ReviewDecision {
+  decision_id: string
+  review_id: string
+  finding_id: string
+  action: string
+  final_verdict: string
+  reason: string
+  actor_id: string
+  expected_revision: number
+  accepted_revision: number
+  created_at: string
+}
+
+export interface ReviewStatusEvent {
+  event_id: string
+  action: string
+  previous_status: string | null
+  status: string | null
+  revision: number | null
+  actor_id: string
+  timestamp: string
+}
+
+export interface ReviewDetail {
+  review_id: string
+  inspection_id: string
+  inspection_status: string
+  assignee_id: string
+  status: string
+  revision: number
+  last_reopen_reason: string | null
+  created_at: string
+  updated_at: string
+  applicable_finding_count: number
+  decided_finding_count: number
+  missing_decision_finding_ids: string[]
+  pending_business_confirmation: boolean
+  pending_confirmation_finding_ids: string[]
+  findings: ReviewFinding[]
+  decisions: ReviewDecision[]
+  status_history: ReviewStatusEvent[]
+}
+
+export interface ReviewSummary {
+  review_id: string
+  inspection_id: string
+  assignee_id: string
+  status: string
+  revision: number
+  created_at: string
+  updated_at: string
+}
+
+export interface ReviewList {
+  items: ReviewSummary[]
+  total: number
+  limit: number
+  offset: number
+}
+
+export interface ReviewDecisionInput {
+  finding_id: string
+  action: ReviewAction
+  final_verdict?: ReviewVerdict
+  reason: string
+  expected_revision: number
+}
+
+export interface ReviewDecisionAccepted {
+  review_id: string
+  inspection_id: string
+  status: string
+  revision: number
+  decision: ReviewDecision
+}
+
+export interface ReviewCompleteInput {
+  expected_revision: number
+  pending_business_confirmation: boolean
+}
+
+/** GET /inspections/{id} 的读取视图（复核页据此找到会话与原文轮次）。 */
+export interface InspectionFinding {
+  finding_id: string
+  rule_version_id: string
+  rule_id: string | null
+  rule_code: string | null
+  version_no: number | null
+  machine_verdict: string
+  severity: string
+  rationale: string
+  evidence: ReviewEvidenceSpan[]
+  knowledge_refs: Record<string, unknown>[]
+  evidence_valid: boolean
+  raw_machine_verdict: string | null
+  created_at: string
+}
+
+export interface InspectionDetail {
+  inspection_id: string
+  conversation_id: string
+  conversation_hash: string
+  status: string
+  error_code: string | null
+  diagnostics: Record<string, unknown>
+  rule_count: number
+  task_id: string | null
+  parent_run_id: string | null
+  run_id: string | null
+  started_at: string | null
+  finished_at: string | null
+  created_at: string
+  updated_at: string
+  findings: InspectionFinding[]
+}
