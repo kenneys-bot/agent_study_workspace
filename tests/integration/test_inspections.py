@@ -29,7 +29,7 @@ from alembic.config import Config
 from alembic.script import ScriptDirectory
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
-from sqlalchemy import func, inspect, select, text
+from sqlalchemy import func, inspect, select, text, update
 from sqlalchemy.exc import IntegrityError
 
 from bank_assistant.config.settings import settings
@@ -48,6 +48,10 @@ from bank_assistant.infra.models import (
     User,
 )
 from bank_assistant.infra.task_queue import MAX_ATTEMPTS_ERROR_CODE, TaskQueue
+from bank_assistant.inspections.evidence import (
+    code_point_length,
+    utf16_offset_to_code_point,
+)
 from bank_assistant.inspections.schema import InspectionStatus, RuleJudgmentPayload
 from bank_assistant.inspections.service import TASK_TYPE
 from bank_assistant.security.identity import Identity
@@ -66,6 +70,11 @@ INSPECTIONS_ENDPOINT = "/api/v1/inspections"
 CONVERSATION_TEXT = (
     "客户：你们必须把年费免了，不然我投诉\n"
     "客服：肯定免息，您放心，我帮您处理\n"
+)
+EMOJI_CONVERSATION_TEXT = (
+    "客户：请问年费\n"
+    "客服：这笔年费我给您免了😀\n"
+    "不用还\n"
 )
 
 
@@ -162,16 +171,22 @@ def _headers(user: dict[str, object], key: str | None = None) -> dict[str, str]:
     return headers
 
 
-def _create_conversation(
-    client: TestClient, user: dict[str, object]
+def _create_conversation_with_text(
+    client: TestClient, user: dict[str, object], text: str
 ) -> dict[str, object]:
     response = client.post(
         "/api/v1/conversations",
-        json={"content": CONVERSATION_TEXT, "format": "text"},
+        json={"content": text, "format": "text"},
         headers=_headers(user),
     )
     assert response.status_code == 201, response.text
     return response.json()
+
+
+def _create_conversation(
+    client: TestClient, user: dict[str, object]
+) -> dict[str, object]:
+    return _create_conversation_with_text(client, user, CONVERSATION_TEXT)
 
 
 def _create_published_rule(
@@ -231,15 +246,30 @@ def _create_published_rule(
         return version.rule_version_id
 
 
-def _judgment(turn_id: UUID, *, verdict: str = "hit") -> dict[str, object]:
-    return {
+def _judgment(
+    turn_id: UUID,
+    *,
+    verdict: str = "hit",
+    start: int = 7,
+    end: int = 9,
+    quote: str = "免了",
+    evidence: list[dict[str, object]] | None = None,
+    applicability: dict[str, object] | None = None,
+) -> dict[str, object]:
+    """构造模型输出；默认证据对应首轮“你们必须把年费免了”。"""
+    payload: dict[str, object] = {
         "verdict": verdict,
         "rationale": "坐席承诺减免费用且没有审批依据",
-        "evidence": [
-            {"turn_id": str(turn_id), "start": 0, "end": 2, "quote": "肯定"}
-        ],
+        "evidence": (
+            evidence
+            if evidence is not None
+            else [{"turn_id": str(turn_id), "start": start, "end": end, "quote": quote}]
+        ),
         "knowledge_refs": [],
     }
+    if applicability is not None:
+        payload["applicability"] = applicability
+    return payload
 
 
 def _unique_business_type() -> str:
@@ -1124,3 +1154,287 @@ def test_judgment_payload_schema_rejects_unknown_verdict() -> None:
         RuleJudgmentPayload.model_validate(
             {"verdict": "probably", "rationale": "x", "evidence": []}
         )
+
+
+# ---------------------------------------------------------------------------
+# T19：严格证据、四态独立与证据展示
+# ---------------------------------------------------------------------------
+
+
+def _single_rule_inspection(
+    client: TestClient,
+    user: dict[str, object],
+    *,
+    text: str = CONVERSATION_TEXT,
+):
+    """建一个会话 + 一条已发布规则 + 一次质检，返回构造好的输入。"""
+    conversation = _create_conversation_with_text(client, user, text)
+    business_type = _unique_business_type()
+    code = f"DEMO-T19-{uuid4().hex[:6].upper()}"
+    _create_published_rule(
+        scope_id=str(user["scope_id"]),
+        author_id=user["user_id"],  # type: ignore[arg-type]
+        rule_code=code,
+        business_type=business_type,
+    )
+    created = _post_inspection(
+        client,
+        user,
+        conversation["conversation_id"],
+        business_type=business_type,
+    )
+    assert created.status_code == 202, created.text
+    return conversation, code, created.json()["inspection_id"]
+
+
+@pytest.mark.parametrize(
+    "start,end,quote",
+    [
+        (7, 999, "免了"),  # end 越过原文码点长度
+        (7, 9, "我给您"),  # quote 与原文不一致
+    ],
+)
+def test_worker_rejects_invalid_evidence_interval_with_stable_code(
+    client: TestClient,
+    users: dict[str, dict[str, object]],
+    start: int,
+    end: int,
+    quote: str,
+) -> None:
+    """CT-09：错误证据区间必须被拒绝，且不能留下任何 hit 结论。"""
+    _cancel_pending_inspections()
+    conversation, code, inspection_id = _single_rule_inspection(
+        client, users["agent_a"]
+    )
+    turn_id = UUID(conversation["turns"][0]["turn_id"])
+    gateway = FakeGateway(
+        {code: _judgment(turn_id, start=start, end=end, quote=quote)}
+    )
+
+    outcome = Worker(
+        gateway=gateway,
+        queue=TaskQueue(max_attempts=1),
+        worker_id="worker-invalid-evidence",
+    ).run_once()
+
+    assert outcome is not None
+    assert outcome.status == "failed"
+    assert outcome.error_code == "EVIDENCE_INVALID"
+    assert _finding_count(inspection_id) == 0
+    run = _stored_run(inspection_id)
+    assert run.status == "failed"
+    assert run.error_code == "EVIDENCE_INVALID"
+    detail = client.get(
+        f"{INSPECTIONS_ENDPOINT}/{inspection_id}",
+        headers=_headers(users["agent_a"]),
+    )
+    assert detail.json()["status"] == "failed"
+    assert detail.json()["findings"] == []
+
+
+def test_worker_rejects_knowledge_refs_that_do_not_exist(
+    client: TestClient, users: dict[str, dict[str, object]]
+) -> None:
+    """CT-09：引用不存在的 chunk/version 同样不能生成确认风险。"""
+    _cancel_pending_inspections()
+    conversation, code, inspection_id = _single_rule_inspection(
+        client, users["agent_a"]
+    )
+    turn_id = UUID(conversation["turns"][0]["turn_id"])
+    payload = _judgment(turn_id) | {
+        "knowledge_refs": [
+            {"version_id": str(uuid4()), "chunk_id": str(uuid4())}
+        ]
+    }
+    gateway = FakeGateway({code: payload})
+
+    outcome = Worker(
+        gateway=gateway,
+        queue=TaskQueue(max_attempts=1),
+        worker_id="worker-unknown-knowledge",
+    ).run_once()
+
+    assert outcome is not None
+    assert outcome.status == "failed"
+    assert outcome.error_code == "EVIDENCE_INVALID"
+    assert _finding_count(inspection_id) == 0
+
+
+def test_worker_rejects_a_hit_whose_evidence_is_negated(
+    client: TestClient, users: dict[str, dict[str, object]]
+) -> None:
+    """M4-02：否定句里的关键词不能成为命中证据。"""
+    _cancel_pending_inspections()
+    conversation, code, inspection_id = _single_rule_inspection(
+        client,
+        users["agent_a"],
+        text="客户：年费\n客服：我们没有收取年费\n",
+    )
+    turn_id = UUID(conversation["turns"][1]["turn_id"])
+    assert conversation["turns"][1]["content"] == "我们没有收取年费"
+    gateway = FakeGateway(
+        {
+            code: _judgment(
+                turn_id, start=2, end=8, quote="没有收取年费"
+            )
+        }
+    )
+
+    outcome = Worker(
+        gateway=gateway,
+        queue=TaskQueue(max_attempts=1),
+        worker_id="worker-negated-evidence",
+    ).run_once()
+
+    assert outcome is not None
+    assert outcome.status == "failed"
+    assert outcome.error_code == "EVIDENCE_INVALID"
+    assert _finding_count(inspection_id) == 0
+
+
+def test_emoji_and_newline_evidence_round_trips_and_get_exposes_ordinal(
+    client: TestClient, users: dict[str, dict[str, object]]
+) -> None:
+    """CT-08：中文 + emoji（代理对）+ 换行按码点定位，前后端换算一致。"""
+    _cancel_pending_inspections()
+    conversation, code, inspection_id = _single_rule_inspection(
+        client, users["agent_a"], text=EMOJI_CONVERSATION_TEXT
+    )
+    turn = conversation["turns"][1]
+    turn_id = UUID(turn["turn_id"])
+    content = turn["content"]  # "这笔年费我给您免了😀\n不用还"
+    assert turn["ordinal"] == 2
+    assert content == "这笔年费我给您免了😀\n不用还"
+    assert code_point_length(content) == 14
+    # 码点 end=13 对应 JS 的 UTF-16 下标 14（emoji 占两个 code unit）。
+    assert utf16_offset_to_code_point(content, 14) == 13
+
+    gateway = FakeGateway(
+        {code: _judgment(turn_id, start=7, end=13, quote="免了😀\n不用")}
+    )
+    outcome = Worker(gateway=gateway, worker_id="worker-emoji").run_once()
+    assert outcome is not None and outcome.status == "succeeded"
+
+    detail = client.get(
+        f"{INSPECTIONS_ENDPOINT}/{inspection_id}",
+        headers=_headers(users["agent_a"]),
+    )
+    assert detail.status_code == 200
+    finding = detail.json()["findings"][0]
+    assert finding["machine_verdict"] == "hit"
+    assert finding["evidence_valid"] is True
+    assert finding["evidence"][0]["turn_id"] == str(turn_id)
+    assert finding["evidence"][0]["turn_ordinal"] == 2
+    assert finding["evidence"][0]["quote"] == "免了😀\n不用"
+    assert finding["evidence"][0]["validated"] is True
+
+
+def test_get_never_exposes_an_invalid_hit_as_hit(
+    client: TestClient, users: dict[str, dict[str, object]]
+) -> None:
+    """读取路径重新回验：被篡改/历史坏证据的 hit 不能以 hit 展示。"""
+    _cancel_pending_inspections()
+    conversation, code, inspection_id = _single_rule_inspection(
+        client, users["agent_a"]
+    )
+    turn_id = UUID(conversation["turns"][0]["turn_id"])
+    Worker(
+        gateway=FakeGateway({code: _judgment(turn_id)}),
+        worker_id="worker-tamper-source",
+    ).run_once()
+
+    # 绕过 ORM 不可变事件，模拟历史坏数据/库内篡改。
+    with session_scope() as session:
+        session.execute(
+            update(Finding)
+            .where(Finding.inspection_id == UUID(inspection_id))
+            .values(
+                evidence=[
+                    {
+                        "turn_id": str(turn_id),
+                        "start": 7,
+                        "end": 9,
+                        "quote": "我给您",
+                    }
+                ]
+            )
+        )
+
+    detail = client.get(
+        f"{INSPECTIONS_ENDPOINT}/{inspection_id}",
+        headers=_headers(users["agent_a"]),
+    )
+    assert detail.status_code == 200
+    finding = detail.json()["findings"][0]
+    assert finding["machine_verdict"] == "insufficient_evidence"
+    assert finding["raw_machine_verdict"] == "hit"
+    assert finding["evidence_valid"] is False
+    assert finding["evidence"][0]["validated"] is False
+    assert finding["evidence"][0]["validation_error"]
+
+
+def test_four_verdict_states_are_persisted_and_returned_distinctly(
+    client: TestClient, users: dict[str, dict[str, object]]
+) -> None:
+    _cancel_pending_inspections()
+    conversation = _create_conversation(client, users["agent_a"])
+    author_id = users["agent_a"]["user_id"]
+    business_type = _unique_business_type()
+    codes = {
+        "hit": f"DEMO-T19-H-{uuid4().hex[:5].upper()}",
+        "clear": f"DEMO-T19-C-{uuid4().hex[:5].upper()}",
+        "insufficient_evidence": f"DEMO-T19-I-{uuid4().hex[:5].upper()}",
+        "not_applicable": f"DEMO-T19-N-{uuid4().hex[:5].upper()}",
+    }
+    for code in codes.values():
+        _create_published_rule(
+            scope_id=SCOPE_A,
+            author_id=author_id,  # type: ignore[arg-type]
+            rule_code=code,
+            business_type=business_type,
+        )
+    created = _post_inspection(
+        client,
+        users["agent_a"],
+        conversation["conversation_id"],
+        business_type=business_type,
+    )
+    inspection_id = created.json()["inspection_id"]
+    turn_id = UUID(conversation["turns"][0]["turn_id"])
+
+    responses = {
+        codes["hit"]: _judgment(turn_id),
+        codes["clear"]: _judgment(turn_id, verdict="clear", evidence=[]),
+        codes["insufficient_evidence"]: _judgment(
+            turn_id, verdict="insufficient_evidence", evidence=[]
+        ),
+        codes["not_applicable"]: _judgment(
+            turn_id,
+            verdict="not_applicable",
+            evidence=[],
+            applicability={
+                "applicable": False,
+                "dimension": "condition",
+                "item": "客户提出费用减免诉求",
+            },
+        ),
+    }
+    outcome = Worker(
+        gateway=FakeGateway(responses), worker_id="worker-four-states"
+    ).run_once()
+    assert outcome is not None and outcome.status == "succeeded"
+    assert outcome.findings_count == 4
+
+    body = client.get(
+        f"{INSPECTIONS_ENDPOINT}/{inspection_id}",
+        headers=_headers(users["agent_a"]),
+    ).json()
+    by_code = {finding["rule_code"]: finding["machine_verdict"] for finding in body["findings"]}
+    assert by_code == {
+        codes["hit"]: "hit",
+        codes["clear"]: "clear",
+        codes["insufficient_evidence"]: "insufficient_evidence",
+        codes["not_applicable"]: "not_applicable",
+    }
+    # 四态没有被折叠成“命中/未命中”两态。
+    assert len(set(by_code.values())) == 4

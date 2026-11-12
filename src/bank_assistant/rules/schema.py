@@ -4,11 +4,14 @@
 ``exceptions``、``severity``、``source_refs`` 与 ``examples`` 组成；时间窗口
 由服务端列 ``valid_from``/``valid_to`` 维护，客户端不能塞进 ``applicability``。
 
-``examples`` 的每个桶（正例/反例/证据不足/不适用）里，每一项都必须是契约 §4
-的证据对象：``rule_id``、``rule_version``、``verdict``、``severity``、
+``examples`` 的每个桶（正例/反例/否定或转述/证据不足/不适用）里，每一项都必须
+是契约 §4 的证据对象：``rule_id``、``rule_version``、``verdict``、``severity``、
 ``evidence``（码点区间 + 原文）、``rationale``、``knowledge_refs``。演示规则
 另带 ``sample_turns``（合成示例原文），使每个证据区间都能被独立回验：
 ``quote == content[start:end]``（Unicode 码点，start 含、end 不含）。
+
+``negation`` 桶固定为 ``clear``：用于证明“没有收取年费”“客户说有人告诉他……”
+这类否定/引用他人话语不会被当成坐席自身行为（M4-02、T19）。
 
 本模块是 API 与演示种子的共用校验层；纯逻辑，不依赖数据库。
 """
@@ -39,6 +42,7 @@ DEMO_SOURCE_KINDS: frozenset[str] = frozenset({"demo_policy", "demo_rule_set"})
 EXAMPLES_BUCKETS: tuple[str, ...] = (
     "positive",
     "negative",
+    "negation",
     "insufficient_evidence",
     "not_applicable",
 )
@@ -46,6 +50,8 @@ EXAMPLES_BUCKETS: tuple[str, ...] = (
 BUCKET_VERDICTS: dict[str, str] = {
     "positive": "hit",
     "negative": "clear",
+    # 否定/引用他人话语的样例仍是 clear：命中关键词不等于坐席自身行为。
+    "negation": "clear",
     "insufficient_evidence": "insufficient_evidence",
     "not_applicable": "not_applicable",
 }
@@ -106,13 +112,15 @@ class SampleTurn(BaseModel):
 
 
 class RuleExamples(BaseModel):
-    """正例/反例/证据不足/不适用四类示例；正反例必填（M4-02 验收）。"""
+    """正例/反例/否定或转述/证据不足/不适用示例；正反例必填（M4-02 验收）。"""
 
     model_config = ConfigDict(extra="forbid")
 
     sample_turns: list[SampleTurn] = Field(default_factory=list)
     positive: list[RuleExample] = Field(..., min_length=1)
     negative: list[RuleExample] = Field(..., min_length=1)
+    # 否定/引用他人话语：verdict 固定 clear，但证据必须真的处于否定/转述语境。
+    negation: list[RuleExample] = Field(default_factory=list)
     insufficient_evidence: list[RuleExample] = Field(default_factory=list)
     not_applicable: list[RuleExample] = Field(default_factory=list)
 

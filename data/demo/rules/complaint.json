@@ -70,6 +70,11 @@
             "turn_id": "00000000-0000-0000-0000-000000000142",
             "speaker": "坐席",
             "content": "我帮您登记投诉，稍后会有专人联系。"
+          },
+          {
+            "turn_id": "00000000-0000-0000-0000-000000000143",
+            "speaker": "坐席",
+            "content": "客户说有人告诉他，投诉也没用。"
           }
         ],
         "positive": [
@@ -105,6 +110,24 @@
               }
             ],
             "rationale": "坐席主动登记投诉并安排专人联系，不构成阻碍",
+            "knowledge_refs": []
+          }
+        ],
+        "negation": [
+          {
+            "rule_id": "DEMO-CMP-01",
+            "rule_version": "1",
+            "verdict": "clear",
+            "severity": "high",
+            "evidence": [
+              {
+                "turn_id": "00000000-0000-0000-0000-000000000143",
+                "start": 9,
+                "end": 14,
+                "quote": "投诉也没用"
+              }
+            ],
+            "rationale": "关键词出现在引用/否定语境，不是坐席自身行为，不命中",
             "knowledge_refs": []
           }
         ],
@@ -194,6 +217,11 @@
             "turn_id": "00000000-0000-0000-0000-000000000152",
             "speaker": "坐席",
             "content": "抱歉让您久等了，我再解释一遍。"
+          },
+          {
+            "turn_id": "00000000-0000-0000-0000-000000000153",
+            "speaker": "坐席",
+            "content": "客户说有人骂他笨，情绪很激动。"
           }
         ],
         "positive": [
@@ -229,6 +257,24 @@
               }
             ],
             "rationale": "坐席致歉并重复解释，不构成侮辱性表达",
+            "knowledge_refs": []
+          }
+        ],
+        "negation": [
+          {
+            "rule_id": "DEMO-ATT-01",
+            "rule_version": "1",
+            "verdict": "clear",
+            "severity": "high",
+            "evidence": [
+              {
+                "turn_id": "00000000-0000-0000-0000-000000000153",
+                "start": 5,
+                "end": 8,
+                "quote": "骂他笨"
+              }
+            ],
+            "rationale": "关键词出现在引用/否定语境，不是坐席自身行为，不命中",
             "knowledge_refs": []
           }
         ],

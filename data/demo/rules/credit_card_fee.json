@@ -70,6 +70,11 @@
             "turn_id": "00000000-0000-0000-0000-000000000122",
             "speaker": "坐席",
             "content": "减免需要审批，我帮您提交申请。"
+          },
+          {
+            "turn_id": "00000000-0000-0000-0000-000000000123",
+            "speaker": "坐席",
+            "content": "客户听说可以免年费，来问我是不是真的。"
           }
         ],
         "positive": [
@@ -105,6 +110,24 @@
               }
             ],
             "rationale": "说明需审批、未承诺结果，不构成无依据承诺减免",
+            "knowledge_refs": []
+          }
+        ],
+        "negation": [
+          {
+            "rule_id": "DEMO-FEE-01",
+            "rule_version": "1",
+            "verdict": "clear",
+            "severity": "high",
+            "evidence": [
+              {
+                "turn_id": "00000000-0000-0000-0000-000000000123",
+                "start": 4,
+                "end": 9,
+                "quote": "可以免年费"
+              }
+            ],
+            "rationale": "关键词出现在引用/否定语境，不是坐席自身行为，不命中",
             "knowledge_refs": []
           }
         ],
@@ -198,6 +221,11 @@
             "turn_id": "00000000-0000-0000-0000-000000000132",
             "speaker": "坐席",
             "content": "年费减免以最新公告和您的合同为准。"
+          },
+          {
+            "turn_id": "00000000-0000-0000-0000-000000000133",
+            "speaker": "坐席",
+            "content": "我们不会跟客户说年费可以免，一切按公告执行。"
           }
         ],
         "positive": [
@@ -233,6 +261,24 @@
               }
             ],
             "rationale": "指向有效公告与合同，说明与条款一致",
+            "knowledge_refs": []
+          }
+        ],
+        "negation": [
+          {
+            "rule_id": "DEMO-FEE-02",
+            "rule_version": "1",
+            "verdict": "clear",
+            "severity": "high",
+            "evidence": [
+              {
+                "turn_id": "00000000-0000-0000-0000-000000000133",
+                "start": 8,
+                "end": 13,
+                "quote": "年费可以免"
+              }
+            ],
+            "rationale": "关键词出现在引用/否定语境，不是坐席自身行为，不命中",
             "knowledge_refs": []
           }
         ],
