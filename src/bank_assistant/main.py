@@ -30,6 +30,7 @@ from bank_assistant.api.routers import (
     knowledge_router,
     script_recommender_router,
     quality_inspector_router,
+    reports_router,
     reviews_router,
     rules_router,
     suggestions_router,
@@ -104,6 +105,7 @@ app.include_router(quality_inspector_router, prefix=API_PREFIX)
 app.include_router(tasks_router, prefix=API_PREFIX)
 app.include_router(inspections_router, prefix=API_PREFIX)
 app.include_router(reviews_router, prefix=API_PREFIX)
+app.include_router(reports_router, prefix=API_PREFIX)
 app.include_router(suggestions_router, prefix=API_PREFIX)
 app.include_router(system_router, prefix=API_PREFIX)
 

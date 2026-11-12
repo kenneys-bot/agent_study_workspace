@@ -500,14 +500,16 @@ def test_review_tables_match_the_contract_minimum() -> None:
     assert "uq_review_cases_active_inspection" in review_indexes
 
 
-def test_reviews_revision_is_the_single_head() -> None:
+def test_reviews_revision_extends_the_single_head() -> None:
     script = ScriptDirectory.from_config(Config(str(REPO_ROOT / "alembic.ini")))
-    assert script.get_current_head() == "0010_reviews"
+    # T20 自己的 revision 不是最终 head：T21 的 0011_report_exports 接在其后。
+    assert script.get_revision("0010_reviews") is not None
+    assert script.get_current_head() == "0011_report_exports"
     with session_scope() as session:
         current = session.execute(
             text("SELECT version_num FROM alembic_version")
         ).scalar_one()
-    assert current == "0010_reviews"
+    assert current == "0011_report_exports"
 
 
 # ---------------------------------------------------------------------------
