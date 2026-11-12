@@ -5,12 +5,16 @@
 
 import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from uuid import uuid4
+
+from fastapi import FastAPI, Request
+from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from bank_assistant.config.settings import settings
 from bank_assistant.config.constants import API_PREFIX
+from bank_assistant.infra.db import ping_database
 from bank_assistant.utils.logger import LoggerConfig
 from bank_assistant.api.routers import (
     knowledge_base_router,
@@ -104,6 +108,39 @@ async def health_check():
         "status": "healthy",
         "app": settings.APP_NAME,
         "version": settings.APP_VERSION
+    }
+
+
+# 存活探针：只看进程，不依赖数据库等外部资源（T09）
+@app.get("/health/live")
+async def health_live():
+    """进程存活"""
+    return {"status": "alive"}
+
+
+# 就绪探针：真实 SELECT 1 成功才 200，依赖不可用返回标准 503 错误结构（T09）
+@app.get("/health/ready")
+async def health_ready(request: Request):
+    """必需依赖（PostgreSQL）是否可用"""
+    trace_id = request.headers.get("x-trace-id") or uuid4().hex
+    try:
+        await run_in_threadpool(ping_database)
+    except Exception as exc:  # 连接失败、超时、驱动错误都视为不可用
+        logger.warning("readiness 检查失败: %s", type(exc).__name__)
+        return JSONResponse(
+            status_code=503,
+            content={
+                "code": "DEPENDENCY_UNAVAILABLE",
+                "message": "数据库暂不可用",
+                "trace_id": trace_id,
+                "retryable": True,
+                "details": {"dependency": "postgresql"},
+            },
+        )
+    return {
+        "status": "ready",
+        "checks": {"database": "ok"},
+        "trace_id": trace_id,
     }
 
 
