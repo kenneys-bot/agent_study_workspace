@@ -20,7 +20,7 @@ from bank_assistant.security.tokens import (
     decode_access_token,
 )
 
-UNIT_SECRET = "unit-test-signing-secret"
+UNIT_SECRET = "unit-test-signing-secret-0123456789abcdef"
 IDENTITY = Identity(
     user_id=uuid4(),
     username="agent-a",
@@ -51,7 +51,7 @@ def test_token_signed_with_another_key_is_rejected():
     token = create_access_token(IDENTITY, secret=UNIT_SECRET)
 
     with pytest.raises(TokenError):
-        decode_access_token(token, secret="a-different-secret")
+        decode_access_token(token, secret="a-different-signing-secret-0123456789ab")
 
 
 def test_tampered_signature_is_rejected():
