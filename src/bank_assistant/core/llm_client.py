@@ -9,6 +9,7 @@ from datetime import datetime
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 from bank_assistant.config.settings import settings
+from bank_assistant.core.errors import CapabilityUnavailableError
 from bank_assistant.config.constants import (
     LLMModels,
     LLMDefaultParams,
@@ -50,28 +51,43 @@ class LLMClient:
     提供与通义千问大模型交互的统一接口
     """
     
-    def __init__(self, model_name: str = LLMModels.QWEN_PLUS):
+    def __init__(
+        self,
+        model_name: str = LLMModels.QWEN_PLUS,
+        api_key: Optional[str] = None
+    ):
         """
         初始化大模型客户端
         
         Args:
             model_name (str): 模型名称，默认为qwen-plus
+            api_key (Optional[str]): 凭据；缺省从 settings 读取。
+                显式传空字符串会触发 capability unavailable（用于测试缺失凭据）。
         """
         self.model_name = model_name
-        self.api_key = settings.DASHSCOPE_API_KEY
+        self.api_key = settings.DASHSCOPE_API_KEY if api_key is None else api_key
         self.base_url = settings.DASHSCOPE_BASE_URL
         self._client = None
         self._init_client()
     
     def _init_client(self):
-        """初始化DashScope客户端"""
+        """初始化DashScope客户端。
+
+        凭据或 SDK 缺失时显式失败：不提供隐式 mock，也不返回随机向量
+        （ADR-0004 / M1-04）。
+        """
+        if not self.api_key:
+            raise CapabilityUnavailableError(
+                "capability unavailable: DASHSCOPE_API_KEY 未配置，无法调用 DashScope"
+            )
         try:
             from dashscope import Generation
-            self._client = Generation()
-            logger.info(f"大模型客户端初始化成功，使用模型: {self.model_name}")
-        except ImportError:
-            logger.warning("DashScope SDK未安装，将使用模拟模式")
-            self._client = None
+        except ImportError as exc:
+            raise CapabilityUnavailableError(
+                "capability unavailable: DashScope SDK 未安装（uv sync 安装依赖后重试）"
+            ) from exc
+        self._client = Generation()
+        logger.info(f"大模型客户端初始化成功，使用模型: {self.model_name}")
     
     @retry(
         stop=stop_after_attempt(3),
@@ -99,7 +115,9 @@ class LLMClient:
         """
         try:
             if self._client is None:
-                return self._mock_generate(prompt)
+                raise CapabilityUnavailableError(
+                    "capability unavailable: 大模型客户端未初始化"
+                )
             
             from dashscope import Generation
             
@@ -122,6 +140,8 @@ class LLMClient:
                 raise APIConnectionError(f"API返回错误: {response.status_code}")
                 
         except Exception as e:
+            if isinstance(e, CapabilityUnavailableError):
+                raise
             logger.error(f"文本生成失败: {str(e)}")
             if isinstance(e, LLMException):
                 raise
@@ -153,22 +173,22 @@ class LLMClient:
         """
         try:
             if self._client is None:
-                return self._mock_chat(messages)
+                raise CapabilityUnavailableError(
+                    "capability unavailable: 大模型客户端未初始化"
+                )
             
             from dashscope import Generation
             
-            # 将消息格式转换为DashScope格式
-            system_prompt = None
-            conversation = []
-            for msg in messages:
-                if msg.get("role") == "system":
-                    system_prompt = msg.get("content")
-                else:
-                    conversation.append(msg)
+            # 保留完整消息（含 system）。此前把 system 抽出来后就再没发送，
+            # 导致真正下发的请求丢失系统提示词（M1-02 / #6）。
+            api_messages = [
+                {"role": msg.get("role"), "content": msg.get("content")}
+                for msg in messages
+            ]
             
             response = Generation.call(
                 model=self.model_name,
-                messages=conversation,
+                messages=api_messages,
                 temperature=temperature,
                 max_tokens=max_tokens,
                 api_key=self.api_key,
@@ -183,6 +203,8 @@ class LLMClient:
                 raise APIConnectionError(f"对话失败: {response.message}")
                 
         except Exception as e:
+            if isinstance(e, CapabilityUnavailableError):
+                raise
             logger.error(f"对话生成失败: {str(e)}")
             if isinstance(e, LLMException):
                 raise
@@ -203,26 +225,12 @@ class LLMClient:
         Returns:
             List[float]: 文本向量表示
         """
-        try:
-            if self._client is None:
-                return self._mock_embedding(text)
-            
-            from dashscope import TextEmbedding
-            
-            response = TextEmbedding.call(
-                model=settings.EMBEDDING_MODEL if hasattr(settings, 'EMBEDDING_MODEL') else "text-embedding-v1",
-                input=text,
-                api_key=self.api_key
-            )
-            
-            if response.status_code == 200:
-                return response.output["embeddings"][0]
-            else:
-                raise APIConnectionError(f"向量化失败: {response.message}")
-                
-        except Exception as e:
-            logger.error(f"文本向量化失败: {str(e)}")
-            raise APIConnectionError(f"向量化异常: {str(e)}")
+        # DeepSeek 官方不提供 embedding；正式索引使用自托管 BGE（ADR-0004，M3 接入）。
+        # 在接入之前显式报能力不可用，绝不返回随机/占位向量污染索引。
+        raise CapabilityUnavailableError(
+            "capability unavailable: embedding 端点未配置；正式索引需自托管 BGE"
+            "（ADR-0004），当前不提供随机向量或占位向量"
+        )
     
     @retry(
         stop=stop_after_attempt(3),
@@ -343,20 +351,6 @@ class LLMClient:
                 break
         
         return result
-    
-    def _mock_generate(self, prompt: str) -> str:
-        """模拟文本生成（用于测试）"""
-        return f"模拟回复: 已收到您的请求: {prompt[:50]}..."
-    
-    def _mock_chat(self, messages: List[Dict[str, str]]) -> str:
-        """模拟对话（用于测试）"""
-        last_message = messages[-1].get("content", "") if messages else ""
-        return f"模拟回复: 理解您的需求: {last_message[:50]}..."
-    
-    def _mock_embedding(self, text: str) -> List[float]:
-        """模拟向量化（用于测试）"""
-        import numpy as np
-        return np.random.randn(1536).tolist()
     
     def get_model_info(self) -> Dict[str, Any]:
         """获取模型信息"""

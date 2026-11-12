@@ -33,6 +33,25 @@ class Settings(BaseSettings):
         validation_alias="DASHSCOPE_BASE_URL"
     )
     
+    # 统一模型适配层（T05）：生成主用 DeepSeek 官方，第三方中继仅作对比/回退
+    DEEPSEEK_API_KEY: Optional[str] = Field(
+        default=None, validation_alias="DEEPSEEK_API_KEY"
+    )
+    DEEPSEEK_BASE_URL: str = Field(
+        default="https://api.deepseek.com/v1", validation_alias="DEEPSEEK_BASE_URL"
+    )
+    DEEPSEEK_MODEL: str = Field(default="deepseek-chat", validation_alias="DEEPSEEK_MODEL")
+    LLM_BASE_URL: Optional[str] = Field(default=None, validation_alias="LLM_BASE_URL")
+    LLM_API_KEY: Optional[str] = Field(default=None, validation_alias="LLM_API_KEY")
+    LLM_MODEL_CHAT: Optional[str] = Field(default=None, validation_alias="LLM_MODEL_CHAT")
+    MODEL_PROVIDER: str = Field(default="deepseek", validation_alias="MODEL_PROVIDER")
+    MODEL_FALLBACK_PROVIDER: Optional[str] = Field(
+        default=None, validation_alias="MODEL_FALLBACK_PROVIDER"
+    )
+    LLM_TIMEOUT_SECONDS: float = Field(default=60.0, validation_alias="LLM_TIMEOUT_SECONDS")
+    LLM_MAX_RETRIES: int = Field(default=2, validation_alias="LLM_MAX_RETRIES")
+    LLM_MAX_TOKENS_CHAT: int = Field(default=3000, validation_alias="LLM_MAX_TOKENS_CHAT")
+
     # Chroma向量数据库配置
     CHROMA_HOST: str = Field(default="localhost", validation_alias="CHROMA_HOST")
     CHROMA_PORT: int = Field(default=8000, validation_alias="CHROMA_PORT")
