@@ -17,6 +17,11 @@ dist/
 # 系统
 .DS_Store
 
+# 本机开发数据/产物（仓库内、已忽略；Ubuntu 用仓库外的 ~/bank-assistant-*）
+.local-data/
+.local-artifacts/
+.local-backups/
+
 # 运行产物（大文件与数据库文件不进 Git）
 data/raw/
 data/curated/
