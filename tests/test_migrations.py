@@ -16,6 +16,7 @@ KNOWLEDGE_REVISION = "0003_knowledge"
 TASKS_REVISION = "0005_tasks"
 CHUNKS_REVISION = "0006_knowledge_chunks"
 SUGGESTIONS_REVISION = "0007_suggestions"
+RULES_REVISION = "0008_rules"
 FEEDBACK_REVISION = "0008_suggestion_feedback"
 M2_MERGE_HEAD = "cf1edc530a0c"
 
@@ -75,15 +76,23 @@ def test_suggestions_revision_extends_0006_and_stays_reachable():
     assert revision is not None
     assert revision.down_revision == CHUNKS_REVISION
     assert SUGGESTIONS_REVISION in {item.revision for item in script.walk_revisions()}
-    assert len(script.get_heads()) == 1
 
 
-def test_suggestion_feedback_revision_extends_the_current_single_head():
-    """T16 的 suggestion_feedback 只接在 0007 之后；并行票由 Lead 的合并 revision 收口。"""
+def test_suggestion_feedback_revision_extends_0007():
+    """T16 的 suggestion_feedback 接在 0007 之后；并行票的 head 由 Lead 合并 revision 收口。"""
     script = _script()
     revision = script.get_revision(FEEDBACK_REVISION)
 
     assert revision is not None
     assert revision.down_revision == SUGGESTIONS_REVISION
     assert FEEDBACK_REVISION in {item.revision for item in script.walk_revisions()}
-    assert script.get_heads() == [FEEDBACK_REVISION]
+
+
+def test_rules_revision_extends_0007():
+    """T17 的 rule_sets/rule_versions 接在 0007 之后；并行票的 head 由 Lead 合并 revision 收口。"""
+    script = _script()
+    revision = script.get_revision(RULES_REVISION)
+
+    assert revision is not None
+    assert revision.down_revision == SUGGESTIONS_REVISION
+    assert RULES_REVISION in {item.revision for item in script.walk_revisions()}

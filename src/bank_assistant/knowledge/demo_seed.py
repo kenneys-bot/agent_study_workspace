@@ -29,6 +29,10 @@ from sqlalchemy.orm import Session
 
 from bank_assistant.infra.models import KnowledgeDocument, KnowledgeVersion
 from bank_assistant.knowledge.lifecycle import (
+    DEMO_BUSINESS_TYPES,
+    DEMO_MARKER,
+    DEMO_SOURCE_HOST,
+    PUBLIC_SOURCE_HOSTS,
     SOURCE_TYPES,
     KnowledgeStatus,
     hash_content,
@@ -48,13 +52,6 @@ DEMO_KNOWLEDGE_DIR = (
     Path(__file__).resolve().parents[3] / "data" / "demo" / "knowledge"
 )
 
-DEMO_BUSINESS_TYPES: tuple[str, ...] = ("lost_card", "credit_card_fee", "complaint")
-# 公开监管条文只允许指向公开监管机构站点；demo.invalid 是保留 TLD，绝不解析。
-PUBLIC_SOURCE_HOSTS: frozenset[str] = frozenset(
-    {"www.gov.cn", "www.pbc.gov.cn", "www.npc.gov.cn", "www.csr.gov.cn"}
-)
-DEMO_SOURCE_HOST = "demo.invalid"
-DEMO_MARKER = "虚构演示制度"
 DEMO_AUTHOR_USERNAME = "demo-author"
 DEMO_REVIEWER_USERNAME = "demo-reviewer"
 REVIEW_REASON = "演示知识种子：作者提交，由另一审核人发布"

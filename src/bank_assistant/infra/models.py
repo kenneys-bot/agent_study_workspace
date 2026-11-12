@@ -11,7 +11,9 @@
 - ``knowledge_chunks``：版本化索引的原文区间与 embedding 身份（T14，M3）；
 - ``model_runs`` / ``suggestions``：候选答复运行追溯与业务状态（T15，M3）；
 - ``suggestion_feedback``：坐席采纳/编辑/拒绝反馈，只追加、不改写（T16，M3）；
-  反馈不是正确性标签，不得作为评测的 ground-truth。
+  反馈不是正确性标签，不得作为评测的 ground-truth；
+- ``rule_sets`` / ``rule_versions``：质检规则的身份、版本内容与生命周期
+  （T17，M4-01）；发布后内容不可覆盖。
 
 所有时间列为 ``timestamptz``，写入前统一为 UTC（契约 §1）。
 """
@@ -45,6 +47,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from bank_assistant.infra.db import Base
 from bank_assistant.knowledge.lifecycle import KnowledgeStatus, PublishedContentImmutable
+from bank_assistant.rules.lifecycle import PublishedRuleImmutable, RuleStatus
 
 TASK_STATUS_CHECK = "status IN ('queued', 'running', 'succeeded', 'failed', 'cancelled')"
 
@@ -572,3 +575,164 @@ def _reject_published_content_change(
         or KnowledgeStatus.PUBLISHED.value in previous_statuses
     ):
         raise PublishedContentImmutable(target.version_id)
+
+
+class RuleSet(Base):
+    """规则身份：规则编码、类别、访问范围与演示标记（契约 §2 RuleVersion）。
+
+    ``rule_id`` 是稳定身份；规则的正文随版本变化，``rule_code``（如
+    ``DEMO-FEE-01``）是业务与证据 JSON 里展示的编号。``demo_only`` 标记该
+    规则身份是否来自虚构演示规则集；版本在创建时继承此标记，客户端无法在
+    追加版本时翻转它。
+    """
+
+    __tablename__ = "rule_sets"
+    __table_args__ = (
+        UniqueConstraint(
+            "scope_id", "rule_code", name="uq_rule_sets_scope_rule_code"
+        ),
+        Index("ix_rule_sets_scope_id", "scope_id"),
+        Index("ix_rule_sets_category", "category"),
+    )
+
+    rule_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    rule_code: Mapped[str] = mapped_column(String(64), nullable=False)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    # M4-02 的默认类别之一；规则身份级字段，不随版本变化。
+    category: Mapped[str] = mapped_column(String(64), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    scope_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    # 演示规则必须为 true，且说明需含「虚构演示制度」（GLOSSARY「演示制度」）。
+    demo_only: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=false()
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+
+RULE_SEVERITY_CHECK = "severity IN ('low', 'medium', 'high')"
+
+
+class RuleVersion(Base):
+    """规则版本：内容、适用范围、证据示例与生命周期（契约 §2、§3）。
+
+    ``applicability`` 只存非时间部分（业务范围、渠道、前提条件）；有效期窗口
+    用 ``valid_from``/``valid_to`` 两列表达，便于用 SQL 判定同一规则的两个
+    已发布版本是否重叠。``examples`` 是契约 §4 证据 JSON 的四类示例
+    （正例/反例/证据不足/不适用），由 ``bank_assistant.rules.schema`` 校验。
+
+    ``revision`` 是状态转换的乐观并发版本号；``content_hash`` 是规则内容
+    （含窗口与示例）的规范化 SHA-256，用于演示种子幂等与不可变校验。
+    """
+
+    __tablename__ = "rule_versions"
+    __table_args__ = (
+        UniqueConstraint(
+            "rule_id", "version_no", name="uq_rule_versions_rule_version_no"
+        ),
+        CheckConstraint(
+            "status in ('draft', 'in_review', 'published', 'retired')",
+            name="ck_rule_versions_status",
+        ),
+        CheckConstraint(RULE_SEVERITY_CHECK, name="ck_rule_versions_severity"),
+        CheckConstraint("version_no >= 1", name="ck_rule_versions_version_no"),
+        CheckConstraint("revision >= 1", name="ck_rule_versions_revision"),
+        CheckConstraint(
+            "valid_to is null or valid_to > valid_from",
+            name="ck_rule_versions_valid_window",
+        ),
+        Index("ix_rule_versions_rule_id", "rule_id"),
+        Index("ix_rule_versions_status_valid_from", "status", "valid_from"),
+    )
+
+    rule_version_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    rule_id: Mapped[UUID] = mapped_column(
+        ForeignKey("rule_sets.rule_id"), nullable=False
+    )
+    version_no: Mapped[int] = mapped_column(Integer, nullable=False)
+    business_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    applicability: Mapped[dict[str, Any]] = mapped_column(
+        JSON, nullable=False, default=dict
+    )
+    criteria: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    # 豁免条件：命中的反例边界，必须显式声明。
+    exceptions: Mapped[list[Any]] = mapped_column(JSON, nullable=False, default=list)
+    severity: Mapped[str] = mapped_column(String(16), nullable=False)
+    source_refs: Mapped[list[Any]] = mapped_column(JSON, nullable=False, default=list)
+    examples: Mapped[dict[str, Any]] = mapped_column(
+        JSON, nullable=False, default=dict
+    )
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, index=True)
+    demo_only: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=false()
+    )
+    valid_from: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    valid_to: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    author_id: Mapped[UUID] = mapped_column(
+        ForeignKey("users.user_id"), nullable=False, index=True
+    )
+    reviewer_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("users.user_id"), nullable=True
+    )
+    review_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    retire_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    revision: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default="1"
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+
+# 规则“内容”列：这些字段一旦进入已发布状态就不再允许改写（契约 §3）。
+# 状态、审核人、审核/退役理由与 revision 仍可变化，因为它们记录生命周期。
+_RULE_CONTENT_COLUMNS: tuple[str, ...] = (
+    "business_type",
+    "applicability",
+    "criteria",
+    "exceptions",
+    "severity",
+    "source_refs",
+    "examples",
+    "content_hash",
+    "demo_only",
+    "valid_from",
+    "valid_to",
+)
+
+
+@event.listens_for(RuleVersion, "before_update")
+def _reject_published_rule_change(
+    mapper: Any, connection: Any, target: RuleVersion
+) -> None:
+    """已发布规则内容不可覆盖：内容列变更时若旧状态或新状态为 published 则拒绝。
+
+    数据库层兜底，防止任何绕过服务的写入静默改写已发布的规则定义或窗口。
+    """
+    state = inspect(target)
+    if not any(
+        state.attrs[column].history.has_changes() for column in _RULE_CONTENT_COLUMNS
+    ):
+        return
+    previous_statuses = {str(value) for value in state.attrs.status.history.deleted}
+    if (
+        target.status == RuleStatus.PUBLISHED.value
+        or RuleStatus.PUBLISHED.value in previous_statuses
+    ):
+        raise PublishedRuleImmutable(target.rule_version_id)

@@ -1,0 +1,264 @@
+{
+  "scenario": "信用卡费用与还款咨询",
+  "business_type": "credit_card_fee",
+  "note": "合成演示规则：全部为虚构内容（demo_only=true），不对应任何真实银行规则；费用条款只引用演示制度与公开监管要点。",
+  "entries": [
+    {
+      "id": "rule-fee-01",
+      "rule_code": "DEMO-FEE-01",
+      "title": "不得无依据承诺减免费用",
+      "category": "unverified_fee_waiver",
+      "description": "虚构演示制度：演示质检规则，识别坐席在未核验审批与条款依据时直接承诺减免年费、利息或违约金，不对应任何真实机构规则。",
+      "demo_only": true,
+      "business_type": "credit_card_fee",
+      "version_no": 1,
+      "severity": "high",
+      "valid_from": "2025-01-01T00:00:00+00:00",
+      "valid_to": null,
+      "applicability": {
+        "business_types": [
+          "credit_card_fee"
+        ],
+        "channels": [
+          "phone",
+          "online_chat"
+        ],
+        "conditions": [
+          "客户询问年费、利息或违约金能否减免"
+        ]
+      },
+      "criteria": {
+        "evidence_requirements": [
+          "定位坐席承诺减免费用的原文轮次",
+          "确认会话中没有审批结果、有效条款或减免政策依据"
+        ],
+        "decision_rules": [
+          "仅说明“可提交减免申请/需审批”不算承诺减免，不命中",
+          "客户转述或坐席引述他人说法时不能按关键词直接判定",
+          "否定表述如“不能直接免”不命中"
+        ]
+      },
+      "exceptions": [
+        "坐席说明减免需审批并已提交申请，未承诺结果",
+        "坐席引用有效减免政策并说明适用条件后再答复"
+      ],
+      "source_refs": [
+        {
+          "kind": "demo_policy",
+          "ref": "https://demo.invalid/bank-assistant/credit-card-fee/demo-01",
+          "note": "虚构演示制度：年费与费用减免审批要求"
+        },
+        {
+          "kind": "public_regulation",
+          "ref": "https://www.gov.cn/gongbao/content/2011/content_1893974.htm",
+          "note": "公开监管要点摘要：信用卡费用披露与合同约定（自行组织，不复制原文）"
+        },
+        {
+          "kind": "demo_rule_set",
+          "ref": "https://demo.invalid/bank-assistant/rules/demo-rule-set-v1",
+          "note": "演示质检规则集 v1（非真实银行规则）"
+        }
+      ],
+      "examples": {
+        "sample_turns": [
+          {
+            "turn_id": "00000000-0000-0000-0000-000000000121",
+            "speaker": "坐席",
+            "content": "这笔年费我给您免了，不用还。"
+          },
+          {
+            "turn_id": "00000000-0000-0000-0000-000000000122",
+            "speaker": "坐席",
+            "content": "减免需要审批，我帮您提交申请。"
+          }
+        ],
+        "positive": [
+          {
+            "rule_id": "DEMO-FEE-01",
+            "rule_version": "1",
+            "verdict": "hit",
+            "severity": "high",
+            "evidence": [
+              {
+                "turn_id": "00000000-0000-0000-0000-000000000121",
+                "start": 4,
+                "end": 9,
+                "quote": "我给您免了"
+              }
+            ],
+            "rationale": "坐席直接承诺减免费用，未说明审批与有效条款依据",
+            "knowledge_refs": []
+          }
+        ],
+        "negative": [
+          {
+            "rule_id": "DEMO-FEE-01",
+            "rule_version": "1",
+            "verdict": "clear",
+            "severity": "high",
+            "evidence": [
+              {
+                "turn_id": "00000000-0000-0000-0000-000000000122",
+                "start": 2,
+                "end": 6,
+                "quote": "需要审批"
+              }
+            ],
+            "rationale": "说明需审批、未承诺结果，不构成无依据承诺减免",
+            "knowledge_refs": []
+          }
+        ],
+        "insufficient_evidence": [
+          {
+            "rule_id": "DEMO-FEE-01",
+            "rule_version": "1",
+            "verdict": "insufficient_evidence",
+            "severity": "high",
+            "evidence": [],
+            "rationale": "客户询问能否减免，坐席尚未回应减免请求，无法判断是否承诺",
+            "knowledge_refs": []
+          }
+        ],
+        "not_applicable": [
+          {
+            "rule_id": "DEMO-FEE-01",
+            "rule_version": "1",
+            "verdict": "not_applicable",
+            "severity": "high",
+            "evidence": [],
+            "rationale": "会话是挂失咨询，不涉及费用减免",
+            "knowledge_refs": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "rule-fee-02",
+      "rule_code": "DEMO-FEE-02",
+      "title": "费用说明不得与有效条款冲突",
+      "category": "fee_conflict_with_policy",
+      "description": "虚构演示制度：演示质检规则，识别坐席的费用说明与有效演示制度或公开监管要点冲突的情形，不对应任何真实机构规则。",
+      "demo_only": true,
+      "business_type": "credit_card_fee",
+      "version_no": 1,
+      "severity": "high",
+      "valid_from": "2025-01-01T00:00:00+00:00",
+      "valid_to": null,
+      "applicability": {
+        "business_types": [
+          "credit_card_fee"
+        ],
+        "channels": [
+          "phone",
+          "online_chat"
+        ],
+        "conditions": [
+          "坐席解释年费、利息、违约金或其他费用规则"
+        ]
+      },
+      "criteria": {
+        "evidence_requirements": [
+          "定位坐席费用说明的原文轮次",
+          "引用版本有效、访问范围内且业务类型匹配的费用条款"
+        ],
+        "decision_rules": [
+          "没有可引用条款时输出证据不足，不能凭印象判定冲突",
+          "客户复述或坐席转述他人说法时不能按关键词直接判定"
+        ]
+      },
+      "exceptions": [
+        "坐席明确说明以最新公告、合同和账单为准，未给出冲突口径",
+        "客户引用的并非当前有效条款，且坐席已指出以有效条款为准"
+      ],
+      "source_refs": [
+        {
+          "kind": "demo_policy",
+          "ref": "https://demo.invalid/bank-assistant/credit-card-fee/demo-02",
+          "note": "虚构演示制度：年费与利息计收口径"
+        },
+        {
+          "kind": "public_regulation",
+          "ref": "https://www.gov.cn/zhengce/2020-09/15/content_5712684.htm",
+          "note": "公开监管要点摘要：收费透明与知情权（自行组织，不复制原文）"
+        },
+        {
+          "kind": "demo_rule_set",
+          "ref": "https://demo.invalid/bank-assistant/rules/demo-rule-set-v1",
+          "note": "演示质检规则集 v1（非真实银行规则）"
+        }
+      ],
+      "examples": {
+        "sample_turns": [
+          {
+            "turn_id": "00000000-0000-0000-0000-000000000131",
+            "speaker": "坐席",
+            "content": "这张卡永久免年费，不会扣费。"
+          },
+          {
+            "turn_id": "00000000-0000-0000-0000-000000000132",
+            "speaker": "坐席",
+            "content": "年费减免以最新公告和您的合同为准。"
+          }
+        ],
+        "positive": [
+          {
+            "rule_id": "DEMO-FEE-02",
+            "rule_version": "1",
+            "verdict": "hit",
+            "severity": "high",
+            "evidence": [
+              {
+                "turn_id": "00000000-0000-0000-0000-000000000131",
+                "start": 3,
+                "end": 8,
+                "quote": "永久免年费"
+              }
+            ],
+            "rationale": "口头说明与有效费用条款冲突：演示制度要求年费按合同与公告执行",
+            "knowledge_refs": []
+          }
+        ],
+        "negative": [
+          {
+            "rule_id": "DEMO-FEE-02",
+            "rule_version": "1",
+            "verdict": "clear",
+            "severity": "high",
+            "evidence": [
+              {
+                "turn_id": "00000000-0000-0000-0000-000000000132",
+                "start": 5,
+                "end": 9,
+                "quote": "最新公告"
+              }
+            ],
+            "rationale": "指向有效公告与合同，说明与条款一致",
+            "knowledge_refs": []
+          }
+        ],
+        "insufficient_evidence": [
+          {
+            "rule_id": "DEMO-FEE-02",
+            "rule_version": "1",
+            "verdict": "insufficient_evidence",
+            "severity": "high",
+            "evidence": [],
+            "rationale": "会话未引用任何费用条款，无法判断说明是否冲突",
+            "knowledge_refs": []
+          }
+        ],
+        "not_applicable": [
+          {
+            "rule_id": "DEMO-FEE-02",
+            "rule_version": "1",
+            "verdict": "not_applicable",
+            "severity": "high",
+            "evidence": [],
+            "rationale": "会话是投诉受理，未涉及费用说明",
+            "knowledge_refs": []
+          }
+        ]
+      }
+    }
+  ]
+}
