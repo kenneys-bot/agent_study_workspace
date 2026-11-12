@@ -271,6 +271,39 @@ def test_post_suggestion_model_failure_returns_5xx_and_keeps_failed_row(
     assert body["trace_id"]
 
 
+def test_post_suggestion_provider_rate_limit_returns_429_without_fake_answer(
+    api_world: ApiWorld,
+) -> None:
+    """CT-04/M7-04：上游限流必须 429，且保留 failed 行、不伪造答复。"""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            429,
+            json={"error": {"message": "rate limit", "type": "rate_limit_error"}},
+            headers={"retry-after": "3"},
+        )
+
+    api_world.set_gateway(model_gateway(handler))
+
+    response = api_world.client().post(
+        "/api/v1/suggestions",
+        json={"query": api_world.chunk.text, "business_type": "lost_card"},
+    )
+
+    assert response.status_code == 429
+    body = response.json()
+    assert body["code"] == "MODEL_RATE_LIMITED"
+    assert body["retryable"] is True
+    assert body["details"]["status"] == "failed"
+    assert body["trace_id"]
+    stored = api_world.session.get(
+        Suggestion, UUID(body["details"]["suggestion_id"])
+    )
+    assert stored is not None
+    assert stored.status == "failed"
+    assert stored.answer == ""
+
+
 def test_post_suggestion_requires_authentication(
     api_world: ApiWorld,
 ) -> None:

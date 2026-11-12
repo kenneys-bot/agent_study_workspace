@@ -58,6 +58,7 @@ from bank_assistant.knowledge.indexing import (
     ChromaVectorStore,
 )
 from bank_assistant.security.authorization import get_current_identity
+from bank_assistant.security.rate_limit import enforce_expensive_rate_limit
 from bank_assistant.security.identity import Identity
 
 logger = logging.getLogger(__name__)
@@ -114,6 +115,7 @@ def get_suggestion_service(
     "/suggestions",
     response_model=SuggestionPublic,
     status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(enforce_expensive_rate_limit)],
 )
 def create_suggestion_endpoint(
     payload: SuggestionCreateRequest,

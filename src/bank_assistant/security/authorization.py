@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import Depends
+from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
@@ -73,6 +73,7 @@ def ensure_resource_visible(
 
 
 def get_current_identity(
+    request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(_BEARER),
     session: Session = Depends(get_db_session),
 ) -> Identity:
@@ -88,6 +89,9 @@ def get_current_identity(
     if identity is None:
         # 用户已删除/停用，与令牌无效同样处理，不区分原因。
         raise unauthorized("访问令牌无效或已过期")
+    # 只把用户 id 写进请求状态，供结构化访问日志关联；不写会话/凭据。
+    request.state.user_id = str(identity.user_id)
+    request.state.scope_id = identity.scope_id
     return identity
 
 

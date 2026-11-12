@@ -49,10 +49,15 @@ from bank_assistant.reviews.service import (
     reopen_review,
     submit_decision,
 )
-from bank_assistant.security.authorization import get_current_identity
+from bank_assistant.security.authorization import get_current_identity, require_role
+from bank_assistant.security.identity import Role
 from bank_assistant.security.identity import Identity
 
 router = APIRouter(prefix="/reviews", tags=["人工复核"])
+
+# 审核分离：写入复核（创建/决定/完成/重开）只允许复核员与管理员；
+# 读取列表/详情仍按 scope 授权，便于坐席查看与自己相关的复核。
+_REVIEWER_ROLES = (Role.REVIEWER, Role.ADMIN)
 
 
 def _not_found() -> ApiError:
@@ -81,7 +86,12 @@ def _conflict(exc: ReviewConflict) -> ApiError:
     )
 
 
-@router.post("", response_model=ReviewDetail, status_code=201)
+@router.post(
+    "",
+    response_model=ReviewDetail,
+    status_code=201,
+    dependencies=[Depends(require_role(*_REVIEWER_ROLES))],
+)
 def create_review_endpoint(
     payload: ReviewCreateRequest,
     request: Request,
@@ -148,6 +158,7 @@ def read_review_endpoint(
     "/{review_id}/decisions",
     response_model=ReviewDecisionAccepted,
     status_code=201,
+    dependencies=[Depends(require_role(*_REVIEWER_ROLES))],
 )
 def submit_decision_endpoint(
     review_id: UUID,
@@ -179,7 +190,11 @@ def submit_decision_endpoint(
         raise _input_error(exc) from None
 
 
-@router.post("/{review_id}/complete", response_model=ReviewDetail)
+@router.post(
+    "/{review_id}/complete",
+    response_model=ReviewDetail,
+    dependencies=[Depends(require_role(*_REVIEWER_ROLES))],
+)
 def complete_review_endpoint(
     review_id: UUID,
     payload: ReviewCompleteRequest,
@@ -207,7 +222,11 @@ def complete_review_endpoint(
         raise _input_error(exc) from None
 
 
-@router.post("/{review_id}/reopen", response_model=ReviewDetail)
+@router.post(
+    "/{review_id}/reopen",
+    response_model=ReviewDetail,
+    dependencies=[Depends(require_role(*_REVIEWER_ROLES))],
+)
 def reopen_review_endpoint(
     review_id: UUID,
     payload: ReviewReopenRequest,

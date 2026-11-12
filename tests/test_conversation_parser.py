@@ -123,12 +123,24 @@ class TestOrdinalsAndRawText:
 
 @pytest.fixture
 def client():
-    """解析接口的测试客户端。"""
+    """解析接口的测试客户端（旧原型端点现要求认证）。"""
     from fastapi.testclient import TestClient
 
     from bank_assistant.main import app
 
-    return TestClient(app)
+    from uuid import uuid4
+
+    from bank_assistant.security.authorization import get_current_identity
+    from bank_assistant.security.identity import Identity
+
+    app.dependency_overrides[get_current_identity] = lambda: Identity(
+        user_id=uuid4(),
+        username="legacy-api-test",
+        role="agent",
+        scope_id="legacy-api-scope",
+    )
+    yield TestClient(app)
+    app.dependency_overrides.clear()
 
 
 class TestInvalidInput:

@@ -11,7 +11,9 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+from bank_assistant.config.settings import settings
 
 from bank_assistant.assistants.candidate_answer import Citation
 from bank_assistant.assistants.suggestion_feedback import FeedbackAction
@@ -21,10 +23,20 @@ class SuggestionCreateRequest(BaseModel):
     """输入：会话或原始问题至少一个；业务类型可选。"""
 
     conversation_id: UUID | None = Field(None, description="会话 ID；与 query 至少提供一个")
-    query: str | None = Field(None, max_length=4000, description="原始问题")
+    query: str | None = Field(None, description="原始问题")
     business_type: str | None = Field(None, max_length=64, description="业务类型（可选）")
 
     model_config = ConfigDict(extra="forbid")
+
+    @field_validator("query")
+    @classmethod
+    def validate_query_length(cls, value: str | None) -> str | None:
+        """问题长度上限可配置；超限 422，不把无界文本送进模型。"""
+        if value is not None and len(value) > settings.MAX_PROMPT_CHARS:
+            raise ValueError(
+                f"query 超过 {settings.MAX_PROMPT_CHARS} 字符上限"
+            )
+        return value
 
     @model_validator(mode="after")
     def require_conversation_or_query(self) -> "SuggestionCreateRequest":

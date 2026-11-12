@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends
 from typing import List
 
 from bank_assistant.api.errors import ApiError
+from bank_assistant.security.authorization import get_current_identity
 from bank_assistant.core.llm_client import get_llm_client, LLMClient
 from bank_assistant.core.vector_db import get_vector_db_client, VectorDBClient
 from bank_assistant.api.models.script_recommender import (
@@ -33,7 +34,12 @@ from bank_assistant.assistants.script_recommender import (
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/script-recommender", tags=["话术推荐助手"])
+# M7-03/T30：旧版 M1 原型端点也必须认证，不能成为未授权入口。
+router = APIRouter(
+    prefix="/script-recommender",
+    tags=["话术推荐助手"],
+    dependencies=[Depends(get_current_identity)],
+)
 
 
 def get_context_analyzer() -> ContextAnalyzer:

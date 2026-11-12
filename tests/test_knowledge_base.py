@@ -149,10 +149,19 @@ class TestScriptGeneratorParameters:
         )
         from bank_assistant.api.routers.knowledge_base import get_script_generator
         from bank_assistant.main import app
+        from bank_assistant.security.authorization import get_current_identity
+        from bank_assistant.security.identity import Identity
+        from uuid import uuid4
 
         fake_llm = FakeLLMClient(response=THREE_CALL_SCRIPT_BLOCKS)
         app.dependency_overrides[get_script_generator] = lambda: ScriptGenerator(
             fake_llm
+        )
+        app.dependency_overrides[get_current_identity] = lambda: Identity(
+            user_id=uuid4(),
+            username="legacy-api-test",
+            role="agent",
+            scope_id="legacy-api-scope",
         )
         try:
             client = TestClient(app)

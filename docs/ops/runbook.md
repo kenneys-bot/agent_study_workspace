@@ -195,7 +195,99 @@ ssh my-ubuntu-server 'ss -tln | grep -E ":(8000|5432) "'
 ssh my-ubuntu-server 'du -sh ~/workspace/bank-assistant/{data,backups}'
 ```
 
-## 10. 与 ADR 的关系
+## 10. 监控、日志与安全观测（M7-02/T30）
+
+### 10.1 `/metrics` 的暴露面
+
+- 端点：`GET /metrics`（Prometheus 文本格式），由 API 进程直接提供；
+- **内部端点**：API 只绑服务器回环 `127.0.0.1:8000`（§1），跨机抓取必须经
+  `ssh` 或 SSH 隧道；不要为它单独映射 `0.0.0.0`；
+- 可选令牌：若将来要跨主机抓取，在 `.env.app` 配置 `METRICS_TOKEN`，之后
+  请求必须带 `Authorization: Bearer <token>`；未配置时依赖回环绑定作为访问控制；
+- 指标只含聚合值，不含用户 id、会话原文、请求体、trace_id 或凭据。
+
+主要序列（全部以 `bank_` 开头）：
+
+| 指标 | 类型 | 含义 |
+|---|---|---|
+| `bank_http_requests_total{method,route,status}` | counter | 请求数；route 是路由模板，不是实际 UUID 路径 |
+| `bank_http_request_duration_seconds{method,route}` | histogram | 请求耗时（非模型 API 门槛 P95 ≤ 500ms） |
+| `bank_http_inflight_requests` | gauge | 正在处理的请求数 |
+| `bank_model_calls_total{provider,model,status,mode}` | counter | 模型调用结果（含 timeout/rate_limited/invalid_structure） |
+| `bank_model_tokens_total{provider,model,kind}` | counter | prompt/completion token 用量 |
+| `bank_model_request_duration_seconds{provider,mode}` | histogram | 模型调用耗时 |
+| `bank_task_events_total{event,task_type}` | counter | claim/reclaim/success/retry/fail/renew/lease_lost/sweep |
+| `bank_task_queue_depth{task_type,status}` | gauge | 抓取时按数据库真实任务状态计数 |
+| `bank_db_ready` | gauge | 1=真实 `SELECT 1` 成功；0=不可用（不伪造深度） |
+| `bank_rate_limit_rejections_total{scope}` | counter | login/expensive 限流拒绝 |
+| `bank_input_rejections_total{kind}` | counter | 请求体/会话原文等输入上限拒绝 |
+| `bank_db_probe_errors_total` / `bank_task_queue_depth_collect_errors_total` | counter | 依赖探测失败；用于区分“值为 0”和“指标采集本身失败” |
+
+### 10.2 告警阈值（初始工程门槛，非业务 SLA）
+
+| 告警 | 条件 | 处置 |
+|---|---|---|
+| API 错误率 | 5xx（排除 429）占 `bank_http_requests_total` > 1%，持续 10 分钟 | 看 `/health/ready`、容器日志与 `bank_db_ready` |
+| 普通 API 延迟 | 非模型路由 P95 > 500ms，持续 10 分钟 | 查数据库/事件循环；模型路由单独看 |
+| 模型限流 | `status="rate_limited"` 任意增长或 > 5%/10 分钟 | 检查供应商配额；429 会带 `Retry-After`，调用方按提示退避 |
+| 模型超时 | `status="timeout"` 增长或 P95 > 30s | 查供应商状态/网络；超时映射 504，不重试成假成功 |
+| 数据库不可用 | `bank_db_ready == 0` 持续 1 分钟 | `docker ps`、`docker inspect bank-assistant-db-db-1`，按 §8 排查；API 端点应返回 503 |
+| 队列积压 | `bank_task_queue_depth{status="queued"} > 50` 或 oldest queued > 5 分钟 | 启动/检查 worker；确认没有永久 running |
+| 租约回收 | `event="reclaim"` 或 `lease_lost` 增长 | 可能 worker 崩溃/租约过短；查 worker 日志，确认无重复最终结果 |
+| 任务失败 | `event="fail"` 增长 / `MAX_ATTEMPTS_EXCEEDED` | 查 `error_code` 与模型输出校验日志；不要清空问题列表 |
+| 限流/输入拒绝 | `bank_rate_limit_rejections_total`、`bank_input_rejections_total` 突增 | 可能是攻击/误配置；核对 `RATE_LIMIT_*`、`MAX_REQUEST_BYTES` |
+
+### 10.3 结构化日志与脱敏
+
+每个请求一行 JSON（stdout，`docker logs` 可读）：
+
+```json
+{"event":"http_request","trace_id":"...","method":"POST","route":"/suggestions","status":201,"duration_ms":12.3,"request_bytes":42,"user_id":"..."}
+```
+
+- 不记录请求体、查询串、Authorization、cookie、会话原文、令牌或连接串；
+- `bank_assistant.observability.redaction` 作为第二道防线，把连接串密码、
+  `sk-...`/`pk-...` key、Bearer/JWT、`password=`/`token=` 等替换为 `***`；
+- 响应头 `x-trace-id` 与日志 `trace_id` 相同，便于把前端错误关联到后端日志。
+
+日常检查（**只输出计数/状态，不打印密钥**）：
+
+```bash
+# 指标（服务器回环；需要时经 SSH 执行）
+ssh my-ubuntu-server 'curl -fsS http://127.0.0.1:8000/metrics | grep -E "bank_(db_ready|http_requests_total|task_queue_depth|model_calls_total)" | head -20'
+ssh my-ubuntu-server 'curl -fsS http://127.0.0.1:8000/metrics | grep -c "^bank_"'
+# 最近日志里 trace_id 行数（应 > 0）
+ssh my-ubuntu-server 'docker logs --since 1h bank-assistant-api 2>&1 | grep -c "trace_id"'
+# 秘密形态计数（期望 0；只打印计数，不打印匹配内容）
+ssh my-ubuntu-server 'docker logs --since 24h bank-assistant-api 2>&1 | grep -Ec "sk-[A-Za-z0-9]|postgresql(\+psycopg)?://[^:[:space:]]+:[^@[:space:]]+@|Bearer [A-Za-z0-9._-]{8,}"'
+# 会话原文/敏感样例不得出现在日志（把 <marker> 换成一次性测试串；期望 0）
+ssh my-ubuntu-server 'docker logs --since 24h bank-assistant-api 2>&1 | grep -c "<marker>"'
+```
+
+### 10.4 限流与输入上限配置
+
+| 环境变量 | 默认 | 说明 |
+|---|---|---|
+| `RATE_LIMIT_ENABLED` | `true` | 关闭仅用于本地压测，生产不得关闭 |
+| `RATE_LIMIT_LOGIN_PER_MINUTE` / `_BURST` | 30 / 10 | `/auth/login` 按客户端 IP 令牌桶 |
+| `RATE_LIMIT_EXPENSIVE_PER_MINUTE` / `_BURST` | 60 / 20 | `/suggestions`、`/inspections`、`/reports` 按用户令牌桶 |
+| `MAX_REQUEST_BYTES` | 2,000,000 | 超过 Content-Length 直接 413，不读 body |
+| `MAX_CONVERSATION_CHARS` | 200,000 | 会话原文超限 413；不截断后当完整会话 |
+| `MAX_PROMPT_CHARS` | 4,000 | 候选答复问题超限 422；构造提示词时再防御性截断 |
+| `METRICS_TOKEN` | 空 | 可选；配置后 `/metrics` 需要 Bearer 令牌 |
+
+超限返回：429 带 `Retry-After` 与 `retryable=true`；413/422 带稳定错误码与
+`trace_id`。限流是**单进程内存**实现，与当前一个 uvicorn worker 的部署匹配；
+重启会清零计数，多实例前必须换成共享存储（Redis/网关门限流）。
+
+### 10.5 故障恢复边界
+
+- 需要重启容器验证恢复时，**只允许** `ssh my-ubuntu-server 'docker restart bank-assistant-api'`；
+- 不重启服务器整机、不重启/不触碰 `bank-assistant-db-db-1` 以外的数据库容器，
+  更不触碰 `dingtalk-*` 容器；
+- 重启 API 会清空进程内指标与限流桶；日志/数据库不受影响。
+
+## 11. 与 ADR 的关系
 
 - ADR-0002：PostgreSQL 是事实源，Chroma 索引可重建；备份校验以数据库哈希为准。
 - ADR-0003：服务器只读拉取；部署用 `git bundle` 精确对齐 SHA，不需要服务器写凭据。

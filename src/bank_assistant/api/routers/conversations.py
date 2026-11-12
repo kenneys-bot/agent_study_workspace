@@ -27,7 +27,10 @@ from bank_assistant.assistants.quality_inspector.conversation_parser import (
     ConversationParseError,
     ConversationParser,
 )
+from bank_assistant.config.settings import settings
 from bank_assistant.infra.db import get_db_session
+from bank_assistant.observability.metrics import INPUT_REJECTIONS
+from bank_assistant.security.input_limits import InputTooLarge, ensure_text_limit
 from bank_assistant.security.authorization import (
     ensure_resource_visible,
     ensure_scope,
@@ -84,6 +87,23 @@ def create_conversation_endpoint(
     if payload.scope_id is not None:
         # 客户端显式声明其他范围 → 403；服务端身份绝不因请求体改变。
         ensure_scope(identity, payload.scope_id)
+
+    try:
+        ensure_text_limit(
+            payload.content,
+            kind="conversation",
+            limit=settings.MAX_CONVERSATION_CHARS,
+        )
+    except InputTooLarge as exc:
+        # 显式 413：不截断会话原文，否则证据坐标与质检结论都会失真。
+        INPUT_REJECTIONS.inc({"kind": "conversation"})
+        raise ApiError(
+            status_code=413,
+            code="INPUT_TOO_LARGE",
+            message=f"会话原文超过 {exc.limit} 字符上限",
+            retryable=False,
+            details={"limit_chars": exc.limit, "kind": "conversation"},
+        ) from exc
 
     parsed = _parse_or_400(parser, payload)
     try:
