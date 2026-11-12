@@ -56,6 +56,28 @@ make index-info      # 打印活动索引版本、校准向量哈希与清单摘
 - 离线无模型时可 `EMBEDDING_PROVIDER=fake make index-rebuild`（确定性假向量）验证构建/切换/
   失败保留路径；fake 索引没有真实语义质量，不能当作检索效果证据。
 
+### 质检规则版本与演示规则集（M4-01）
+
+```bash
+make seed-demo       # 幂等导入：演示账号 + 32 条演示知识 + 6 条演示规则
+```
+
+- 演示规则在 `data/demo/rules/`：挂失 2 条、信用卡费用 2 条、投诉 2 条，覆盖
+  M4-02 的六个默认类别（索取密码/验证码、无依据声称办理成功、无依据承诺减免费用、
+  费用说明与有效条款冲突、阻碍投诉、明显侮辱性表达），其中 5 条为高风险。每条规则
+  都带适用范围、证据要求、风险级别、正反例/证据不足/不适用示例与豁免条件。
+- 示例统一使用契约 §4 证据 JSON，并附合成 `sample_turns`；证据区间按 Unicode
+  码点计数（start 含、end 不含），可按 `content[start:end] == quote` 回验原文。
+- 全部为合成演示规则（`demo_only=true`，说明注明「虚构演示制度」）；来源只用
+  `demo.invalid` 占位地址与公开监管链接，不对应任何机构的真实规则。
+- 规则版本走与知识相同的生命周期：`draft → in_review → published → retired`；
+  发布必须是 reviewer/admin 且不能是作者本人；已发布内容不可覆盖，修改要新建版本。
+- 适用范围窗口是半开区间 `[valid_from, valid_to)`。同一规则发布窗口重叠的新版本时，
+  旧版本被**显式退役**并在响应 `superseded_rule_version_ids` 中回报——决策、理由与
+  测试见 `src/bank_assistant/rules/service.py` 与 `tests/integration/test_rules.py`。
+- 接口（`/api/v1`）：`POST /rules`、`POST /rules/versions/{id}/submit|publish|retire`、
+  `GET /rules/{rule_id}`（返回生效的 published 版本 + applicability）。
+
 ## 设计与决策
 
 - 需求与验收：[计划书 v1.1](docs/plan/bank-customer-service-plan.md)、[系统契约](docs/plan/bank-customer-service-contracts.md)、[执行交接](docs/plan/bank-customer-service-execution.md)、[现状分析](docs/plan/bank-customer-service-assessment.md)

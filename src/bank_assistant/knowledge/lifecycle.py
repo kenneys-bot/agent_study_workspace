@@ -25,6 +25,17 @@ from uuid import UUID
 # 演示制度必须显式标注（business 侧展示），不得与真实制度混同。
 SOURCE_TYPES: frozenset[str] = frozenset({"public_regulation", "demo_policy"})
 
+# 来源主机白名单：投影到知识种子，也被 M4 规则来源校验复用。
+# 公开监管条文只允许指向公开监管机构站点；demo.invalid 是保留 TLD，绝不解析。
+PUBLIC_SOURCE_HOSTS: frozenset[str] = frozenset(
+    {"www.gov.cn", "www.pbc.gov.cn", "www.npc.gov.cn", "www.csr.gov.cn"}
+)
+DEMO_SOURCE_HOST = "demo.invalid"
+# 演示制度/演示规则正文与说明必须包含该标记，避免与真实制度混同。
+DEMO_MARKER = "虚构演示制度"
+# 首版三个业务场景；演示知识与演示规则集都必须全部覆盖。
+DEMO_BUSINESS_TYPES: tuple[str, ...] = ("lost_card", "credit_card_fee", "complaint")
+
 
 class KnowledgeStatus(StrEnum):
     """知识版本在生命周期中的阶段；只有 PUBLISHED 能进入正式检索。"""

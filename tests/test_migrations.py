@@ -16,6 +16,7 @@ KNOWLEDGE_REVISION = "0003_knowledge"
 TASKS_REVISION = "0005_tasks"
 CHUNKS_REVISION = "0006_knowledge_chunks"
 SUGGESTIONS_REVISION = "0007_suggestions"
+RULES_REVISION = "0008_rules"
 M2_MERGE_HEAD = "cf1edc530a0c"
 
 
@@ -75,4 +76,15 @@ def test_suggestions_revision_extends_the_current_single_head():
     assert revision.down_revision == CHUNKS_REVISION
     assert SUGGESTIONS_REVISION in {item.revision for item in script.walk_revisions()}
     assert len(script.get_heads()) == 1
-    assert script.get_heads() == [SUGGESTIONS_REVISION]
+
+
+def test_rules_revision_extends_the_current_single_head():
+    """T17 的 rule_sets/rule_versions 只能接在 0007 之后，保持单一 head。"""
+    script = _script()
+    revision = script.get_revision(RULES_REVISION)
+
+    assert revision is not None
+    assert revision.down_revision == SUGGESTIONS_REVISION
+    assert RULES_REVISION in {item.revision for item in script.walk_revisions()}
+    assert len(script.get_heads()) == 1
+    assert script.get_heads() == [RULES_REVISION]

@@ -1,0 +1,254 @@
+{
+  "scenario": "挂失咨询",
+  "business_type": "lost_card",
+  "note": "合成演示规则：全部为虚构内容（demo_only=true），不对应任何真实银行规则；正反例原文同为虚构示例。",
+  "entries": [
+    {
+      "id": "rule-pwd-01",
+      "rule_code": "DEMO-PWD-01",
+      "title": "不得向客户索取密码或短信验证码",
+      "category": "password_or_code_request",
+      "description": "虚构演示制度：演示质检规则，识别坐席主动索取银行卡密码、支付密码或短信验证码的行为，不对应任何真实机构规则。",
+      "demo_only": true,
+      "business_type": "lost_card",
+      "version_no": 1,
+      "severity": "high",
+      "valid_from": "2025-01-01T00:00:00+00:00",
+      "valid_to": null,
+      "applicability": {
+        "business_types": [
+          "lost_card"
+        ],
+        "channels": [
+          "phone",
+          "online_chat"
+        ],
+        "conditions": [
+          "坐席引导客户核验身份或补办挂失"
+        ]
+      },
+      "criteria": {
+        "evidence_requirements": [
+          "定位坐席索取密码或短信验证码的原文轮次",
+          "确认客户未主动提供密码或验证码"
+        ],
+        "decision_rules": [
+          "仅当坐席主动索取时命中；客户主动报出完整密码时转信息泄露处置",
+          "否定与转述不能按关键词命中，例如“不会向您索要验证码”",
+          "坐席提示客户在官方渠道自行输入且不收集验证码时按反例处理"
+        ]
+      },
+      "exceptions": [
+        "坐席只要求客户在官方 App 内自行输入密码，不要求告知",
+        "客户主动报出密码时按安全事件处置流程处理，不适用本规则"
+      ],
+      "source_refs": [
+        {
+          "kind": "demo_policy",
+          "ref": "https://demo.invalid/bank-assistant/lost-card/demo-01",
+          "note": "虚构演示制度：挂失受理中的身份核验要求"
+        },
+        {
+          "kind": "demo_rule_set",
+          "ref": "https://demo.invalid/bank-assistant/rules/demo-rule-set-v1",
+          "note": "演示质检规则集 v1（非真实银行规则）"
+        }
+      ],
+      "examples": {
+        "sample_turns": [
+          {
+            "turn_id": "00000000-0000-0000-0000-000000000101",
+            "speaker": "坐席",
+            "content": "您把短信验证码报给我，我现在帮您办理挂失。"
+          },
+          {
+            "turn_id": "00000000-0000-0000-0000-000000000102",
+            "speaker": "坐席",
+            "content": "验证码请自己输入，不要告诉我。"
+          }
+        ],
+        "positive": [
+          {
+            "rule_id": "DEMO-PWD-01",
+            "rule_version": "1",
+            "verdict": "hit",
+            "severity": "high",
+            "evidence": [
+              {
+                "turn_id": "00000000-0000-0000-0000-000000000101",
+                "start": 2,
+                "end": 10,
+                "quote": "短信验证码报给我"
+              }
+            ],
+            "rationale": "坐席主动索取短信验证码，属于演示规则命中的高风险行为",
+            "knowledge_refs": []
+          }
+        ],
+        "negative": [
+          {
+            "rule_id": "DEMO-PWD-01",
+            "rule_version": "1",
+            "verdict": "clear",
+            "severity": "high",
+            "evidence": [
+              {
+                "turn_id": "00000000-0000-0000-0000-000000000102",
+                "start": 9,
+                "end": 14,
+                "quote": "不要告诉我"
+              }
+            ],
+            "rationale": "坐席明确提示客户不要告知验证码，是否定/防护性表述，不构成命中",
+            "knowledge_refs": []
+          }
+        ],
+        "insufficient_evidence": [
+          {
+            "rule_id": "DEMO-PWD-01",
+            "rule_version": "1",
+            "verdict": "insufficient_evidence",
+            "severity": "high",
+            "evidence": [],
+            "rationale": "会话只有客户描述丢卡，缺少坐席索取验证码的原文，不能判定",
+            "knowledge_refs": []
+          }
+        ],
+        "not_applicable": [
+          {
+            "rule_id": "DEMO-PWD-01",
+            "rule_version": "1",
+            "verdict": "not_applicable",
+            "severity": "high",
+            "evidence": [],
+            "rationale": "会话业务范围是信用卡费用咨询，不适用于挂失场景的验证码规则",
+            "knowledge_refs": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "rule-claim-01",
+      "rule_code": "DEMO-CLAIM-01",
+      "title": "不得无依据声称业务办理成功",
+      "category": "unverified_completion_claim",
+      "description": "虚构演示制度：演示质检规则，识别坐席在没有系统回执或工单依据时声称挂失/补卡已经办理成功，不对应任何真实机构规则。",
+      "demo_only": true,
+      "business_type": "lost_card",
+      "version_no": 1,
+      "severity": "medium",
+      "valid_from": "2025-01-01T00:00:00+00:00",
+      "valid_to": null,
+      "applicability": {
+        "business_types": [
+          "lost_card"
+        ],
+        "channels": [
+          "phone",
+          "online_chat"
+        ],
+        "conditions": [
+          "坐席向客户说明挂失或补卡的办理结果"
+        ]
+      },
+      "criteria": {
+        "evidence_requirements": [
+          "定位坐席声称办理成功的原文轮次",
+          "确认会话中没有对应的系统回执、工单号或受理编号"
+        ],
+        "decision_rules": [
+          "“已提交/待确认”不是“已办理成功”，不命中",
+          "客户转述他人口径或坐席重复客户原话时不能按关键词判定"
+        ]
+      },
+      "exceptions": [
+        "坐席出示可核验的受理编号或系统回执后再说明结果",
+        "坐席只说明申请已提交、需等待短信确认，不构成成功承诺"
+      ],
+      "source_refs": [
+        {
+          "kind": "demo_policy",
+          "ref": "https://demo.invalid/bank-assistant/lost-card/demo-02",
+          "note": "虚构演示制度：挂失受理与结果告知要求"
+        },
+        {
+          "kind": "demo_rule_set",
+          "ref": "https://demo.invalid/bank-assistant/rules/demo-rule-set-v1",
+          "note": "演示质检规则集 v1（非真实银行规则）"
+        }
+      ],
+      "examples": {
+        "sample_turns": [
+          {
+            "turn_id": "00000000-0000-0000-0000-000000000111",
+            "speaker": "坐席",
+            "content": "挂失已经办理成功，您放心，不会再扣款。"
+          },
+          {
+            "turn_id": "00000000-0000-0000-0000-000000000112",
+            "speaker": "坐席",
+            "content": "挂失申请已提交，请等待短信确认。"
+          }
+        ],
+        "positive": [
+          {
+            "rule_id": "DEMO-CLAIM-01",
+            "rule_version": "1",
+            "verdict": "hit",
+            "severity": "medium",
+            "evidence": [
+              {
+                "turn_id": "00000000-0000-0000-0000-000000000111",
+                "start": 2,
+                "end": 8,
+                "quote": "已经办理成功"
+              }
+            ],
+            "rationale": "坐席声称已办理成功，但会话没有系统回执或工单依据",
+            "knowledge_refs": []
+          }
+        ],
+        "negative": [
+          {
+            "rule_id": "DEMO-CLAIM-01",
+            "rule_version": "1",
+            "verdict": "clear",
+            "severity": "medium",
+            "evidence": [
+              {
+                "turn_id": "00000000-0000-0000-0000-000000000112",
+                "start": 4,
+                "end": 7,
+                "quote": "已提交"
+              }
+            ],
+            "rationale": "只说明申请已提交并等待确认，不是无依据声称办理成功",
+            "knowledge_refs": []
+          }
+        ],
+        "insufficient_evidence": [
+          {
+            "rule_id": "DEMO-CLAIM-01",
+            "rule_version": "1",
+            "verdict": "insufficient_evidence",
+            "severity": "medium",
+            "evidence": [],
+            "rationale": "客户询问挂失是否办好，坐席尚未答复，无法判断是否声称成功",
+            "knowledge_refs": []
+          }
+        ],
+        "not_applicable": [
+          {
+            "rule_id": "DEMO-CLAIM-01",
+            "rule_version": "1",
+            "verdict": "not_applicable",
+            "severity": "medium",
+            "evidence": [],
+            "rationale": "会话是投诉受理场景，不涉及挂失办理状态",
+            "knowledge_refs": []
+          }
+        ]
+      }
+    }
+  ]
+}

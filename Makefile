@@ -39,9 +39,10 @@ down: ## 停止并移除 API 容器
 smoke: ## [M1] 真实启动容器，断言存活、就绪与错误路径
 	@bash scripts/smoke.sh
 
-seed-demo: ## [M3] 只导入合成演示数据，幂等
+seed-demo: ## [M3/M4] 只导入合成演示数据（知识 + 规则），幂等
 	@$(UV) run python scripts/seed_demo_accounts.py
 	@$(UV) run python scripts/seed_demo.py
+	@$(UV) run python scripts/seed_demo_rules.py
 
 seed-demo-accounts: ## [M3] 显式创建演示作者/审核人账号（不导入知识）
 	@$(UV) run python scripts/seed_demo_accounts.py

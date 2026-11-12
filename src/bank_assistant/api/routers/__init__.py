@@ -9,6 +9,8 @@ from .knowledge import router as knowledge_router
 from .knowledge_base import router as knowledge_base_router
 from .script_recommender import router as script_recommender_router
 from .quality_inspector import router as quality_inspector_router
+from .rules import install_rules_error_handler
+from .rules import router as rules_router
 from .suggestions import router as suggestions_router
 from .tasks import router as tasks_router
 

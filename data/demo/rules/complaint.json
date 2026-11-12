@@ -1,0 +1,260 @@
+{
+  "scenario": "投诉受理",
+  "business_type": "complaint",
+  "note": "合成演示规则：全部为虚构内容（demo_only=true），不对应任何真实银行规则；正反例原文同为虚构示例。",
+  "entries": [
+    {
+      "id": "rule-cmp-01",
+      "rule_code": "DEMO-CMP-01",
+      "title": "不得阻碍客户投诉",
+      "category": "complaint_obstruction",
+      "description": "虚构演示制度：演示质检规则，识别坐席劝阻、拒绝或推诿客户投诉的行为，不对应任何真实机构规则。",
+      "demo_only": true,
+      "business_type": "complaint",
+      "version_no": 1,
+      "severity": "high",
+      "valid_from": "2025-01-01T00:00:00+00:00",
+      "valid_to": null,
+      "applicability": {
+        "business_types": [
+          "complaint"
+        ],
+        "channels": [
+          "phone",
+          "online_chat"
+        ],
+        "conditions": [
+          "客户明确表达投诉意愿或询问投诉渠道"
+        ]
+      },
+      "criteria": {
+        "evidence_requirements": [
+          "定位客户表达投诉的原文轮次",
+          "定位坐席劝阻、拒绝登记或推诿投诉的原文轮次"
+        ],
+        "decision_rules": [
+          "坐席正常告知投诉渠道与处理时限不命中",
+          "客户只是表达不满但未提出投诉时按不适用处理",
+          "转述他人说法不能按关键词直接判定"
+        ]
+      },
+      "exceptions": [
+        "坐席按流程登记投诉并告知后续联系安排",
+        "客户询问投诉渠道，坐席完整说明且未劝阻"
+      ],
+      "source_refs": [
+        {
+          "kind": "demo_policy",
+          "ref": "https://demo.invalid/bank-assistant/complaint/demo-01",
+          "note": "虚构演示制度：投诉受理与转办流程"
+        },
+        {
+          "kind": "public_regulation",
+          "ref": "https://www.gov.cn/gongbao/content/2020/content_5512564.htm",
+          "note": "公开监管要点摘要：金融消费者投诉处理要求（自行组织，不复制原文）"
+        },
+        {
+          "kind": "demo_rule_set",
+          "ref": "https://demo.invalid/bank-assistant/rules/demo-rule-set-v1",
+          "note": "演示质检规则集 v1（非真实银行规则）"
+        }
+      ],
+      "examples": {
+        "sample_turns": [
+          {
+            "turn_id": "00000000-0000-0000-0000-000000000141",
+            "speaker": "坐席",
+            "content": "投诉也没用，你别再打了。"
+          },
+          {
+            "turn_id": "00000000-0000-0000-0000-000000000142",
+            "speaker": "坐席",
+            "content": "我帮您登记投诉，稍后会有专人联系。"
+          }
+        ],
+        "positive": [
+          {
+            "rule_id": "DEMO-CMP-01",
+            "rule_version": "1",
+            "verdict": "hit",
+            "severity": "high",
+            "evidence": [
+              {
+                "turn_id": "00000000-0000-0000-0000-000000000141",
+                "start": 0,
+                "end": 5,
+                "quote": "投诉也没用"
+              }
+            ],
+            "rationale": "坐席用“投诉也没用”劝阻客户投诉，属于阻碍投诉",
+            "knowledge_refs": []
+          }
+        ],
+        "negative": [
+          {
+            "rule_id": "DEMO-CMP-01",
+            "rule_version": "1",
+            "verdict": "clear",
+            "severity": "high",
+            "evidence": [
+              {
+                "turn_id": "00000000-0000-0000-0000-000000000142",
+                "start": 3,
+                "end": 7,
+                "quote": "登记投诉"
+              }
+            ],
+            "rationale": "坐席主动登记投诉并安排专人联系，不构成阻碍",
+            "knowledge_refs": []
+          }
+        ],
+        "insufficient_evidence": [
+          {
+            "rule_id": "DEMO-CMP-01",
+            "rule_version": "1",
+            "verdict": "insufficient_evidence",
+            "severity": "high",
+            "evidence": [],
+            "rationale": "客户提到投诉，坐席尚未回应，无法判断是否阻碍",
+            "knowledge_refs": []
+          }
+        ],
+        "not_applicable": [
+          {
+            "rule_id": "DEMO-CMP-01",
+            "rule_version": "1",
+            "verdict": "not_applicable",
+            "severity": "high",
+            "evidence": [],
+            "rationale": "会话是信用卡费用咨询，未出现投诉诉求",
+            "knowledge_refs": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "rule-att-01",
+      "rule_code": "DEMO-ATT-01",
+      "title": "不得使用明显侮辱性表达",
+      "category": "insulting_language",
+      "description": "虚构演示制度：演示质检规则，识别坐席对客户使用明显侮辱、贬损表达的行为，不对应任何真实机构规则。",
+      "demo_only": true,
+      "business_type": "complaint",
+      "version_no": 1,
+      "severity": "high",
+      "valid_from": "2025-01-01T00:00:00+00:00",
+      "valid_to": null,
+      "applicability": {
+        "business_types": [
+          "complaint"
+        ],
+        "channels": [
+          "phone",
+          "online_chat"
+        ],
+        "conditions": [
+          "坐席与客户发生争执或重复解释同一问题"
+        ]
+      },
+      "criteria": {
+        "evidence_requirements": [
+          "定位坐席使用侮辱、贬损表达的原文轮次",
+          "确认表达指向客户本人且不属于引用或转述"
+        ],
+        "decision_rules": [
+          "坐席复述客户原话或引用规则文本时不能按关键词直接判定",
+          "客户辱骂坐席不适用本规则；本规则只评判坐席表达",
+          "语气助词或口头语不构成明显侮辱"
+        ]
+      },
+      "exceptions": [
+        "坐席引用客户原话进行核实，并明确说明是转述",
+        "坐席使用中性表达重复解释，即使客户情绪激动"
+      ],
+      "source_refs": [
+        {
+          "kind": "demo_policy",
+          "ref": "https://demo.invalid/bank-assistant/complaint/demo-02",
+          "note": "虚构演示制度：坐席服务用语与情绪管理要求"
+        },
+        {
+          "kind": "demo_rule_set",
+          "ref": "https://demo.invalid/bank-assistant/rules/demo-rule-set-v1",
+          "note": "演示质检规则集 v1（非真实银行规则）"
+        }
+      ],
+      "examples": {
+        "sample_turns": [
+          {
+            "turn_id": "00000000-0000-0000-0000-000000000151",
+            "speaker": "坐席",
+            "content": "你怎么这么笨，说了几遍还听不懂。"
+          },
+          {
+            "turn_id": "00000000-0000-0000-0000-000000000152",
+            "speaker": "坐席",
+            "content": "抱歉让您久等了，我再解释一遍。"
+          }
+        ],
+        "positive": [
+          {
+            "rule_id": "DEMO-ATT-01",
+            "rule_version": "1",
+            "verdict": "hit",
+            "severity": "high",
+            "evidence": [
+              {
+                "turn_id": "00000000-0000-0000-0000-000000000151",
+                "start": 3,
+                "end": 6,
+                "quote": "这么笨"
+              }
+            ],
+            "rationale": "坐席对客户使用侮辱性表达“这么笨”",
+            "knowledge_refs": []
+          }
+        ],
+        "negative": [
+          {
+            "rule_id": "DEMO-ATT-01",
+            "rule_version": "1",
+            "verdict": "clear",
+            "severity": "high",
+            "evidence": [
+              {
+                "turn_id": "00000000-0000-0000-0000-000000000152",
+                "start": 0,
+                "end": 2,
+                "quote": "抱歉"
+              }
+            ],
+            "rationale": "坐席致歉并重复解释，不构成侮辱性表达",
+            "knowledge_refs": []
+          }
+        ],
+        "insufficient_evidence": [
+          {
+            "rule_id": "DEMO-ATT-01",
+            "rule_version": "1",
+            "verdict": "insufficient_evidence",
+            "severity": "high",
+            "evidence": [],
+            "rationale": "缺少坐席对客户使用贬损表达的原文",
+            "knowledge_refs": []
+          }
+        ],
+        "not_applicable": [
+          {
+            "rule_id": "DEMO-ATT-01",
+            "rule_version": "1",
+            "verdict": "not_applicable",
+            "severity": "high",
+            "evidence": [],
+            "rationale": "会话是挂失咨询，未出现明显侮辱性表达",
+            "knowledge_refs": []
+          }
+        ]
+      }
+    }
+  ]
+}
