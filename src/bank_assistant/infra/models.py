@@ -16,6 +16,8 @@
   （T17，M4-01）；发布后内容不可覆盖。
 - ``inspection_runs`` / ``findings``：一次质检运行的规则快照、状态与逐规则
   机器判断（T18，M4-03）；机器判断写入后不可覆盖。
+- ``review_cases`` / ``review_decisions``：人工复核状态与逐项结论（T20，M4-04）；
+  决定追加保存、只读，同一 inspection 只允许一个未完成复核。
 
 所有时间列为 ``timestamptz``，写入前统一为 UTC（契约 §1）。
 """
@@ -55,6 +57,11 @@ TASK_STATUS_CHECK = "status IN ('queued', 'running', 'succeeded', 'failed', 'can
 INSPECTION_STATUS_CHECK = TASK_STATUS_CHECK
 FINDING_VERDICT_CHECK = (
     "machine_verdict IN ('hit', 'clear', 'insufficient_evidence', 'not_applicable')"
+)
+REVIEW_STATUS_CHECK = "status IN ('pending', 'in_review', 'completed')"
+REVIEW_ACTION_CHECK = "action IN ('confirm', 'reject', 'modify')"
+REVIEW_FINAL_VERDICT_CHECK = (
+    "final_verdict IN ('hit', 'clear', 'insufficient_evidence', 'not_applicable')"
 )
 
 
@@ -880,3 +887,164 @@ def _reject_finding_update(
 ) -> None:
     """ORM 层兜底：机器判断只能追加，任何 UPDATE 都显式失败。"""
     raise FindingImmutable(target.finding_id)
+
+
+# ---------------------------------------------------------------------------
+# 人工复核（T20，M4-04；契约 §2 ReviewCase / ReviewDecision）
+# ---------------------------------------------------------------------------
+
+
+class ReviewDecisionImmutable(RuntimeError):
+    """复核决定追加保存，写入后不可更新/删除（契约 §2「追加保存」）。"""
+
+    def __init__(self, decision_id: UUID) -> None:
+        self.decision_id = decision_id
+        super().__init__(f"复核决定不可修改: {decision_id}")
+
+
+class ReviewCaseImmutable(RuntimeError):
+    """复核案例承载审计历史，不允许物理删除。"""
+
+    def __init__(self, review_id: UUID) -> None:
+        self.review_id = review_id
+        super().__init__(f"复核案例不可删除: {review_id}")
+
+
+class ReviewCase(Base):
+    """一次人工复核（契约 §2 ReviewCase、§3「人工复核」）。
+
+    - ``status`` 只允许 ``pending → in_review → completed``；重新打开是唯一
+      显式回退（completed → in_review），并产生新 revision 与审计；
+    - ``revision`` 是乐观并发版本号：每个被接受的决定/完成/重开都加一；
+    - ``inspection_id`` 在同一有效复核流内唯一：部分唯一索引把所有未完成
+      （``status <> 'completed'``）行限制为一条；完成后可另起新的复核流，
+      历史行保留；
+    - ``scope_id`` 来自服务端身份，用于跨范围 404。
+    """
+
+    __tablename__ = "review_cases"
+    __table_args__ = (
+        CheckConstraint(REVIEW_STATUS_CHECK, name="ck_review_cases_status"),
+        CheckConstraint("revision >= 1", name="ck_review_cases_revision"),
+        Index("ix_review_cases_scope_status", "scope_id", "status"),
+        Index("ix_review_cases_inspection_id", "inspection_id"),
+        # 同一 inspection 同时只能有一个未完成复核；完成后允许新复核流。
+        Index(
+            "uq_review_cases_active_inspection",
+            "inspection_id",
+            unique=True,
+            postgresql_where=text("status <> 'completed'"),
+            sqlite_where=text("status <> 'completed'"),
+        ),
+    )
+
+    review_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    inspection_id: Mapped[UUID] = mapped_column(
+        ForeignKey("inspection_runs.inspection_id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    assignee_id: Mapped[UUID] = mapped_column(
+        ForeignKey("users.user_id", ondelete="RESTRICT"), nullable=False
+    )
+    status: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default="pending",
+        server_default=text("'pending'"),
+    )
+    revision: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default=text("1")
+    )
+    scope_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    # 最近一次重新打开的理由（完整理由属于当前状态，不写进审计摘要正文）。
+    last_reopen_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+
+class ReviewDecision(Base):
+    """逐项复核结论（契约 §2 ReviewDecision）：追加保存，不改写历史。
+
+    - ``machine_verdict`` 永远留在 ``findings``；这里只存人工动作与
+      ``final_verdict``，二者都可以与机器判断不同；
+    - ``action`` = confirm / reject / modify；confirm 沿用机器判断、reject
+      驳回为 clear、modify 必须给出新的 final_verdict；
+    - ``reason`` 必填（非空），``expected_revision`` 记录提交时的乐观版本，
+      ``accepted_revision`` 是接受后的 review revision（同一 review 内唯一），
+      因此「决定历史」可按 revision 稳定排序；
+    - 追加式：ORM 事件拒绝任何 UPDATE/DELETE。
+    """
+
+    __tablename__ = "review_decisions"
+    __table_args__ = (
+        CheckConstraint(REVIEW_ACTION_CHECK, name="ck_review_decisions_action"),
+        CheckConstraint(
+            REVIEW_FINAL_VERDICT_CHECK, name="ck_review_decisions_final_verdict"
+        ),
+        CheckConstraint(
+            "length(trim(reason)) > 0", name="ck_review_decisions_reason"
+        ),
+        CheckConstraint(
+            "expected_revision >= 1", name="ck_review_decisions_expected_revision"
+        ),
+        CheckConstraint(
+            "accepted_revision >= 2", name="ck_review_decisions_accepted_revision"
+        ),
+        UniqueConstraint(
+            "review_id",
+            "accepted_revision",
+            name="uq_review_decisions_review_revision",
+        ),
+        Index("ix_review_decisions_review_id", "review_id"),
+        Index("ix_review_decisions_finding_id", "finding_id"),
+    )
+
+    decision_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    review_id: Mapped[UUID] = mapped_column(
+        ForeignKey("review_cases.review_id", ondelete="RESTRICT"), nullable=False
+    )
+    finding_id: Mapped[UUID] = mapped_column(
+        ForeignKey("findings.finding_id", ondelete="RESTRICT"), nullable=False
+    )
+    action: Mapped[str] = mapped_column(String(16), nullable=False)
+    final_verdict: Mapped[str] = mapped_column(String(32), nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    actor_id: Mapped[UUID] = mapped_column(
+        ForeignKey("users.user_id", ondelete="RESTRICT"), nullable=False
+    )
+    expected_revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    accepted_revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+@event.listens_for(ReviewDecision, "before_update")
+def _reject_review_decision_update(
+    mapper: Any, connection: Any, target: ReviewDecision
+) -> None:
+    """ORM 层兜底：复核决定只追加，任何 UPDATE 都显式失败。"""
+    raise ReviewDecisionImmutable(target.decision_id)
+
+
+@event.listens_for(ReviewDecision, "before_delete")
+def _reject_review_decision_delete(
+    mapper: Any, connection: Any, target: ReviewDecision
+) -> None:
+    """ORM 层兜底：复核决定是审计历史，任何 DELETE 都显式失败。"""
+    raise ReviewDecisionImmutable(target.decision_id)
+
+
+@event.listens_for(ReviewCase, "before_delete")
+def _reject_review_case_delete(
+    mapper: Any, connection: Any, target: ReviewCase
+) -> None:
+    """复核案例承载历史，不允许物理删除（重新打开用新 revision）。"""
+    raise ReviewCaseImmutable(target.review_id)

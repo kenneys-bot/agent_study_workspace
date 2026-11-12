@@ -381,14 +381,20 @@ def test_inspection_tables_match_the_contract_minimum() -> None:
     } <= finding_columns
 
 
-def test_inspections_revision_is_the_single_head() -> None:
+def test_inspections_revision_is_reachable_and_db_is_at_a_single_head() -> None:
     script = ScriptDirectory.from_config(Config(str(REPO_ROOT / "alembic.ini")))
-    assert script.get_current_head() == "0009_inspections"
+    # T20（0010_reviews）接在 0009 之后；这里只要求迁移图仍只有一个 head，
+    # 且当前数据库确实停在那个 head 上。
+    assert "0009_inspections" in {
+        revision.revision for revision in script.walk_revisions()
+    }
+    head = script.get_current_head()
+    assert head is not None
     with session_scope() as session:
         current = session.execute(
             text("SELECT version_num FROM alembic_version")
         ).scalar_one()
-    assert current == "0009_inspections"
+    assert current == head
 
 
 # ---------------------------------------------------------------------------

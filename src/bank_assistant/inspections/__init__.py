@@ -23,6 +23,8 @@ from bank_assistant.inspections.service import (
     InspectionView,
     TASK_TYPE,
     create_inspection,
+    effective_machine_verdict,
+    finding_evidence_valid,
     load_inspection,
 )
 
@@ -38,5 +40,7 @@ __all__ = [
     "RuleSnapshotEntry",
     "TASK_TYPE",
     "create_inspection",
+    "effective_machine_verdict",
+    "finding_evidence_valid",
     "load_inspection",
 ]
