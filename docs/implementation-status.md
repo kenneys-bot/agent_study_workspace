@@ -1,11 +1,11 @@
 # 执行进度
 
-当前里程碑：M7 部署/恢复（T29）与监控/日志/安全（T30）已交付，待负责人验收；M6 已交付（T28 真实训练 NOT_RUN）
-当前任务：T30 监控、日志与安全测试（#31）READY_FOR_ACCEPTANCE；T29 部署与恢复演练（#30）已执行；T28 条件性微调（#29）READY_FOR_ACCEPTANCE；T33 ADR-0006 数据库落地（#34）已执行
-当前状态：M1–M5 已交付（等待负责人验收）；M6 已交付（T26/T27 完成、T28 harness 交付但真实训练 NOT_RUN）；**M7-01/M7-02/M7-03/M7-04/M7-05 已真实执行**（不可变镜像部署、备份恢复/回滚/索引重建、指标与脱敏日志、限流/输入上限/安全测试；2026-11-12）
-本机代码分支：`feat/bank-assistant`（集成分支）
-本机代码SHA：`59a5869`（T30 合并 `feat/bank-assistant`；实现提交 `f27c216`）
-Ubuntu代码SHA：`59a5869`（与合并提交一致；镜像 `bank-assistant:api-59a5869`）
+当前里程碑：M7 全部子项（T29/T30/T31）已交付，**READY_FOR_ACCEPTANCE**；负责人尚未签收，无里程碑为 ACCEPTED。M6 已交付（T28 真实训练 NOT_RUN，Recall@5 0.833 未达门槛）
+当前任务：T31 发布包与运维手册（#32）READY_FOR_ACCEPTANCE；T30 监控、日志与安全测试（#31）READY_FOR_ACCEPTANCE；T29 部署与恢复演练（#30）已执行；T28 条件性微调（#29）READY_FOR_ACCEPTANCE；T33 ADR-0006 数据库落地（#34）已执行
+当前状态：M1–M5 已交付（等待负责人验收）；M6 已交付（T26/T27 完成、T28 harness 交付但真实训练 NOT_RUN；引用支持度 NOT_MEASURED）；**M7-01～M7-06 已交付**（不可变镜像部署、备份恢复/回滚/索引重建、指标与脱敏日志、限流/输入上限/安全测试、发布清单与 `make release-verify`；2026-11-12）。计划 §7 的 Recall@5/引用支持度/24h/压测门槛仍未达成，见 [M7 报告](milestones/M7-report.md) 与 [风险清单](ops/risk-register.md)
+本机代码分支：`feat/bank-assistant`（集成分支；T31 在 `ticket/T31` 打包）
+发布代码SHA：`59a5869`（`v0.1.0` 镜像身份；T31 文档提交不改变镜像）
+Ubuntu代码SHA：`59a5869`（与发布镜像一致；镜像 `bank-assistant:api-59a5869`）
 最近更新：2026-11-12（Asia/Shanghai）
 
 ## 任务状态
@@ -143,7 +143,21 @@ M5 报告：`docs/milestones/M5-report.md`（T25 交付）。web 48 tests、`mak
 |---|---|---|
 | #30 T29 部署与恢复演练 | DONE | 服务器 bank-assistant-api healthy、仅 127.0.0.1:8000；备份恢复行数与哈希一致；回滚演练通过 |
 | #31 T30 监控/日志/安全测试 | READY_FOR_ACCEPTANCE | 650 unit + 138 integration；真实 `/metrics`/trace_id 日志/密文扫描 0；`docs/milestones/M7-observability-report.md` |
-| #32 T31 发布包与运维手册 | BLOCKED | 等 #31 负责人验收 |
+| #32 T31 发布包与运维手册 | READY_FOR_ACCEPTANCE | `docs/releases/v0.1.0.md` + `release.json`（SHA/镜像/传输校验/Alembic/索引/模型）；`make release-verify` PASS；`docs/ops/{dependency-audit,risk-register,runbook}.md`；[M7 验收报告](milestones/M7-report.md) |
+
+## T31 发布包（#32，2026-11-12）
+
+- 发布记录：[docs/releases/v0.1.0.md](releases/v0.1.0.md)；清单：[release.json](../release.json)
+- 发布身份：代码 `59a5869`、镜像 `bank-assistant:api-59a5869`（id `1c7dc47e…`）、
+  tar sha256 `779f9a9e…`、Alembic `0011_report_exports`、索引 `idx-20261112T110703Z-2334d03e`。
+- 发布校验：`make release-verify` PASS（image id/标签、容器 healthy、live/ready、
+  Alembic head、版本页 `code_sha`/索引/校准/embedding/生成模型全部一致）。
+- 依赖审计：Python 111 个运行时依赖，`chromadb 1.5.9` 5 条公告记录（4 唯一，无修复）；
+  npm prod/全部均 0 漏洞。见 [依赖记录](ops/dependency-audit.md)。
+- 风险：18 项（High 7 / Medium 8 / Low 3），见 [风险清单](ops/risk-register.md)。
+- 手册：`make release-verify`、事故第一响应（503/429/504/worker）与命令索引已并入
+  [运维手册](ops/runbook.md)。
+- 边界：**不是生产部署授权**；无 tag、未 push；Lead 合并后由负责人打 tag。
 
 ## M6 验收
 

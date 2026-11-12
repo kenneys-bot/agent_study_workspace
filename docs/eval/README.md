@@ -151,9 +151,10 @@ dry-run 退出码 `0`（报告可以是 `NOT_RUN`）；配置/split/数据集哈
 - **本评测运行器不直接连接应用数据库**；它需要的是与 DB 一致的冻结快照。
   正式在 Ubuntu 复跑时，必须先确认应用 DB 已由同一份语料/规则种子导入，
   且快照哈希与数据集 manifest 一致（当前没有自动 DB 对账，属于已知限制）。
-- 应用运行、`make seed-demo`、集成测试仍然需要数据库。**当前基础设施是过渡性
-  的本机容器**，不是 ADR-0006 的「PostgreSQL 18 只部署在 Ubuntu + SSH 隧道」
-  方案；ADR-0006 **尚未实现**，本项目**不声称** ADR-0006 合规。
+- 应用运行、`make seed-demo`、集成测试需要数据库。T33 已把数据库入口切到
+  ADR-0006 的「PostgreSQL 18 只部署在 Ubuntu + SSH 隧道」（`make db-tunnel`）；
+  唯一例外是 `make test-e2e` 仍临时用本机一次性 compose 数据库（见风险 R-08）。
+  正式复跑评测仍须先确认应用 DB 与冻结快照同源（当前没有自动 DB 对账）。
 - ADR-0006 要求数据库不可达时显式失败/BLOCKED，不得静默切 SQLite。本评测在
   replay 模式不依赖 DB；live 模式只依赖模型凭据与网络，凭据/能力缺失时由
   `runner._blocked_run` 写 `status: blocked` 的 manifest，不伪造成功。

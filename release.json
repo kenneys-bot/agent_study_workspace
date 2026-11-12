@@ -1,0 +1,99 @@
+{
+  "release": {
+    "version": "v0.1.0",
+    "date": "2026-11-12",
+    "kind": "personal_showcase_release",
+    "production_authorization": false,
+    "statement": "个人展示项目的可追溯发布记录，不是任何机构的生产部署授权；全部业务数据为合成数据。"
+  },
+  "code": {
+    "git_sha": "59a586976093b2e9359fec97baec6d2f1ee4d6ad",
+    "short_sha": "59a5869",
+    "branch": "ticket/T30",
+    "repository": "github.com/kenneys-bot/agent_study_workspace"
+  },
+  "image": {
+    "tag": "bank-assistant:api-59a5869",
+    "id": "sha256:1c7dc47e2a95908a35f7870f4b49dc8cb32213ad30fa3bf98a57073f5f7496be",
+    "repo_digest": "bank-assistant@sha256:1c7dc47e2a95908a35f7870f4b49dc8cb32213ad30fa3bf98a57073f5f7496be",
+    "platform": "linux/amd64",
+    "size_bytes": 210228068,
+    "transfer": {
+      "method": "docker save | ssh docker load",
+      "tar_sha256": "779f9a9e9436f472462a03343051efd06d22a1eb1a3d6c587053d893de245a94",
+      "note": "在打包机上用部署镜像重算 docker save 的 sha256；docker save 对同一 image id 逐字节稳定（已用 T29 记录的 tar_sha256 7aeeca3b… 复核），image id 与服务器一致，故该字节流即传输内容。"
+    }
+  },
+  "deployment": {
+    "host_alias": "my-ubuntu-server",
+    "container": "bank-assistant-api",
+    "compose_project": "bank-assistant-app",
+    "compose_file": "deploy/compose.app.yml",
+    "restart_policy": "unless-stopped",
+    "network_mode": "host",
+    "port": 8000,
+    "bind": "127.0.0.1:8000",
+    "env_file": "~/workspace/bank-assistant/.env.app (chmod 600, 仓库外)",
+    "data_root": "~/workspace/bank-assistant/data",
+    "artifact_root": "~/workspace/bank-assistant/artifacts",
+    "deployed_at": "2026-11-12T11:33:16Z",
+    "previous_image": "bank-assistant:api-1fb91b6",
+    "previous_sha": "1fb91b6b22085dd8064ec6fe128420b2e598f755"
+  },
+  "database": {
+    "engine": "postgresql-18",
+    "container": "bank-assistant-db-db-1",
+    "bind": "127.0.0.1:5432",
+    "name": "bank_assistant_demo",
+    "user": "bank",
+    "alembic_head": "0011_report_exports"
+  },
+  "index": {
+    "index_version": "idx-20261112T110703Z-2334d03e",
+    "calibration_sha256": "136e030a6da8397756dd2d2547891ee66797d595a9b61d2d14611f89659c4004",
+    "embedding_model": "BAAI/bge-small-zh-v1.5",
+    "embedding_model_version": "BAAI/bge-small-zh-v1.5@512",
+    "embedding_runtime": "fastembed/onnx-cpu",
+    "chunk_count": 30,
+    "indexed_knowledge_versions": 30,
+    "active_pointer": "data/index/active.json"
+  },
+  "models": {
+    "generation_provider": "deepseek",
+    "generation_model": "deepseek-chat",
+    "mode": "live"
+  },
+  "dependencies": {
+    "python_lock": "uv.lock",
+    "uv_lock_sha256": "240e6b61ce42b130e4db92cb8b80938b51a69bf2cbd54b9ea7c9d7753b7e2238",
+    "python": "3.13",
+    "uv": "0.10.11"
+  },
+  "frontend": {
+    "node": "v25.7.0",
+    "npm": "11.10.1",
+    "package_lock": "web/package-lock.json",
+    "package_lock_sha256": "4fa58b2216e52b48f7539f84738b2af7f58b6c055eced74fce3a9c2cce243a3e",
+    "build_command": "cd web && npm ci && npm run build",
+    "dist_committed": false,
+    "note": "web/dist 是构建产物，不入库、未部署到服务器；发布只记录可复现构建输入（Node/npm/lockfile）。"
+  },
+  "demo_data": {
+    "scope_id": "demo-bank",
+    "accounts": ["demo-author", "demo-reviewer"],
+    "knowledge_versions": 32,
+    "rule_versions": 6,
+    "conversations": 6,
+    "inspection_runs": 3,
+    "review_cases": 3,
+    "conversation_ids": {
+      "s1-lost-card-normal": "9a907fec-0037-4a26-9b55-812f4f42ca98",
+      "s1-lost-card-risk": "d645d5d2-7dab-4193-b2d2-8921b19219f4",
+      "s2-fee-normal": "cd178328-ff11-4bbf-875c-cf67017efdef",
+      "s2-fee-risk": "4a9cc667-53b1-402e-bbb2-f9e9395bfc7d",
+      "s3-complaint-normal": "9160e4f2-e92c-4c42-8524-e18a0301734c",
+      "s3-complaint-risk": "188285e6-9891-4c89-a5e8-cd51fcf82c15"
+    },
+    "note": "全部为合成演示数据；UUID 来自当前 bank_assistant_demo，可由 make seed-demo 幂等重建（逻辑 id 见 data/demo/conversations/）。"
+  }
+}
