@@ -1,0 +1,31 @@
+# 本地凭据与运行产物——禁止提交
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+build/
+dist/
+
+# 系统
+.DS_Store
+
+# 运行产物（大文件与数据库文件不进 Git）
+data/raw/
+data/curated/
+data/splits/
+artifacts/
+*.sqlite3
+*.db
+*.log
+
+# 前端
+web/node_modules/
+web/dist/
