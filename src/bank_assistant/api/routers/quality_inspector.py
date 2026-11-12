@@ -3,11 +3,11 @@
 """
 
 import logging
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 from fastapi.responses import JSONResponse
-from typing import List
 
-from bank_assistant.core.llm_client import get_llm_client, LLMClient
+from bank_assistant.core.llm_client import get_llm_client
+from bank_assistant.api.errors import ErrorResponse, not_implemented_response
 from bank_assistant.api.models.quality_inspector import (
     ParseConversationRequest,
     ParseConversationResponse,
@@ -16,19 +16,13 @@ from bank_assistant.api.models.quality_inspector import (
     InspectRequest,
     InspectResponse,
     GenerateReportRequest,
-    GenerateReportResponse,
     SubmitReviewRequest,
-    SubmitReviewResponse,
     ApproveRejectRequest,
-    ApproveRejectResponse,
-    PendingReviewsResponse
 )
 from bank_assistant.assistants.quality_inspector import (
     ConversationParser,
     SpeechToTextProcessor,
     AutoInspector,
-    ReportGenerator,
-    ReviewWorkflow,
     ParsedConversation
 )
 from bank_assistant.assistants.quality_inspector.conversation_parser import (
@@ -54,16 +48,6 @@ def get_auto_inspector() -> AutoInspector:
     """获取自动化质检器"""
     llm_client = get_llm_client()
     return AutoInspector(llm_client)
-
-
-def get_report_generator() -> ReportGenerator:
-    """获取报告生成器"""
-    return ReportGenerator()
-
-
-def get_review_workflow() -> ReviewWorkflow:
-    """获取复核工作流"""
-    return ReviewWorkflow()
 
 
 @router.post("/parse-conversation", response_model=ParseConversationResponse)
@@ -220,166 +204,127 @@ async def inspect_conversation(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/generate-report", response_model=GenerateReportResponse)
+@router.post(
+    "/generate-report",
+    status_code=501,
+    responses={501: {"model": ErrorResponse, "description": "报告持久化尚未实现"}},
+)
 async def generate_report(
     request: GenerateReportRequest,
-    inspector: AutoInspector = Depends(get_auto_inspector),
-    report_generator: ReportGenerator = Depends(get_report_generator)
+    http_request: Request,
 ):
     """
-    生成质检报告
-    
+    导出质检报告
+
+    尚未实现：系统还没有真实的质检报告持久化，不能凭空生成分数和总结。
+    M4 接通报告持久化后再提供真实导出。
+
     - report_id: 报告ID或会话ID
     - format: 导出格式（json/text/html）
     - report_type: 报告类型（detailed/summary）
     """
-    try:
-        # 这里需要从数据库获取质检结果
-        # 模拟返回
-        from bank_assistant.assistants.quality_inspector import InspectionReport
-        
-        mock_report = InspectionReport(
-            session_id=request.report_id,
-            overall_score=85.0,
-            attitude_score=90.0,
-            professionalism_score=85.0,
-            compliance_score=95.0,
-            summary="客服表现良好"
-        )
-        
-        content = report_generator.generate_detailed_report(mock_report)
-        
-        return GenerateReportResponse(
-            report_id=request.report_id,
-            content=content,
-            format=request.format,
-            size=len(content)
-        )
-        
-    except Exception as e:
-        logger.error(f"报告生成失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+    logger.info("报告导出不可用：尚无真实报告持久化 [report_id=%s]", request.report_id)
+    return not_implemented_response(
+        http_request,
+        operation="generate_report",
+        message="报告导出尚未实现：系统尚未持久化质检报告，无法返回真实内容",
+    )
 
 
-@router.post("/submit-review", response_model=SubmitReviewResponse)
+@router.post(
+    "/submit-review",
+    status_code=501,
+    responses={501: {"model": ErrorResponse, "description": "复核持久化尚未实现"}},
+)
 async def submit_for_review(
     request: SubmitReviewRequest,
-    workflow: ReviewWorkflow = Depends(get_review_workflow)
+    http_request: Request,
 ):
     """
     提交复核
-    
+
+    尚未实现：系统还没有真实的复核记录持久化，不能返回假的 review_id 或时间戳。
+    M4 接通复核流程后再提供真实提交。
+
     - report_id: 报告ID
     - reviewer: 复核人
     - comments: 复核意见（可选）
     """
-    try:
-        from bank_assistant.assistants.quality_inspector import InspectionReport
-        
-        # 模拟报告对象
-        mock_report = InspectionReport(
-            session_id=request.report_id,
-            overall_score=85.0
-        )
-        
-        success = workflow.submit_for_review(mock_report, request.reviewer)
-        
-        if success:
-            return SubmitReviewResponse(
-                review_id=f"review_{request.report_id}",
-                status="pending",
-                submitted_at="2024-01-01T00:00:00"
-            )
-        else:
-            raise HTTPException(status_code=500, detail="提交失败")
-        
-    except Exception as e:
-        logger.error(f"复核提交失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+    logger.info("复核提交不可用：尚无真实复核持久化 [report_id=%s]", request.report_id)
+    return not_implemented_response(
+        http_request,
+        operation="submit_review",
+        message="复核提交尚未实现：系统尚未持久化复核记录，无法返回真实复核结果",
+    )
 
 
-@router.post("/approve", response_model=ApproveRejectResponse)
+@router.post(
+    "/approve",
+    status_code=501,
+    responses={501: {"model": ErrorResponse, "description": "复核持久化尚未实现"}},
+)
 async def approve_report(
     request: ApproveRejectRequest,
-    workflow: ReviewWorkflow = Depends(get_review_workflow)
+    http_request: Request,
 ):
     """
     批准报告
-    
+
+    尚未实现：没有持久化的复核记录可批准，不能凭进程内状态返回成功。
+
     - review_id: 复核ID
     - approver: 操作人
     - comments: 意见（可选）
     """
-    try:
-        success = workflow.approve_report(
-            request.review_id,
-            request.approver,
-            request.comments
-        )
-        
-        if success:
-            return ApproveRejectResponse(
-                review_id=request.review_id,
-                status="approved",
-                updated_at="2024-01-01T00:00:00"
-            )
-        else:
-            raise HTTPException(status_code=500, detail="批准失败")
-        
-    except Exception as e:
-        logger.error(f"批准失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+    logger.info("报告批准不可用：尚无真实复核持久化 [review_id=%s]", request.review_id)
+    return not_implemented_response(
+        http_request,
+        operation="approve_review",
+        message="报告批准尚未实现：系统尚未持久化复核记录，无法返回真实状态",
+    )
 
 
-@router.post("/reject", response_model=ApproveRejectResponse)
+@router.post(
+    "/reject",
+    status_code=501,
+    responses={501: {"model": ErrorResponse, "description": "复核持久化尚未实现"}},
+)
 async def reject_report(
     request: ApproveRejectRequest,
-    workflow: ReviewWorkflow = Depends(get_review_workflow)
+    http_request: Request,
 ):
     """
     拒绝报告
-    
+
+    尚未实现：没有持久化的复核记录可拒绝，不能凭进程内状态返回成功。
+
     - review_id: 复核ID
     - approver: 操作人
     - comments: 意见（可选）
     - reasons: 拒绝原因
     """
-    try:
-        success = workflow.reject_report(
-            request.review_id,
-            request.approver,
-            request.reasons or []
-        )
-        
-        if success:
-            return ApproveRejectResponse(
-                review_id=request.review_id,
-                status="rejected",
-                updated_at="2024-01-01T00:00:00"
-            )
-        else:
-            raise HTTPException(status_code=500, detail="拒绝失败")
-        
-    except Exception as e:
-        logger.error(f"拒绝失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+    logger.info("报告拒绝不可用：尚无真实复核持久化 [review_id=%s]", request.review_id)
+    return not_implemented_response(
+        http_request,
+        operation="reject_review",
+        message="报告拒绝尚未实现：系统尚未持久化复核记录，无法返回真实状态",
+    )
 
 
-@router.get("/pending-reviews", response_model=PendingReviewsResponse)
-async def get_pending_reviews(
-    workflow: ReviewWorkflow = Depends(get_review_workflow)
-):
+@router.get(
+    "/pending-reviews",
+    status_code=501,
+    responses={501: {"model": ErrorResponse, "description": "复核持久化尚未实现"}},
+)
+async def get_pending_reviews(http_request: Request):
     """
     获取待复核列表
+
+    尚未实现：不存在跨请求存活的复核记录，不能返回进程内实例列表。
     """
-    try:
-        reviews = workflow.get_pending_reviews()
-        
-        return PendingReviewsResponse(
-            count=len(reviews),
-            reviews=reviews
-        )
-        
-    except Exception as e:
-        logger.error(f"获取待复核列表失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+    logger.info("待复核列表不可用：尚无真实复核持久化")
+    return not_implemented_response(
+        http_request,
+        operation="list_pending_reviews",
+        message="待复核列表尚未实现：系统尚未持久化复核记录",
+    )

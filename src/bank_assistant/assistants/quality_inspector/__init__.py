@@ -5,7 +5,7 @@
 from .conversation_parser import ConversationParser, ParsedConversation, DialogueTurn
 from .speech_to_text import SpeechToTextProcessor, TranscriptionResult
 from .auto_inspector import AutoInspector, InspectionReport, QualityIssue
-from .report_generator import ReportGenerator, ReviewWorkflow
+from .report_generator import ReportGenerator
 
 __all__ = [
     "ConversationParser",
@@ -16,6 +16,5 @@ __all__ = [
     "AutoInspector",
     "InspectionReport",
     "QualityIssue",
-    "ReportGenerator",
-    "ReviewWorkflow"
+    "ReportGenerator"
 ]
