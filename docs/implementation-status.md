@@ -1,7 +1,7 @@
 # 执行进度
 
 当前里程碑：M4（进行中）；M1–M3 已交付
-当前任务：M4 T21 报告导出（#22）；M5 T24 质检复核页（#25）并行
+当前任务：M4 T21 报告导出（#22）；M5 T25 演示脚本与端到端（#26）并行
 当前状态：M1–M3 READY_FOR_ACCEPTANCE；M4/M5 IN_PROGRESS（数据库部署方案已于 2026-11-12 调整，见 ADR-0006；实现待办见下）
 本机代码分支：`feat/bank-assistant`
 本机代码SHA：`979b076`（后续提交见 git log）
@@ -102,8 +102,8 @@ Ubuntu 与 Mac 同 SHA；两端 `uv run pytest tests -q` 均 144 用例全过（
 |---|---|---|
 | #23 T22 前端骨架+登录+版本页 | DONE | web build/test 通过；GET /system/version 真实数据、无密钥 |
 | #24 T23 坐席工作台页 | DONE | web 24 tests；引用可打开原文 |
-| #25 T24 质检复核页 | IN_PROGRESS | worktree 中进行 |
-| #26 T25 演示脚本与端到端 | BLOCKED | 等 #25 |
+| #25 T24 质检复核页 | DONE | web 47 tests；409 冲突刷新 + 完成门禁 |
+| #26 T25 演示脚本与端到端 | IN_PROGRESS | worktree 中进行 |
 
 ## M4 工单状态
 
