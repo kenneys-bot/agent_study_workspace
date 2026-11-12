@@ -2,11 +2,12 @@ SHELL := /bin/bash
 .DEFAULT_GOAL := help
 UV := uv
 COMPOSE := docker compose -f deploy/compose.yml
+ENV_FILE ?= .env
 
-.PHONY: help doctor test-unit test-integration test-e2e build web-install web-dev web-build web-test up down smoke seed-demo seed-demo-accounts index-rebuild index-info worker sync-check eval train backup restore-check clean
+.PHONY: help doctor test-unit test-integration test-e2e e2e build web-install web-dev web-build web-test up down smoke seed-demo seed-demo-accounts seed-demo-conversations demo-reset demo-real-model-smoke index-rebuild index-info worker sync-check eval train backup restore-check clean
 
 help: ## 列出可用命令
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
 doctor: ## 检查本机依赖、配置与端口（不打印任何秘密值）
 	@bash scripts/doctor.sh
@@ -37,8 +38,10 @@ web-test: ## 前端组件测试（mock fetch，不需要真实后端）
 test-integration: ## [M2] PostgreSQL 空库迁移与数据库连通性集成测试
 	@bash scripts/test-integration.sh
 
-test-e2e: ## [M5] 隔离演示环境端到端测试
-	@echo "NOT_IMPLEMENTED: test-e2e 在 M5 实现" >&2; exit 2
+test-e2e: ## [M5] 浏览器端到端：隔离 compose 数据库 + 后端 + 前端（Playwright）
+	@bash scripts/test-e2e.sh
+
+e2e: test-e2e ## [M5] test-e2e 的别名（issue #26 使用 make e2e）
 
 up: ## 构建并启动 API 容器（需要 .env 或环境变量提供必填配置）
 	@$(COMPOSE) up -d --build api
@@ -51,10 +54,20 @@ down: ## 停止并移除 API 容器
 smoke: ## [M1] 真实启动容器，断言存活、就绪与错误路径
 	@bash scripts/smoke.sh
 
-seed-demo: ## [M3/M4] 只导入合成演示数据（知识 + 规则），幂等
+seed-demo: ## [M3/M4/M5] 幂等导入：演示账号 + 知识 + 规则 + 六段会话与待复核质检
 	@$(UV) run python scripts/seed_demo_accounts.py
 	@$(UV) run python scripts/seed_demo.py
 	@$(UV) run python scripts/seed_demo_rules.py
+	@$(UV) run python scripts/seed_demo_conversations.py
+
+seed-demo-conversations: ## [M5] 只导入六段合成演示会话并生成待复核质检（需先有账号/规则）
+	@$(UV) run python scripts/seed_demo_conversations.py
+
+demo-reset: ## [M5] 只重置 bank_assistant_demo（必须 DB=bank_assistant_demo CONFIRM=yes；DRY_RUN=1 可预演）
+	@$(UV) run python scripts/demo_reset.py --db="$(DB)" --confirm="$(CONFIRM)" $(if $(DRY_RUN),--dry-run,)
+
+demo-real-model-smoke: ## [M5] 真实云 chat + 真实 embedding 冒烟（凭据缺失则失败；ENV_FILE 可覆盖）
+	@ENV_FILE="$(ENV_FILE)" $(UV) run python scripts/demo_real_model_smoke.py
 
 seed-demo-accounts: ## [M3] 显式创建演示作者/审核人账号（不导入知识）
 	@$(UV) run python scripts/seed_demo_accounts.py

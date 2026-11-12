@@ -317,3 +317,26 @@ export interface InspectionDetail {
   updated_at: string
   findings: InspectionFinding[]
 }
+
+/* ---------------------------------------------------------------------------
+ * 报告导出（T21 #22）：固定 inspection_id + review_revision 的快照。
+ * 内容由后端落盘并返回，前端不解构、不重新生成。
+ * ------------------------------------------------------------------------- */
+
+export type ReportFormat = 'json' | 'html'
+
+export interface ReportExportSummary {
+  export_id: string
+  inspection_id: string
+  review_revision: number
+  format: string
+  content_hash: string
+  artifact_ref: string
+  generated_by: string
+  created_at: string
+  content_url: string
+}
+
+export interface ReportExportDetail extends ReportExportSummary {
+  content: unknown
+}

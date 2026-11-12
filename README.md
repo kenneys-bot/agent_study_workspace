@@ -22,7 +22,7 @@
 | M1 修通后端 | READY_FOR_ACCEPTANCE | [M1 报告](docs/milestones/M1-report.md) |
 | M2 存储与权限 | READY_FOR_ACCEPTANCE | [M2 报告](docs/milestones/M2-report.md) |
 | M3 坐席辅助 | READY_FOR_ACCEPTANCE | [M3 报告](docs/milestones/M3-report.md) |
-| M4 质检闭环 / M5 工作台 | IN_PROGRESS | [进度文件](docs/implementation-status.md) |
+| M4 质检闭环 / M5 工作台 | READY_FOR_ACCEPTANCE | [M5 报告](docs/milestones/M5-report.md) |
 
 唯一进度状态源是 [docs/implementation-status.md](docs/implementation-status.md)；阶段报告在 `docs/milestones/`。
 
@@ -47,8 +47,8 @@ export DATABASE_URL=postgresql+psycopg://<user>:<password>@127.0.0.1:15432/bank_
 
 `localhost` 指 Mac 自己；只有建立转发后 `127.0.0.1:15432` 才指向服务器。数据库按用途隔离：`bank_assistant_dev` / `bank_assistant_demo` / `bank_assistant_test` / `bank_assistant_restore_check`——自动化测试只碰 `*_test`，恢复验证只写 `*_restore_check`，不明原因连不上就**显式失败**，不回退 SQLite/mock。详见 [ADR-0006](docs/adr/0006-postgres-on-ubuntu-only.md)。
 
-尚未实现的命令（`up/down/smoke/eval/train/backup/restore-check/test-e2e`）
-会**非零退出并说明属于哪个里程碑**，不会假装成功。
+尚未实现的命令（`eval/train/backup/restore-check`）会**非零退出并说明属于哪个里程碑**，
+不会假装成功；`up/down/smoke/test-e2e` 已实现。
 
 ### 本地界面（M5）
 
@@ -67,7 +67,7 @@ make web-dev       # 启动 Vite 开发服务器 → http://localhost:5173
 ### 演示知识与版本化索引（M3）
 
 ```bash
-make seed-demo       # 幂等导入 32 条合成演示知识（30 条在有效期内 + 2 条边界用例）
+make seed-demo       # 幂等导入账号 + 32 条知识 + 6 条规则 + 六段会话与待复核质检
 make index-rebuild   # 用 fastembed + BAAI/bge-small-zh-v1.5（512 维）重建索引并切换指针
 make index-info      # 打印活动索引版本、校准向量哈希与清单摘要
 ```
@@ -87,7 +87,7 @@ make index-info      # 打印活动索引版本、校准向量哈希与清单摘
 ### 质检规则版本与演示规则集（M4-01）
 
 ```bash
-make seed-demo       # 幂等导入：演示账号 + 32 条演示知识 + 6 条演示规则
+make seed-demo       # 幂等导入：演示账号 + 32 条知识 + 6 条规则 + 六段会话与待复核质检
 ```
 
 - 演示规则在 `data/demo/rules/`：挂失 2 条、信用卡费用 2 条、投诉 2 条，覆盖
@@ -124,6 +124,53 @@ uv run python -m bank_assistant.worker --once   # 本地验证：抽干当前队
   `(inspection_id, rule_version_id)` 唯一约束，保证**同一质检只有一个最终结果**、重复投递
   不产生重复判断（CT-11）。模型/校验失败写稳定 `error_code` 与安全诊断，重试上限
   `TASK_MAX_ATTEMPTS`（默认 3）后终结为 `failed`；不会用空 findings 冒充“无问题”。
+
+## 演示与浏览器端到端（M5）
+
+8–10 分钟演示脚本见 [docs/demo-script.md](docs/demo-script.md)。所有演示数据为合成数据；
+候选答复不是办理结果，风险命中不是违规认定。
+
+```bash
+# 演示库只允许 bank_assistant_demo；dev/test/restore 一律不碰
+export DATABASE_URL='postgresql+psycopg://<user>:<password>@127.0.0.1:15432/bank_assistant_demo'
+
+make demo-reset DB=bank_assistant_demo CONFIRM=yes DRY_RUN=1   # 先预演，不删数据
+make demo-reset DB=bank_assistant_demo CONFIRM=yes             # 只清空 demo 库
+make seed-demo                                                 # 幂等种子（含 3 个待复核任务）
+make index-rebuild
+make up                                                        # API → :8000
+make web-dev                                                   # 前端 → :5173
+```
+
+`make demo-reset` 的安全闸门：必须显式 `DB=bank_assistant_demo` + `CONFIRM=yes`，
+`DATABASE_URL` 的库名必须恰好是 `bank_assistant_demo`；dev/test/restore 与
+staging/production 一律拒绝（单测见 `tests/test_demo_reset.py`）。
+
+### 浏览器 e2e（Playwright）
+
+```bash
+cd web && npx playwright install chromium   # 首次需要浏览器
+cd .. && make test-e2e   # 等价别名：make e2e
+```
+
+`make test-e2e` 会启动**一次性的本机 compose PostgreSQL**（独立项目名/端口/卷，库名
+`bank_assistant_demo`）、隔离后端（`MODEL_MODE=replay`）与前端 preview，覆盖
+登录 → 坐席工作台生成候选答复（回放，不烧钱）→ 质检任务 → 复核确认/驳回误报 → 报告导出。
+截图与下载产物在 `web/e2e/screenshots/`（已 gitignore）。
+
+> **ADR-0006 过渡做法（必须在报告中标注）**：正式方案是 Mac 经 SSH 隧道访问 Ubuntu 的
+> `bank_assistant_test` 库。T25 先用本机 compose 数据库把 e2e 跑通；自动化测试**只**操作
+> 独立项目的一次性 `bank_assistant_demo`，绝不接触 dev/test/restore 库。
+> TODO(数据库访问工单)：隧道 + `*_test` 方案落地后移除本机 compose 依赖。
+
+### 真实云模型链路证据
+
+```bash
+make demo-real-model-smoke          # 读取 .env；缺凭据则明确失败
+```
+
+该目标只做一次真实 chat + 一次真实 embedding，打印 `mode/provider/model/status` 与
+embedding 的模型/维度/范数，**不打印密钥**。回放运行不能替代这条证据。
 
 ## 设计与决策
 

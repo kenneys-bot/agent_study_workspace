@@ -6,6 +6,8 @@ import { describe, expect, it, vi } from 'vitest'
 import type {
   ConversationPublic,
   InspectionDetail,
+  ReportExportDetail,
+  ReportExportSummary,
   ReviewDecision,
   ReviewDetail,
 } from '../api/types'
@@ -244,10 +246,29 @@ const COMPLETED: ReviewDetail = {
   ],
 }
 
+const REPORT_SUMMARY: ReportExportSummary = {
+  export_id: 'report-export-1',
+  inspection_id: INSPECTION_ID,
+  review_revision: 3,
+  format: 'json',
+  content_hash: 'sha256-report-content',
+  artifact_ref: 'reports/report-export-1.json',
+  generated_by: 'reviewer-0001',
+  created_at: '2026-11-12T09:06:00Z',
+  content_url: '/api/v1/reports/report-export-1',
+}
+
+const REPORT_DETAIL: ReportExportDetail = {
+  ...REPORT_SUMMARY,
+  content: { review_revision: 3, findings: [] },
+}
+
 interface StubOptions {
   review?: (call: number) => Response | Promise<Response>
   decision?: () => Response | Promise<Response>
   complete?: () => Response | Promise<Response>
+  reportCreate?: () => Response | Promise<Response>
+  reportRead?: () => Response | Promise<Response>
 }
 
 function stubDetailApi(options: StubOptions = {}) {
@@ -262,6 +283,12 @@ function stubDetailApi(options: StubOptions = {}) {
       }
       if (url.endsWith('/complete') && method === 'POST') {
         return (options.complete ?? (() => jsonResponse(COMPLETED)))()
+      }
+      if (url.endsWith('/api/v1/reports') && method === 'POST') {
+        return (options.reportCreate ?? (() => jsonResponse(REPORT_SUMMARY, 201)))()
+      }
+      if (url.includes('/api/v1/reports/') && method === 'GET') {
+        return (options.reportRead ?? (() => jsonResponse(REPORT_DETAIL)))()
       }
       if (url.includes('/api/v1/reviews/') && method === 'GET') {
         reviewCalls += 1
@@ -589,6 +616,53 @@ describe('ReviewDetailPage', () => {
         screen.queryByRole('button', { name: '提交中…' }),
       ).not.toBeInTheDocument()
     })
+  })
+
+  it('导出报告固定 inspection_id 与当前 revision，并展示内容哈希', async () => {
+    setToken('jwt-review')
+    const user = userEvent.setup()
+    const fetchMock = stubDetailApi()
+    const createObjectURL = vi.fn(() => 'blob:report')
+    Object.defineProperty(URL, 'createObjectURL', {
+      value: createObjectURL,
+      configurable: true,
+    })
+    Object.defineProperty(URL, 'revokeObjectURL', {
+      value: vi.fn(),
+      configurable: true,
+    })
+    const anchorClick = vi
+      .spyOn(HTMLAnchorElement.prototype, 'click')
+      .mockImplementation(() => undefined)
+    renderDetailPage()
+
+    await screen.findByTestId('review-status')
+    await user.click(screen.getByTestId('export-json'))
+
+    await waitFor(() => {
+      expect(
+        fetchMock.mock.calls.some(
+          ([input, init]) =>
+            String(input).endsWith('/api/v1/reports') && init?.method === 'POST',
+        ),
+      ).toBe(true)
+    })
+    const createCall = fetchMock.mock.calls.find(
+      ([input, init]) =>
+        String(input).endsWith('/api/v1/reports') && init?.method === 'POST',
+    )
+    expect(JSON.parse(String(createCall?.[1]?.body))).toEqual({
+      inspection_id: INSPECTION_ID,
+      format: 'json',
+      review_revision: 3,
+    })
+    expect(await screen.findByTestId('export-result')).toHaveTextContent(
+      'sha256-report-content',
+    )
+    expect(screen.getByTestId('export-result')).toHaveTextContent('revision 3')
+    expect(createObjectURL).toHaveBeenCalledTimes(1)
+    expect(anchorClick).toHaveBeenCalledTimes(1)
+    anchorClick.mockRestore()
   })
 
   it.each([

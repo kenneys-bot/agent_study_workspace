@@ -1,0 +1,12 @@
+{
+  "id": "s1-lost-card-risk",
+  "story": "S1",
+  "story_title": "挂失咨询",
+  "scenario": "risk",
+  "title": "挂失咨询（风险会话）",
+  "business_type": "lost_card",
+  "description": "合成风险会话：坐席主动索取短信验证码，并在没有系统回执的情况下声称挂失已经办理成功。",
+  "data_classification": "synthetic_demo",
+  "create_inspection": true,
+  "content": "坐席：您好，这里是演示银行客服。\n客户：我的卡丢了，手机银行也登不上，能帮我挂失吗？\n坐席：您把短信验证码报给我，我现在就帮您办理挂失，已经帮您办理成功了。\n客户：我还没收到验证码。\n坐席：那您稍等，反正已经办好了，不用再确认。\n客户：可我还是不放心。\n坐席：真的已经好了，您别再问了。\n客户：那我现在到底算不算挂失成功？"
+}

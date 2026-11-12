@@ -17,7 +17,7 @@ import json
 import logging
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Mapping, Optional, Sequence, Type
+from typing import Any, Callable, Mapping, Optional, Sequence, Type
 
 import httpx
 from pydantic import BaseModel, ValidationError
@@ -48,6 +48,11 @@ class ModelCallStatus(str, Enum):
     INVALID_STRUCTURE = "invalid_structure"
     EMPTY_CONTENT = "empty_content"
     PROVIDER_UNAVAILABLE = "provider_unavailable"
+
+
+ReplayResponder = Callable[
+    [Sequence[Mapping[str, str]], Optional[Type[BaseModel]]], str
+]
 
 
 @dataclass(frozen=True)
@@ -110,11 +115,13 @@ class ModelGateway:
         primary: ModelProvider = ModelProvider.DEEPSEEK,
         fallback: Optional[ModelProvider] = None,
         replay_responses: Optional[Sequence[str]] = None,
+        replay_responder: Optional[ReplayResponder] = None,
         http_client: Optional[httpx.Client] = None,
         max_retries: Optional[int] = None,
     ) -> None:
-        self._replay = replay_responses is not None
+        self._replay = replay_responses is not None or replay_responder is not None
         self._replay_responses = list(replay_responses or [])
+        self._replay_responder = replay_responder
         self._replay_index = 0
         self._max_retries = settings.LLM_MAX_RETRIES if max_retries is None else max_retries
         self._http_client = http_client
@@ -176,7 +183,20 @@ class ModelGateway:
 
     @classmethod
     def from_settings(cls, **kwargs: Any) -> "ModelGateway":
-        """按环境变量构建；缺少主供应商凭据时直接抛能力不可用。"""
+        """按环境变量构建；缺少主供应商凭据时直接抛能力不可用。
+
+        ``MODEL_MODE=replay`` 是显式回放：不需要云凭据，但必须使用确定性的
+        回放处理器并在结果里标记 ``mode=replay``；它不会回退到 live，也不会
+        把回放内容当成真实模型结论。
+        """
+        if settings.MODEL_MODE == "replay":
+            from bank_assistant.demo.replay import DemoReplayResponder
+
+            replay_responses = kwargs.pop("replay_responses", None)
+            if replay_responses is not None:
+                return cls(replay_responses=replay_responses, **kwargs)
+            return cls(replay_responder=DemoReplayResponder(), **kwargs)
+
         provider = _provider_from_name(settings.MODEL_PROVIDER)
         fallback = (
             _provider_from_name(settings.MODEL_FALLBACK_PROVIDER)
@@ -223,6 +243,19 @@ class ModelGateway:
     def _complete_replay(
         self, messages: Sequence[Mapping[str, str]], schema: Optional[Type[BaseModel]]
     ) -> ModelResult:
+        if self._replay_responder is not None:
+            try:
+                raw = self._replay_responder(messages, schema)
+            except Exception as exc:  # 回放脚本失败同样必须显式失败
+                return ModelResult(
+                    status=ModelCallStatus.PROVIDER_UNAVAILABLE,
+                    model="replay",
+                    mode="replay",
+                    error=f"replay_error: {type(exc).__name__}: {_short(exc)}",
+                )
+            return self._interpret_text(
+                raw, "stop", schema, None, "replay", "replay", 1, False
+            )
         if self._replay_index >= len(self._replay_responses):
             return ModelResult(
                 status=ModelCallStatus.PROVIDER_UNAVAILABLE,

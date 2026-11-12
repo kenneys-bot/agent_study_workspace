@@ -20,6 +20,9 @@ import type {
   ReviewDecisionInput,
   ReviewDetail,
   ReviewList,
+  ReportExportDetail,
+  ReportExportSummary,
+  ReportFormat,
   ReviewStatus,
   SuggestionCreateInput,
   SuggestionDetail,
@@ -300,5 +303,30 @@ export function fetchInspection(
 ): Promise<InspectionDetail> {
   return request<InspectionDetail>(
     `/api/v1/inspections/${encodeURIComponent(inspectionId)}`,
+  )
+}
+
+/* ---------------------------------------------------------------------------
+ * 报告导出（T21 #22）：POST 固化快照，GET 读取同一份已落盘产物。
+ * ------------------------------------------------------------------------- */
+
+export interface ReportCreateInput {
+  inspection_id: string
+  format: ReportFormat
+  review_revision?: number
+}
+
+export function createReport(
+  input: ReportCreateInput,
+): Promise<ReportExportSummary> {
+  return request<ReportExportSummary>('/api/v1/reports', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+}
+
+export function fetchReport(exportId: string): Promise<ReportExportDetail> {
+  return request<ReportExportDetail>(
+    `/api/v1/reports/${encodeURIComponent(exportId)}`,
   )
 }

@@ -1,0 +1,12 @@
+{
+  "id": "s2-fee-risk",
+  "story": "S2",
+  "story_title": "信用卡费用/还款咨询",
+  "scenario": "risk",
+  "title": "信用卡费用咨询（风险会话）",
+  "business_type": "credit_card_fee",
+  "description": "合成风险会话：客户质疑费用，坐席在没有条款依据和审批结果的情况下直接承诺减免费用。",
+  "data_classification": "synthetic_demo",
+  "create_inspection": true,
+  "content": "客户：这笔费用我不认可，你们必须给我免掉。\n坐席：这个费用我给您免了，不用审批，肯定没问题。\n客户：真的吗？\n坐席：放心，已经给您减免，不会再扣了。\n客户：那我在哪里能看到结果？\n坐席：不用看了，我说免了就免了。\n客户：那我这个费用到底还扣不扣？"
+}
