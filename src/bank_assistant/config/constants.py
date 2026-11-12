@@ -189,8 +189,10 @@ class PromptTemplates:
 
 场景：{scenario}
 客户类型：{customer_type}
+话术风格：{tone}
+数量：{count}
 
-请生成合适的话术，包括问候语、主要内容和结束语。
+请生成{count}个不同的话术，包括问候语、主要内容和结束语。
 """
     
     # 话术推荐模块

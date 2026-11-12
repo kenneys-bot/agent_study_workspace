@@ -8,11 +8,14 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime
 
 from bank_assistant.core.llm_client import LLMClient
-from bank_assistant.core.vector_db import VectorDBClient
+from bank_assistant.core.vector_db import VectorDBClient, QueryError
 from bank_assistant.utils.logger import LoggerMixin
 from bank_assistant.config.constants import PromptTemplates, QuestionTypes
 
 logger = logging.getLogger(__name__)
+
+# 新生成问题与知识库最近邻的距离低于该阈值时，视为知识库已覆盖该问题。
+SIMILAR_QUESTION_DUPLICATE_DISTANCE = 0.9
 
 
 class QuestionValidation:
@@ -135,10 +138,10 @@ class QuestionGenerator(LoggerMixin):
             # 解析返回结果
             questions = self._parse_questions(response)
             
-            # 如果有向量数据库，可以进行相似性验证
+            # 如果有向量数据库，校验新生成的问题是否已被知识库覆盖
             if self.vector_db:
                 questions = self._filter_similar_questions(
-                    question, questions, count
+                    questions, count
                 )
             
             self.logger.info(f"生成了 {len(questions)} 个相似问题")
@@ -284,26 +287,44 @@ FAQ问题列表：
     
     def _filter_similar_questions(
         self,
-        original: str,
         questions: List[str],
         count: int
     ) -> List[str]:
-        """过滤相似问题"""
-        try:
-            results = self.vector_db.query_with_score(
-                query_text=original,
-                n_results=count + 5
+        """校验新生成的问题，剔除知识库中已覆盖的重复问题。
+
+        逐个用新生成的问题查询知识库：最近邻距离低于阈值表示该问题已存在，
+        应过滤掉；知识库为空时没有可比较的对象，保留全部新问题。
+        """
+        filtered = []
+        seen = set()
+
+        for question in questions:
+            question = question.strip()
+            if not question or question in seen:
+                continue
+            seen.add(question)
+
+            neighbors = self.vector_db.query_with_score(
+                query_text=question,
+                n_results=1
             )
-            
-            # 获取与原问题不太相似的问题
-            filtered = []
-            for result in results:
-                if result.get("distance", 1.0) < 0.9:  # 相似度阈值
-                    if result["document"] not in filtered:
-                        filtered.append(result["document"])
-            
-            return filtered[:count]
-            
-        except Exception as e:
-            self.logger.warning(f"相似问题过滤失败: {str(e)}")
-            return questions
+            if self._is_covered_by_knowledge_base(neighbors):
+                continue
+
+            filtered.append(question)
+            if len(filtered) >= count:
+                break
+
+        return filtered
+
+    @staticmethod
+    def _is_covered_by_knowledge_base(neighbors: List[Dict[str, Any]]) -> bool:
+        """判断最近邻是否已覆盖该问题；缺少距离分数时显式报错。"""
+        if not neighbors:
+            return False
+
+        distance = neighbors[0].get("distance")
+        if distance is None:
+            raise QueryError("相似问校验缺少距离分数，无法判断是否重复")
+
+        return distance < SIMILAR_QUESTION_DUPLICATE_DISTANCE

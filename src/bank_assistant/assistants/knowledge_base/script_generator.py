@@ -48,9 +48,9 @@ class CallScript:
     def format_full_script(self) -> str:
         """格式化完整话术"""
         return f"""
-{greeting}
-{main_content}
-{closing}
+{self.greeting}
+{self.main_content}
+{self.closing}
         """.strip()
 
 
@@ -88,9 +88,9 @@ class CollectionScript:
     def format_full_script(self) -> str:
         """格式化完整话术"""
         return f"""
-{opening}
-{negotiation}
-{commitment_request}
+{self.opening}
+{self.negotiation}
+{self.commitment_request}
         """.strip()
 
 
@@ -132,7 +132,9 @@ class ScriptGenerator(LoggerMixin):
         try:
             prompt = PromptTemplates.SCRIPT_GENERATE.format(
                 scenario=scenario,
-                customer_type=customer_type
+                customer_type=customer_type,
+                count=count,
+                tone=tone
             )
             
             response = self.llm_client.generate_text(prompt)
@@ -140,7 +142,7 @@ class ScriptGenerator(LoggerMixin):
             # 解析返回结果
             scripts = self._parse_call_scripts(
                 response, scenario, customer_type
-            )
+            )[:count]
             
             self.logger.info(f"生成了 {len(scripts)} 个电话话术")
             return scripts
@@ -153,7 +155,8 @@ class ScriptGenerator(LoggerMixin):
         self,
         overdue_days: int,
         customer_risk: str = CustomerTypes.LOW_RISK,
-        count: int = 3
+        count: int = 3,
+        tone: str = "professional"
     ) -> List[CollectionScript]:
         """
         生成电催话术
@@ -162,6 +165,7 @@ class ScriptGenerator(LoggerMixin):
             overdue_days (int): 逾期天数
             customer_risk (str): 客户风险等级
             count (int): 生成数量
+            tone (str): 话术风格
             
         Returns:
             List[CollectionScript]: 电催话术列表
@@ -172,6 +176,7 @@ class ScriptGenerator(LoggerMixin):
 
 逾期天数：{overdue_days}天
 客户风险等级：{customer_risk}
+话术风格：{tone}
 
 要求：
 1. 开场白应礼貌且专业
@@ -186,7 +191,7 @@ class ScriptGenerator(LoggerMixin):
             # 解析返回结果
             scripts = self._parse_collection_scripts(
                 response, overdue_days, customer_risk
-            )
+            )[:count]
             
             self.logger.info(f"生成了 {len(scripts)} 个电催话术")
             return scripts
