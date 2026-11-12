@@ -40,6 +40,9 @@ services:
       timeout: 3s
       retries: 12
       start_period: 10s
+    extra_hosts:
+      # 容器内访问宿主机的 SSH 隧道（Mac Docker Desktop / Linux host-gateway）。
+      - "host.docker.internal:host-gateway"
     volumes:
       # 版本化索引是可重建产物，由宿主机构建；容器只读挂载。
       - ../data:/app/data:ro

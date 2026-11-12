@@ -132,15 +132,21 @@ uv run python -m bank_assistant.worker --once   # 本地验证：抽干当前队
 
 ```bash
 # 演示库只允许 bank_assistant_demo；dev/test/restore 一律不碰
+# 宿主机命令（uv/集成测试）用 127.0.0.1；make up 容器内改用 host.docker.internal
 export DATABASE_URL='postgresql+psycopg://<user>:<password>@127.0.0.1:15432/bank_assistant_demo'
 
 make demo-reset DB=bank_assistant_demo CONFIRM=yes DRY_RUN=1   # 先预演，不删数据
 make demo-reset DB=bank_assistant_demo CONFIRM=yes             # 只清空 demo 库
 make seed-demo                                                 # 幂等种子（含 3 个待复核任务）
 make index-rebuild
-make up                                                        # API → :8000
+
+# 演示建议用宿主机进程：直接使用宿主机的索引与 fastembed 缓存
+uv run uvicorn bank_assistant.main:app --host 127.0.0.1 --port 8000
 make web-dev                                                   # 前端 → :5173
 ```
+
+`make up` 仍可用于只验证 API 容器健康（`/health/ready`）；若要在容器内跑完整候选答复，
+数据库地址需写成 `host.docker.internal:15432`，并让容器能加载 fastembed 模型缓存。
 
 `make demo-reset` 的安全闸门：必须显式 `DB=bank_assistant_demo` + `CONFIRM=yes`，
 `DATABASE_URL` 的库名必须恰好是 `bank_assistant_demo`；dev/test/restore 与

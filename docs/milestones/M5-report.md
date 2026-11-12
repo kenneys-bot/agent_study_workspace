@@ -9,7 +9,7 @@ demo 环境、再次指定目标，不接触生产库」以及 M5 验收中的�
 
 | #26 验收项 | 结果 | 证据 |
 |---|---|---|
-| 干净 checkout 按 README 可启动 | PASS | README「演示与浏览器端到端（M5）」；`make seed-demo` + `make index-rebuild` + `make up` + `make web-dev`；e2e 用同一命令链的隔离变体 |
+| 干净 checkout 按 README 可启动 | PASS | README「演示与浏览器端到端（M5）」；`make seed-demo` + `make index-rebuild` + 宿主机 `uvicorn` + `make web-dev`；e2e 用同一命令链的隔离变体。容器镜像已构建、`/health/ready` 已验证；容器内完整候选答复不作为本票验收路径 |
 | 三个业务故事可完成 | PASS | `data/demo/conversations/` 六段合成会话；Playwright 覆盖坐席工作台、质检、复核、导出 |
 | 至少一条真实云模型链路成功 | PASS | `make demo-real-model-smoke`：DeepSeek chat `succeeded` + 真实 fastembed embedding 512 维；见 §4 |
 | 回放演示单独标识 | PASS | `MODEL_MODE=replay` 时 `suggestion.mode`、`model_runs.mode`、系统版本页均标记 `replay`；本报告与演示脚本不把回放当模型质量证据 |
@@ -130,3 +130,6 @@ make demo-real-model-smoke        → chat + embedding 通过
 - `bank_assistant_demo` 里的回放任务不是模型质量证据；M6 的评测需要真实模型与冻结测试集。
 - ADR-0006 过渡做法见 §3；后续数据库访问工单必须替换本机 compose e2e。
 - `.env` 的 `EMBEDDING_PROVIDER=local` 历史别名已兼容；新配置建议写 `fastembed`。
+- 容器路径：`bank-assistant:t25` 镜像构建成功，`/health/ready` 通过（`host.docker.internal`
+  连宿主数据库）；容器内跑候选答复还需要 fastembed 模型缓存/可写索引，本轮未作为验收路径，
+  演示使用宿主机 `uvicorn`（README 与演示脚本已按此写明）。

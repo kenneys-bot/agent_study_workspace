@@ -17,6 +17,7 @@
 cd <repo>
 cp .env.example .env          # 填 DEEPSEEK_API_KEY 等；.env 不进 Git
 # 演示库只允许 bank_assistant_demo；dev/test/restore 一律不碰
+# 宿主机命令（seed/index/uv）用 127.0.0.1
 export DATABASE_URL='postgresql+psycopg://<user>:<password>@127.0.0.1:15432/bank_assistant_demo'
 ```
 
@@ -40,9 +41,14 @@ make seed-demo
 make index-rebuild
 
 # 后端与前端
-make up                       # API → http://localhost:8000
+# 演示建议用宿主机进程：可直接使用宿主机的索引与 fastembed 缓存
+uv run uvicorn bank_assistant.main:app --host 127.0.0.1 --port 8000
+
 make web-dev                  # 前端 → http://localhost:5173
 ```
+
+> `make up` 容器只用于健康检查；容器内跑候选答复时数据库要写
+> `host.docker.internal:15432`，并确保 fastembed 模型缓存可用。
 
 `make seed-demo` 里的质检任务由**真实 worker + 显式回放**执行（不调用云模型），
 因此会立刻得到 3 个 `pending` 复核任务；控制台会打印复核 ID。
