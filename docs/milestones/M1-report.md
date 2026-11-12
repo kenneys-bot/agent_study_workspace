@@ -59,7 +59,7 @@
 
 ## 遗留风险和外部依赖
 
-1. Ubuntu 检出点已同步到 `2c5e0d7`（与本机一致、工作树干净，`git reset --hard` + `git fetch`）；Ubuntu 上的 `uv sync` 因 pypi 约 9 s 较慢，单元测试在 M5 验收前于 Ubuntu 复跑一次并记录。
+1. Ubuntu 检出点已同步到 `2c5e0d7`（与本机一致、工作树干净，`git reset --hard` + `git fetch`）；Ubuntu 端 `uv sync --frozen` 安装 113 包（exit 0），`uv run pytest tests -q` **144 个用例全过**（Python 3.13.14 / fastapi 0.162.5）——两端同一 SHA、同一测试结果。
 2. 语音转写仍未实现（首版不含，计划明确排除）。
 3. `git worktree` 并行开发产生 9 个 worktree，收尾时清理。
 
