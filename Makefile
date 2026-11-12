@@ -3,10 +3,10 @@ SHELL := /bin/bash
 UV := uv
 COMPOSE := docker compose -f deploy/compose.yml
 
-.PHONY: help doctor test-unit test-integration test-e2e build up down smoke seed-demo sync-check eval train backup restore-check clean
+.PHONY: help doctor test-unit test-integration test-e2e build up down smoke seed-demo seed-demo-accounts index-rebuild index-info sync-check eval train backup restore-check clean
 
 help: ## 列出可用命令
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
 doctor: ## 检查本机依赖、配置与端口（不打印任何秘密值）
 	@bash scripts/doctor.sh
@@ -40,7 +40,17 @@ smoke: ## [M1] 真实启动容器，断言存活、就绪与错误路径
 	@bash scripts/smoke.sh
 
 seed-demo: ## [M3] 只导入合成演示数据，幂等
-	@echo "NOT_IMPLEMENTED: seed-demo 在 M3 实现" >&2; exit 2
+	@$(UV) run python scripts/seed_demo_accounts.py
+	@$(UV) run python scripts/seed_demo.py
+
+seed-demo-accounts: ## [M3] 显式创建演示作者/审核人账号（不导入知识）
+	@$(UV) run python scripts/seed_demo_accounts.py
+
+index-rebuild: ## [M3] 重建版本化索引，校验后原子切换活动指针
+	@$(UV) run python scripts/index_rebuild.py
+
+index-info: ## [M3] 打印当前活动索引版本与清单摘要
+	@$(UV) run python scripts/index_info.py
 
 eval: ## [M6] 固定评测（Ubuntu）
 	@echo "NOT_IMPLEMENTED: eval 在 M6 实现；需要 EVAL_CONFIG=path" >&2; exit 2

@@ -14,6 +14,8 @@ BASELINE = "0001_schema_meta"
 AUTH_REVISION = "0002_users"
 KNOWLEDGE_REVISION = "0003_knowledge"
 TASKS_REVISION = "0005_tasks"
+CHUNKS_REVISION = "0006_knowledge_chunks"
+M2_MERGE_HEAD = "cf1edc530a0c"
 
 
 def _script() -> ScriptDirectory:
@@ -51,3 +53,15 @@ def test_tasks_revision_branches_from_users_and_is_reachable():
     assert revision is not None
     assert revision.down_revision == AUTH_REVISION
     assert TASKS_REVISION in {item.revision for item in script.walk_revisions()}
+
+
+def test_knowledge_chunks_revision_extends_the_current_single_head():
+    """T14 的 knowledge_chunks 只能接在 M2 合并 head 之后，不另起分支。"""
+    script = _script()
+    revision = script.get_revision(CHUNKS_REVISION)
+
+    assert revision is not None
+    assert revision.down_revision == M2_MERGE_HEAD
+    assert CHUNKS_REVISION in {item.revision for item in script.walk_revisions()}
+    assert len(script.get_heads()) == 1
+    assert script.get_heads() == [CHUNKS_REVISION]

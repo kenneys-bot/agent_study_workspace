@@ -73,6 +73,18 @@ class Settings(BaseSettings):
     # PostgreSQL数据库配置
     DATABASE_URL: str = Field(..., validation_alias="DATABASE_URL")
 
+    # 演示知识与版本化索引（M3，ADR-0005）：索引产物默认落在仓库内 data/index，
+    # 已被 .gitignore 忽略；脚本只读取这里，不硬编码路径。
+    DEMO_SCOPE_ID: str = Field(default="demo-bank", validation_alias="DEMO_SCOPE_ID")
+    INDEX_DIR: str = Field(default="data/index", validation_alias="INDEX_DIR")
+    EMBEDDING_PROVIDER: str = Field(
+        default="fastembed", validation_alias="EMBEDDING_PROVIDER"
+    )
+    EMBEDDING_MODEL_NAME: str = Field(
+        default="BAAI/bge-small-zh-v1.5",
+        validation_alias="EMBEDDING_MODEL_NAME",
+    )
+
     # 任务队列（契约 §3）：重试上限默认 3；worker 租约默认 60 秒。
     TASK_MAX_ATTEMPTS: int = Field(
         default=3, ge=1, validation_alias="TASK_MAX_ATTEMPTS"

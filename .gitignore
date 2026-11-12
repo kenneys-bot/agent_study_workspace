@@ -26,6 +26,8 @@ dist/
 data/raw/
 data/curated/
 data/splits/
+# 版本化索引产物（含 Chroma 集合、清单与活动指针）：可由数据重建，不入 Git
+data/index/
 artifacts/
 *.sqlite3
 *.db

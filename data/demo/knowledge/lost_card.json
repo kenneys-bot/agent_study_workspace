@@ -1,0 +1,126 @@
+{
+  "scenario": "挂失咨询",
+  "business_type": "lost_card",
+  "entries": [
+    {
+      "id": "lost-card-pub-01",
+      "title": "征信不良信息的保存期限（公开监管要点摘要）",
+      "source_type": "public_regulation",
+      "source_uri": "https://www.gov.cn/zhengce/2013-01/29/content_2602614.htm",
+      "business_type": "lost_card",
+      "version_no": 1,
+      "demo_only": false,
+      "valid_from": "2025-01-01T00:00:00+00:00",
+      "valid_to": null,
+      "content": "《征信业管理条例》公开要点摘要（自行组织，不复制条文原文）：不良信息自不良行为或者事件终止之日起计算保存期限，达到公开规定的期限后应当删除；信息主体认为信息存在错误、遗漏的，可以向征信机构或者信息提供者提出异议。演示知识只复述公开要点，具体口径以官方公布文本为准。"
+    },
+    {
+      "id": "lost-card-pub-02",
+      "title": "信用卡挂失与异常交易处理（公开监管要点摘要）",
+      "source_type": "public_regulation",
+      "source_uri": "https://www.gov.cn/gongbao/content/2011/content_1893974.htm",
+      "business_type": "lost_card",
+      "version_no": 1,
+      "demo_only": false,
+      "valid_from": "2025-01-01T00:00:00+00:00",
+      "valid_to": null,
+      "content": "《商业银行信用卡业务监督管理办法》公开要点摘要（自行组织，不复制条文原文）：发卡行应在合同中明确挂失、补卡、交易争议处理等规则并履行告知义务；持卡人发现卡片遗失或异常交易时，应及时通过发卡行提供的渠道挂失并配合核实。摘要不构成对任何具体合同条款的复述。"
+    },
+    {
+      "id": "lost-card-pub-03",
+      "title": "金融消费者信息安全与挂失渠道（公开监管要点摘要）",
+      "source_type": "public_regulation",
+      "source_uri": "https://www.gov.cn/zhengce/2020-09/15/content_5712684.htm",
+      "business_type": "lost_card",
+      "version_no": 1,
+      "demo_only": false,
+      "valid_from": "2025-01-01T00:00:00+00:00",
+      "valid_to": null,
+      "content": "《中国人民银行金融消费者权益保护实施办法》公开要点摘要（自行组织，不复制条文原文）：银行应保障金融消费者的信息安全与知情权，提供便捷的咨询、挂失与投诉渠道，并明示办理流程与所需材料。坐席只依据公开要求说明一般流程，不对客户作出超出授权的承诺。"
+    },
+    {
+      "id": "lost-card-pub-04",
+      "title": "征信异议的核查处理（公开监管要点摘要）",
+      "source_type": "public_regulation",
+      "source_uri": "https://www.gov.cn/zhengce/2013-01/29/content_2602614.htm",
+      "business_type": "lost_card",
+      "version_no": 1,
+      "demo_only": false,
+      "valid_from": "2025-01-01T00:00:00+00:00",
+      "valid_to": null,
+      "content": "《征信业管理条例》公开要点摘要（自行组织，不复制条文原文）：信息主体提出异议后，征信机构或者信息提供者应在公开规定的时限内完成核查和处理并书面答复；经核查确有错误、遗漏的，应当更正。挂失咨询中如客户询问信用记录，坐席可说明异议渠道，但不能自行承诺删除记录。"
+    },
+    {
+      "id": "lost-card-demo-01",
+      "title": "挂失受理渠道与身份核验（虚构演示制度）",
+      "source_type": "demo_policy",
+      "source_uri": "https://demo.invalid/bank-assistant/lost-card/demo-01",
+      "business_type": "lost_card",
+      "version_no": 1,
+      "demo_only": true,
+      "valid_from": "2025-01-01T00:00:00+00:00",
+      "valid_to": null,
+      "content": "【虚构演示制度】本演示银行（虚构机构）规定：客户可通过演示客服热线、演示手机银行或演示网点提出挂失。受理前核验姓名、证件号码后四位与预留手机号；三项中两项匹配即可进入临时冻结，全部匹配后办理正式挂失。本制度仅为演示编写，不对应任何真实机构制度或话术。"
+    },
+    {
+      "id": "lost-card-demo-02",
+      "title": "临时冻结与正式挂失的区别（虚构演示制度）",
+      "source_type": "demo_policy",
+      "source_uri": "https://demo.invalid/bank-assistant/lost-card/demo-02",
+      "business_type": "lost_card",
+      "version_no": 1,
+      "demo_only": true,
+      "valid_from": "2025-01-01T00:00:00+00:00",
+      "valid_to": null,
+      "content": "【虚构演示制度】本演示银行（虚构机构）规定：临时冻结有效期 24 小时，期间卡片不可消费、不可取现，客户可随时撤销；正式挂失后原卡永久失效，需补发新卡。临时冻结不等于正式挂失，坐席必须向客户说明二者区别与后续材料。本制度仅为演示编写，不对应任何真实机构制度或话术。"
+    },
+    {
+      "id": "lost-card-demo-03",
+      "title": "补卡时限与工本费（虚构演示制度）",
+      "source_type": "demo_policy",
+      "source_uri": "https://demo.invalid/bank-assistant/lost-card/demo-03",
+      "business_type": "lost_card",
+      "version_no": 1,
+      "demo_only": true,
+      "valid_from": "2025-01-01T00:00:00+00:00",
+      "valid_to": null,
+      "content": "【虚构演示制度】本演示银行（虚构机构）规定：正式挂失后第 2 个工作日制卡，普通邮寄 7 个工作日内送达，加急邮寄 3 个工作日内送达；补卡工本费为演示金额 20 元，加急邮寄费为演示金额 15 元，费用以办理页面展示为准。以上金额与时限均为虚构演示数据，不对应任何真实机构制度或话术。"
+    },
+    {
+      "id": "lost-card-demo-04",
+      "title": "挂失生效时点与责任划分（虚构演示制度）",
+      "source_type": "demo_policy",
+      "source_uri": "https://demo.invalid/bank-assistant/lost-card/demo-04",
+      "business_type": "lost_card",
+      "version_no": 1,
+      "demo_only": true,
+      "valid_from": "2025-01-01T00:00:00+00:00",
+      "valid_to": null,
+      "content": "【虚构演示制度】本演示银行（虚构机构）规定：挂失自系统受理成功时生效，受理成功时间以系统回执为准；生效前发生的交易按演示合同约定处理，客户有异议可提交交易争议。坐席不得口头判断责任归属，应引导客户提交材料并由演示争议岗复核。本制度仅为演示编写，不对应任何真实机构制度或话术。"
+    },
+    {
+      "id": "lost-card-demo-05",
+      "title": "境外与异地挂失的处理路径（虚构演示制度）",
+      "source_type": "demo_policy",
+      "source_uri": "https://demo.invalid/bank-assistant/lost-card/demo-05",
+      "business_type": "lost_card",
+      "version_no": 1,
+      "demo_only": true,
+      "valid_from": "2025-01-01T00:00:00+00:00",
+      "valid_to": null,
+      "content": "【虚构演示制度】本演示银行（虚构机构）规定：境外挂失可通过演示客服热线 7×24 小时受理，异地挂失可在任一演示网点办理；境外补卡仅支持邮寄至演示地址库内地址，不承诺具体到达时间。坐席应记录客户所在时区与联系方式，避免承诺无法核实的时效。本制度仅为演示编写，不对应任何真实机构制度或话术。"
+    },
+    {
+      "id": "lost-card-demo-06",
+      "title": "挂失后争议交易的受理与材料（虚构演示制度）",
+      "source_type": "demo_policy",
+      "source_uri": "https://demo.invalid/bank-assistant/lost-card/demo-06",
+      "business_type": "lost_card",
+      "version_no": 1,
+      "demo_only": true,
+      "valid_from": "2025-01-01T00:00:00+00:00",
+      "valid_to": null,
+      "content": "【虚构演示制度】本演示银行（虚构机构）规定：客户对挂失前交易有异议的，可在挂失后 30 个自然日内提交演示争议申请，材料包括交易时间、金额、商户名称与客户声明；争议岗在 5 个工作日内首次反馈，处理期间不停止计息规则按演示合同执行。本制度仅为演示编写，不对应任何真实机构制度或话术。"
+    }
+  ]
+}

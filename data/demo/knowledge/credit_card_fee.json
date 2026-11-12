@@ -1,0 +1,126 @@
+{
+  "scenario": "信用卡费用与还款咨询",
+  "business_type": "credit_card_fee",
+  "entries": [
+    {
+      "id": "fee-pub-01",
+      "title": "信用卡息费披露与合同约定（公开监管要点摘要）",
+      "source_type": "public_regulation",
+      "source_uri": "https://www.gov.cn/gongbao/content/2011/content_1893974.htm",
+      "business_type": "credit_card_fee",
+      "version_no": 1,
+      "demo_only": false,
+      "valid_from": "2025-01-01T00:00:00+00:00",
+      "valid_to": null,
+      "content": "《商业银行信用卡业务监督管理办法》公开要点摘要（自行组织，不复制条文原文）：发卡行应在信用卡合同中明确计息规则、免息还款期、最低还款额、违约金及其他费用的计算方式，并按约定向持卡人披露账单与费用信息。坐席解释费用时应指向合同与账单，不自行创设收费项目。"
+    },
+    {
+      "id": "fee-pub-02",
+      "title": "收费透明与金融消费者知情权（公开监管要点摘要）",
+      "source_type": "public_regulation",
+      "source_uri": "https://www.gov.cn/zhengce/2020-09/15/content_5712684.htm",
+      "business_type": "credit_card_fee",
+      "version_no": 1,
+      "demo_only": false,
+      "valid_from": "2025-01-01T00:00:00+00:00",
+      "valid_to": null,
+      "content": "《中国人民银行金融消费者权益保护实施办法》公开要点摘要（自行组织，不复制条文原文）：银行应保障金融消费者知情权，以显著方式披露收费标准、计息规则与合同关键条款，不得以格式条款不合理免除自身责任或加重消费者负担。坐席答复费用问题时应说明查询路径与账单依据，避免口头承诺减免。"
+    },
+    {
+      "id": "fee-pub-03",
+      "title": "信用卡还款与计息规则的公开要求（摘要）",
+      "source_type": "public_regulation",
+      "source_uri": "https://www.gov.cn/gongbao/content/2011/content_1893974.htm",
+      "business_type": "credit_card_fee",
+      "version_no": 1,
+      "demo_only": false,
+      "valid_from": "2025-01-01T00:00:00+00:00",
+      "valid_to": null,
+      "content": "《商业银行信用卡业务监督管理办法》公开要点摘要（自行组织，不复制条文原文）：信用卡透支利率、免息还款期与最低还款额等要素应在合同中约定并披露；持卡人未按约定还款时，发卡行按合同约定计收相应费用并应在账单中列明。具体利率与费用以客户合同、账单及发卡行公告为准，坐席不作统一口径承诺。"
+    },
+    {
+      "id": "fee-pub-04",
+      "title": "违约金与年费的约定与告知（公开监管要点摘要）",
+      "source_type": "public_regulation",
+      "source_uri": "https://www.gov.cn/gongbao/content/2011/content_1893974.htm",
+      "business_type": "credit_card_fee",
+      "version_no": 1,
+      "demo_only": false,
+      "valid_from": "2025-01-01T00:00:00+00:00",
+      "valid_to": null,
+      "content": "《商业银行信用卡业务监督管理办法》公开要点摘要（自行组织，不复制条文原文）：年费、违约金等费用应在合同中明确收取条件与标准，发卡行应按约定告知持卡人；对费用有异议的，持卡人可要求发卡行说明计算依据。演示知识只复述公开要点，不提供任何真实机构的具体费率。"
+    },
+    {
+      "id": "fee-demo-01",
+      "title": "年费减免条件（虚构演示制度）",
+      "source_type": "demo_policy",
+      "source_uri": "https://demo.invalid/bank-assistant/credit-card-fee/demo-01",
+      "business_type": "credit_card_fee",
+      "version_no": 1,
+      "demo_only": true,
+      "valid_from": "2025-01-01T00:00:00+00:00",
+      "valid_to": null,
+      "content": "【虚构演示制度】本演示银行（虚构机构）规定：演示金卡首年免年费，次年起上一完整年度累计消费满演示金额 6 笔可免当年年费；未达标时收取演示年费 200 元。年费在账单日计入，客户可在收取前申请降级或销卡。以上条件与金额均为虚构演示数据，不对应任何真实机构制度或话术。"
+    },
+    {
+      "id": "fee-demo-02",
+      "title": "分期手续费展示与提前结清（虚构演示制度）",
+      "source_type": "demo_policy",
+      "source_uri": "https://demo.invalid/bank-assistant/credit-card-fee/demo-02",
+      "business_type": "credit_card_fee",
+      "version_no": 1,
+      "demo_only": true,
+      "valid_from": "2025-01-01T00:00:00+00:00",
+      "valid_to": null,
+      "content": "【虚构演示制度】本演示银行（虚构机构）规定：演示账单分期可选 3、6、12 期，手续费率分别为演示值 1.8%、3.6%、7.2%，在办理页面明示折算年化利率区间；分期成功后每期手续费按剩余本金计算并在账单列示。客户申请提前结清时，已收取的手续费不退还，未收取部分在结清日一次性计入当期账单，具体以办理页面确认为准。演示利率、费率与规则均为虚构数据，不对应任何真实机构制度或话术。"
+    },
+    {
+      "id": "fee-demo-03",
+      "title": "最低还款与循环利息示例（虚构演示制度）",
+      "source_type": "demo_policy",
+      "source_uri": "https://demo.invalid/bank-assistant/credit-card-fee/demo-03",
+      "business_type": "credit_card_fee",
+      "version_no": 1,
+      "demo_only": true,
+      "valid_from": "2025-01-01T00:00:00+00:00",
+      "valid_to": null,
+      "content": "【虚构演示制度】本演示银行（虚构机构）规定：最低还款额为当期账单金额的 10% 与全部费用之和；只还最低还款额时，未还部分按演示日利率 0.05% 计息，直至还清。示例：账单 1000 元、还最低 100 元，剩余 900 元按日计息。示例数字仅用于说明计算方式，不对应任何真实机构制度或话术。"
+    },
+    {
+      "id": "fee-demo-04",
+      "title": "还款入账顺序与容时容差（虚构演示制度）",
+      "source_type": "demo_policy",
+      "source_uri": "https://demo.invalid/bank-assistant/credit-card-fee/demo-04",
+      "business_type": "credit_card_fee",
+      "version_no": 1,
+      "demo_only": true,
+      "valid_from": "2025-01-01T00:00:00+00:00",
+      "valid_to": null,
+      "content": "【虚构演示制度】本演示银行（虚构机构）规定：还款按费用、利息、本金的顺序入账；到期还款日后 3 个自然日内还款且差额不超过 10 元视为按时还款，不计逾期。跨境还款以入账日为准，可能产生汇兑差异。容时容差是演示规则，不构成对任何真实机构的承诺。"
+    },
+    {
+      "id": "fee-demo-05",
+      "title": "逾期费用与催收边界（虚构演示制度）",
+      "source_type": "demo_policy",
+      "source_uri": "https://demo.invalid/bank-assistant/credit-card-fee/demo-05",
+      "business_type": "credit_card_fee",
+      "version_no": 1,
+      "demo_only": true,
+      "valid_from": "2025-01-01T00:00:00+00:00",
+      "valid_to": null,
+      "content": "【虚构演示制度】本演示银行（虚构机构）规定：逾期后按演示合同计收利息与违约金，并在账单中分项列示；催收仅联系客户本人及合同约定的紧急联系人，不得向无关第三方披露债务信息，不得使用威胁、侮辱性表述。客户提出异议时应转入费用复核，不在通话中强行催收。本制度仅为演示编写，不对应任何真实机构制度或话术。"
+    },
+    {
+      "id": "fee-demo-06",
+      "title": "账单异议与费用复核流程（虚构演示制度）",
+      "source_type": "demo_policy",
+      "source_uri": "https://demo.invalid/bank-assistant/credit-card-fee/demo-06",
+      "business_type": "credit_card_fee",
+      "version_no": 1,
+      "demo_only": true,
+      "valid_from": "2025-01-01T00:00:00+00:00",
+      "valid_to": null,
+      "content": "【虚构演示制度】本演示银行（虚构机构）规定：客户对账单费用有异议的，可在账单日后 60 个自然日内提交演示复核申请；复核岗在 3 个工作日内调取交易与计费记录并书面答复，确属多收的按原路径退回。复核期间不停止正常计息规则，但不得重复催收。本制度仅为演示编写，不对应任何真实机构制度或话术。"
+    }
+  ]
+}

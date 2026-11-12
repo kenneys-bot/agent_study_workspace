@@ -1,0 +1,30 @@
+{
+  "scenario": "索引过滤边界用例（已过期 / 未生效）",
+  "business_type": null,
+  "entries": [
+    {
+      "id": "edge-expired-01",
+      "title": "已过期的挂失受理规则（虚构演示制度，历史版本）",
+      "source_type": "demo_policy",
+      "source_uri": "https://demo.invalid/bank-assistant/edge/expired-01",
+      "business_type": "lost_card",
+      "version_no": 1,
+      "demo_only": true,
+      "valid_from": "2024-01-01T00:00:00+00:00",
+      "valid_to": "2025-01-01T00:00:00+00:00",
+      "content": "【虚构演示制度】本演示银行（虚构机构）2024 年度规定：挂失受理后 5 个工作日补卡，工本费演示金额 10 元。该版本已于 2025-01-01 失效，仅用于验证“过期版本不进入正式检索”，不得作为现行口径引用。本制度仅为演示编写，不对应任何真实机构制度或话术。"
+    },
+    {
+      "id": "edge-future-01",
+      "title": "尚未生效的投诉响应规则（虚构演示制度，未来版本）",
+      "source_type": "demo_policy",
+      "source_uri": "https://demo.invalid/bank-assistant/edge/future-01",
+      "business_type": "complaint",
+      "version_no": 1,
+      "demo_only": true,
+      "valid_from": "2027-01-01T00:00:00+00:00",
+      "valid_to": null,
+      "content": "【虚构演示制度】本演示银行（虚构机构）计划自 2027-01-01 起施行：投诉首次响应时限调整为 1 小时。该版本尚未生效，仅用于验证“未来版本不进入正式检索”，当前不得对外引用。本制度仅为演示编写，不对应任何真实机构制度或话术。"
+    }
+  ]
+}

@@ -1,5 +1,7 @@
 # 生成用 DeepSeek 官方、第三方中继仅作对比；embedding 自托管 BGE
 
+> embedding 部分由 [ADR-0005](0005-embedding-runtime-and-index-versioning.md) 取代。
+
 状态：accepted（2026-11-12，依据当日实测修订）
 
 2026-11-12 对两条链路做了真实调用探测：
