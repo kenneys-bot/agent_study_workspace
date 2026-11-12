@@ -55,3 +55,22 @@ def mock_vector_db(mocker):
 
 
 pytest_plugins = ["pytest_asyncio"]
+
+
+@pytest.fixture(scope="session")
+def frozen_dataset_dir(tmp_path_factory):
+    """用 T26 构建器在临时目录生成一份可校验的冻结数据集（离线、确定性）。
+
+    训练/评测测试不依赖仓库里 gitignore 的 ``artifacts/`` 产物，也不下载任何
+    模型；这样 `uv run pytest` 在干净检出上也能跑。
+    """
+    from datetime import UTC, datetime
+
+    from bank_assistant.datasets.build import build_dataset, write_dataset
+
+    directory = tmp_path_factory.mktemp("frozen-bank-cs-m6-v1")
+    build = build_dataset(
+        seed=42, created_at=datetime(2026, 11, 12, 12, 0, 0, tzinfo=UTC)
+    )
+    write_dataset(build, directory)
+    return directory

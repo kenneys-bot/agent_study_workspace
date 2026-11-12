@@ -37,6 +37,16 @@ dev = [
     "pytest-mock>=3.14",
     "pytest-cov>=5.0",
 ]
+# T28（#29）条件任务的可选训练依赖。默认 `uv sync` 不安装它们；只有真正要
+# 训练/做 tiny CPU smoke 时才 `uv sync --group train`。8GB 卡用 bitsandbytes
+# 4-bit QLoRA，因此只在 Linux 安装 bitsandbytes。
+train = [
+    "torch>=2.6,<3",
+    "transformers>=4.51,<5",
+    "peft>=0.14,<1",
+    "accelerate>=1.3,<2",
+    "bitsandbytes>=0.45,<1; sys_platform == 'linux'",
+]
 
 [tool.setuptools]
 package-dir = { "" = "src" }

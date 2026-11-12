@@ -3,6 +3,8 @@ SHELL := /bin/bash
 UV := uv
 COMPOSE := docker compose -f deploy/compose.yml
 ENV_FILE ?= .env
+TRAIN_CONFIG ?= configs/train/qlora-intent-qwen3-0.6b.yaml
+TRAIN_ARGS ?= --dry-run
 
 .PHONY: help doctor test-unit test-integration test-e2e e2e build web-install web-dev web-build web-test up down smoke seed-demo seed-demo-accounts seed-demo-conversations demo-reset demo-real-model-smoke dataset-build dataset-verify index-rebuild index-info worker sync-check eval train backup restore-check clean
 
@@ -90,8 +92,8 @@ worker: ## [M4] 启动质检 worker（领取租约任务、按规则快照执行
 eval: ## [M6] 固定评测：默认 replay；用 EVAL_CONFIG=path 覆盖（live 需样本/预算上限）
 	@$(UV) run python -m scripts.run_eval --config "$${EVAL_CONFIG:-configs/eval/replay.yaml}"
 
-train: ## [M6] 条件任务：4-bit QLoRA 微调（Ubuntu）
-	@echo "NOT_IMPLEMENTED: train 为 M6 条件任务；需先冻结测试集" >&2; exit 2
+train: ## [M6] 条件任务：4-bit QLoRA 意图分类（默认 dry-run；TRAIN_ARGS=--execute 才训练）
+	@$(UV) run python -m scripts.train_intent_lora --config "$(TRAIN_CONFIG)" $(TRAIN_ARGS)
 
 backup: ## [M7] 备份数据库与产物
 	@echo "NOT_IMPLEMENTED: backup 在 M7 实现" >&2; exit 2
