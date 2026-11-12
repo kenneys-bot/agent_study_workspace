@@ -5,6 +5,8 @@ import Layout from './components/Layout'
 import ConsolePage from './pages/ConsolePage'
 import LoginPage from './pages/LoginPage'
 import NotFoundPage from './pages/NotFoundPage'
+import ReviewDetailPage from './pages/ReviewDetailPage'
+import ReviewsPage from './pages/ReviewsPage'
 import SystemPage from './pages/SystemPage'
 
 export default function App() {
@@ -14,6 +16,8 @@ export default function App() {
       <Route element={<RequireAuth />}>
         <Route element={<Layout />}>
           <Route path="/console" element={<ConsolePage />} />
+          <Route path="/reviews" element={<ReviewsPage />} />
+          <Route path="/reviews/:reviewId" element={<ReviewDetailPage />} />
           <Route path="/system" element={<SystemPage />} />
         </Route>
       </Route>

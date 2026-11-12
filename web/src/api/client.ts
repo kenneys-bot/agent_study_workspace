@@ -12,8 +12,15 @@ import type {
   ApiErrorPayload,
   ConversationCreateInput,
   ConversationPublic,
+  InspectionDetail,
   KnowledgeVersion,
   LoginResponse,
+  ReviewCompleteInput,
+  ReviewDecisionAccepted,
+  ReviewDecisionInput,
+  ReviewDetail,
+  ReviewList,
+  ReviewStatus,
   SuggestionCreateInput,
   SuggestionDetail,
   SuggestionFeedbackInput,
@@ -232,5 +239,66 @@ export function fetchKnowledgeVersion(
 ): Promise<KnowledgeVersion> {
   return request<KnowledgeVersion>(
     `/api/v1/knowledge/versions/${encodeURIComponent(versionId)}`,
+  )
+}
+
+/* ---------------------------------------------------------------------------
+ * 质检复核（T24 #25 / M5-02）：复核列表/详情、逐项决定与完成。
+ * 决定与完成都携带 expected_revision；409 由调用方显式展示并刷新。
+ * ------------------------------------------------------------------------- */
+
+export interface ReviewListQuery {
+  status?: ReviewStatus
+  limit?: number
+  offset?: number
+}
+
+export function fetchReviews(query: ReviewListQuery = {}): Promise<ReviewList> {
+  const params = new URLSearchParams()
+  if (query.status !== undefined) {
+    params.set('status', query.status)
+  }
+  params.set('limit', String(query.limit ?? 20))
+  params.set('offset', String(query.offset ?? 0))
+  return request<ReviewList>(`/api/v1/reviews?${params.toString()}`)
+}
+
+export function fetchReview(reviewId: string): Promise<ReviewDetail> {
+  return request<ReviewDetail>(
+    `/api/v1/reviews/${encodeURIComponent(reviewId)}`,
+  )
+}
+
+export function submitReviewDecision(
+  reviewId: string,
+  input: ReviewDecisionInput,
+): Promise<ReviewDecisionAccepted> {
+  return request<ReviewDecisionAccepted>(
+    `/api/v1/reviews/${encodeURIComponent(reviewId)}/decisions`,
+    {
+      method: 'POST',
+      body: JSON.stringify(input),
+    },
+  )
+}
+
+export function completeReview(
+  reviewId: string,
+  input: ReviewCompleteInput,
+): Promise<ReviewDetail> {
+  return request<ReviewDetail>(
+    `/api/v1/reviews/${encodeURIComponent(reviewId)}/complete`,
+    {
+      method: 'POST',
+      body: JSON.stringify(input),
+    },
+  )
+}
+
+export function fetchInspection(
+  inspectionId: string,
+): Promise<InspectionDetail> {
+  return request<InspectionDetail>(
+    `/api/v1/inspections/${encodeURIComponent(inspectionId)}`,
   )
 }

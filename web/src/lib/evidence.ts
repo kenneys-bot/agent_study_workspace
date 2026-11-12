@@ -86,3 +86,49 @@ export function sliceByCodePoints(text: string, start: number, end: number): str
   const range = codePointRangeToUtf16Range(text, start, end)
   return text.slice(range.start, range.end)
 }
+
+export interface HighlightSegment {
+  text: string
+  highlighted: boolean
+}
+
+/**
+ * 把多条证据区间切成可直接渲染的文本片段（纯文本 + 是否高亮）。
+ *
+ * - 区间先按后端码点换算成 UTF-16，再合并重叠/相邻区间，避免同一句话被
+ *   多个 finding 重复切开；
+ * - 返回的片段按顺序拼接后必须与原文逐字相等（不增删任何字符）；
+ * - 非法区间直接抛错，由调用方决定跳过该条证据而不是渲染错位高亮。
+ */
+export function buildHighlightSegments(
+  text: string,
+  ranges: readonly CodePointRange[],
+): HighlightSegment[] {
+  const converted: CodePointRange[] = ranges
+    .map((range) => codePointRangeToUtf16Range(text, range.start, range.end))
+    .sort((left, right) => left.start - right.start || left.end - right.end)
+
+  const merged: CodePointRange[] = []
+  for (const range of converted) {
+    const last = merged[merged.length - 1]
+    if (last !== undefined && range.start <= last.end) {
+      last.end = Math.max(last.end, range.end)
+    } else {
+      merged.push({ ...range })
+    }
+  }
+
+  const segments: HighlightSegment[] = []
+  let cursor = 0
+  for (const range of merged) {
+    if (cursor < range.start) {
+      segments.push({ text: text.slice(cursor, range.start), highlighted: false })
+    }
+    segments.push({ text: text.slice(range.start, range.end), highlighted: true })
+    cursor = range.end
+  }
+  if (cursor < text.length) {
+    segments.push({ text: text.slice(cursor), highlighted: false })
+  }
+  return segments
+}
