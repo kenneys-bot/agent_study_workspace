@@ -106,7 +106,11 @@ demo-real-model-smoke: 真实链路（不会回放）
 ## 5. 测试结果
 
 ```text
+# T25 分支（合入 feat 之前）
 uv run --frozen pytest tests      → 474 passed, 130 deselected
+
+# 合并 feat/bank-assistant（含 T26 数据集）后复验
+uv run --frozen pytest tests      → 499 passed, 130 deselected
 cd web && npm run build           → tsc + vite 构建通过
 cd web && npm run test            → 8 files / 48 tests passed
 make test-e2e                     → 1 Playwright test passed

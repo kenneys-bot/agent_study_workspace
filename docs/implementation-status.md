@@ -1,8 +1,8 @@
 # 执行进度
 
-当前里程碑：M5（进行中）；M4 T21 报告导出已合入 T25 分支待集成
-当前任务：M5 T25 演示脚本与端到端（#26）已完成，等待合并与验收
-当前状态：M1–M3 READY_FOR_ACCEPTANCE；M5 T25 DONE；M4 T21 分支完成待集成（数据库部署方案已于 2026-11-12 调整，见 ADR-0006；实现待办见下）
+当前里程碑：M5（进行中）；M1–M4 已交付
+当前任务：M5 T25 演示脚本与端到端（#26）已完成；M6 T27 评测脚本（#28）并行
+当前状态：M1–M4 READY_FOR_ACCEPTANCE；M5 T25 DONE（待负责人验收）；M6 IN_PROGRESS（数据库部署方案已于 2026-11-12 调整，见 ADR-0006；实现待办见下）
 本机代码分支：`feat/bank-assistant`
 本机代码SHA：`979b076`（后续提交见 git log）
 Ubuntu代码SHA：`2c5e0d7`（M3 期间的同步点；集成分支已前进，下次合并后刷新）
@@ -114,6 +114,18 @@ Ubuntu 与 Mac 同 SHA；两端 `uv run pytest tests -q` 均 144 用例全过（
 - `make demo-real-model-smoke`：DeepSeek chat `status=succeeded` + fastembed embedding 512 维成功，未打印密钥。
 - **ADR-0006 过渡做法**：e2e 暂用本机 compose 的独立 `bank_assistant_demo`，不是隧道 + `*_test`；TODO 指向后续数据库访问工单，落地后移除本机 compose 依赖。
 
+## M6 工单状态
+
+| 工单 | 状态 | 证据 |
+|---|---|---|
+| #27 T26 数据集构建与冻结 | DONE | 330 检索/186 质检、按组 60/20/20、manifest 哈希两次一致 |
+| #28 T27 评测脚本与基线对比 | IN_PROGRESS | worktree 中进行 |
+| #29 T28 条件性微调 | BLOCKED | 等 #28 |
+
+## M4 验收
+
+M4 报告：`docs/milestones/M4-report.md`（READY_FOR_ACCEPTANCE）。迁移单 head `0011_report_exports`；448 unit / 130 integration passed。
+
 ## M4 工单状态
 
 | 工单 | 状态 | 证据 |
@@ -122,7 +134,7 @@ Ubuntu 与 Mac 同 SHA；两端 `uv run pytest tests -q` 均 144 用例全过（
 | #19 T18 质检任务执行 | READY_FOR_ACCEPTANCE | inspection_runs/findings + 0009 迁移；202+幂等、worker 租约/条件最终化、失败 error_code；379 unit / 94 integration |
 | #20 T19 证据定位与校验 | READY_FOR_ACCEPTANCE | 码点证据逐字校验+四态+否定/转述；422 unit / 101 integration |
 | #21 T20 人工复核闭环 | DONE | 440 unit / 116 integration；并发 409 + 完成门禁 |
-| #22 T21 报告导出 | IN_PROGRESS | worktree 中进行 |
+| #22 T21 报告导出 | DONE | CT-12 快照 hash 不变；HTML 转义；权限 404 |
 
 ## M3 工单状态
 
