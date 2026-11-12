@@ -199,7 +199,8 @@ async def generate_scripts(
             scripts = generator.generate_collection_scripts(
                 overdue_days=params.get("overdue_days", 30),
                 customer_risk=params.get("customer_risk", "低风险"),
-                count=request.count
+                count=request.count,
+                tone=request.tone
             )
             response_scripts = [
                 {

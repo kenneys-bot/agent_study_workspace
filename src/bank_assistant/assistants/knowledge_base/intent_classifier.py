@@ -67,9 +67,9 @@ class IntentClassifier(LoggerMixin):
         self.llm_client = llm_client
         self.categories = categories or [
             IntentCategories.ACCOUNT_QUERY,
-            IntentCategories.BUSINESS办理,
-            IntentCategories.COMPLAINT,
-            IntentCategories.FEEDBACK,
+            IntentCategories.BUSINESS_HANDLE,
+            IntentCategories.COMPLAINT_SUGGESTION,
+            IntentCategories.OPINION_FEEDBACK,
             IntentCategories.TECHNICAL_SUPPORT,
             IntentCategories.OTHER
         ]
