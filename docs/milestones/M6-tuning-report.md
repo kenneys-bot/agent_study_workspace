@@ -3,7 +3,7 @@
 **状态：`NOT_RUN`（未执行真实训练）**
 **决策：保留 T27 基线；不发布微调模型。**
 **报告日期：2026-11-12（Asia/Shanghai）**
-**代码基线：`ticket/T28`，起点 `f75771b`（`feat/bank-assistant` 集成分支 tip）**
+**代码基线：`ticket/T28`；T28 提交 `55cc799`，合并 `feat/bank-assistant` 后 `22ffe5e`（dry-run 即在此 SHA 的干净工作树上运行）**
 
 这是一份 **model card 式的诚实报告**，不是道歉信。T28 是计划 M6-05/M6-07 的
 **条件任务**：只有确认错误可由学习改善、数据足够、资源与费用明确时才训练。
@@ -98,7 +98,7 @@ uv sync --frozen --group train
 HF_HOME=$PWD/.hf-cache uv run --frozen --group train \
   python -m scripts.train_intent_lora \
   --config configs/train/qlora-intent-qwen3-0.6b.yaml \
-  --dry-run --tiny-smoke --run-id dry-run-20261112T1052Z
+  --dry-run --tiny-smoke --run-id dry-run-20261112T1105Z
 # exit code 0；status=NOT_RUN
 ```
 
@@ -124,13 +124,13 @@ dry-run 的一个重要实测结论：**完整训练序列最长 119 token**，�
 
 | 文件 | sha256 |
 |---|---|
-| `artifacts/training/dry-run-20261112T1052Z/manifest.json` | `a4ea2373c7f0d64ee0ce6b9d630876b0fb5015f996b3e44a0fc24c564091889f` |
-| `artifacts/training/dry-run-20261112T1052Z/model-card.md` | `2026756c91ee38d265d3ae5bdbf7f7f251ede02f963b394c8f2aa735be1db326` |
-| `artifacts/training/dry-run-20261112T1052Z/config.json` | `f90bf0acab13d997108bd7a539288d4d1db680bd85a052692dcf0d894463355f` |
-| `artifacts/training/dry-run-20261112T1052Z/dry-run.json` | `34811a930f5c30bff3e3a8aef24aba08b0eb1baa7244322d388356e87c02eda0` |
+| `artifacts/training/dry-run-20261112T1105Z/manifest.json` | `e20b982d797710a73a9fc0368ba19f89121bba6a88d597bd84766c38d13341ba` |
+| `artifacts/training/dry-run-20261112T1105Z/model-card.md` | `0cf5a77b72d476037b71b5413cd230d6d2927de4f9e42bac8c2fa32381ccfa28` |
+| `artifacts/training/dry-run-20261112T1105Z/config.json` | `f90bf0acab13d997108bd7a539288d4d1db680bd85a052692dcf0d894463355f` |
+| `artifacts/training/dry-run-20261112T1105Z/dry-run.json` | `34811a930f5c30bff3e3a8aef24aba08b0eb1baa7244322d388356e87c02eda0` |
 
-manifest 字段（节选）：`status=NOT_RUN`、`mode=dry_run`、`code_sha=f75771b…`、
-`seed=42`、`train_items=202`、`test_items=50`、`wall_time_seconds=2.431`、
+manifest 字段（节选）：`status=NOT_RUN`、`mode=dry_run`、`code_sha=22ffe5e…`（worktree clean=true）、
+`seed=42`、`train_items=202`、`test_items=50`、`wall_time_seconds=11.784`、
 `vram_peak_gib=null`（未训练，如实为空）、`evaluation.available=false`。
 
 复现：`make train`（默认就是 dry-run）；`make dataset-build` 先构建冻结数据集。
