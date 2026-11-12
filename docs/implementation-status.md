@@ -1,7 +1,7 @@
 # 执行进度
 
 当前里程碑：M3（进行中）；M1/M2 已交付
-当前任务：M3 T14 演示知识与版本化索引（#15）
+当前任务：M3 T15 候选答复端到端（#16）
 当前状态：M1/M2 READY_FOR_ACCEPTANCE；M3 IN_PROGRESS
 本机代码分支：`feat/bank-assistant`
 本机代码SHA：`979b076`（后续提交见 git log）
@@ -62,6 +62,14 @@ Ubuntu 与 Mac 同 SHA；两端 `uv run pytest tests -q` 均 144 用例全过（
 
 - Ubuntu 整机重启：需负责人逐次准许。
 - GPU 分时：M6 微调（#28）前需确认 `dingtalk-train` 空闲。
+
+## M3 工单状态
+
+| 工单 | 状态 | 证据 |
+|---|---|---|
+| #15 T14 演示知识与版本化索引 | DONE | 32 条演示知识；真实 fastembed 建索引 idx-20261112T084715Z；246 unit / 58 integration passed |
+| #16 T15 候选答复端到端 | IN_PROGRESS | worktree 中进行 |
+| #17 T16 采纳反馈 | BLOCKED | 等 #16 |
 
 ## M2 双机与迁移
 
