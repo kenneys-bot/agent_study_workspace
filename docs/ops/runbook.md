@@ -12,7 +12,8 @@
 | 项目根 | `~/workspace/bank-assistant/`（`repo`、`data`、`artifacts`、`backups`、`deploy`） |
 | 数据库 | 已有 PostgreSQL 18 容器 `bank-assistant-db-db-1`，只绑 `127.0.0.1:5432` |
 | API 容器 | `bank-assistant-api`（compose 项目 `bank-assistant-app`） |
-| API 端口 | **只绑服务器回环** `127.0.0.1:8000`；外部访问走 SSH |
+| API 端口 | **只绑服务器回环** `127.0.0.1:8000`；外部访问走 SSH（`ss -tln` 判据） |
+| 容器网络 | `network_mode: host`（让 `DATABASE_URL=127.0.0.1:5432` 指向宿主 PG）；端口隔离由 uvicorn `--host 127.0.0.1` 保证，不写 `ports:` |
 | 镜像 | `bank-assistant:api-<code_sha7>`，不可变；服务器不重建源码 |
 | 配置 | 仓库外 `~/workspace/bank-assistant/.env.app`（chmod 600），模板 `deploy/env.app.example` |
 | compose | 仓库 `deploy/compose.app.yml`；服务器运行副本 `~/workspace/bank-assistant/deploy/compose.app.yml` |
@@ -92,7 +93,8 @@ make verify-deploy         # 可选：随时复核线上真实状态
 - 本地与服务器 **image id 相同**、`tar_sha256` 一致；
 - 服务器 `HEAD=<sha>` 且工作树干净；
 - `/health/live`、`/health/ready` 均 200；
-- `docker port` 与 `ss -tln` 都只出现 `127.0.0.1:8000`。
+- `ss -tln` 只出现 `127.0.0.1:8000`；host 网络下同时检查容器 `command` 含
+  `--host 127.0.0.1`（不写 `0.0.0.0`），不依赖 `docker port`。
 
 ## 4. 备份（每次发布/迁移前）
 
@@ -178,7 +180,8 @@ make rollback
 | `/health/ready` 503 | 数据库容器未起/凭据不对：`docker ps`、`docker inspect bank-assistant-db-db-1` |
 | `/system/version` 的 `index_version` 为 null | 没建索引：`make deploy-index` |
 | 索引构建报 embedding 下载失败 | 服务器网络受限时重试；模型缓存在 `data/models`，成功后不重复下载 |
-| 端口出现在 `0.0.0.0` | 立即 `docker compose -f ~/workspace/bank-assistant/deploy/compose.app.yml down`，检查 compose 是否被改 |
+| 端口出现在 `0.0.0.0` | 立即 `docker compose -f ~/workspace/bank-assistant/deploy/compose.app.yml down`，检查 compose 的 `command` 是否丢了 `--host 127.0.0.1` |
+| `/health/ready` 503 且日志无异常 | 先确认容器是 host 网络；bridge 网络下 `127.0.0.1:5432` 是容器自己，连不到宿主 PG |
 | 回滚后旧版启动失败 | 旧镜像与当前 schema 不兼容：先恢复到当前镜像，再评估兼容性（不要降 schema） |
 
 ## 9. 日常检查命令

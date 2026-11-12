@@ -17,6 +17,7 @@
 #   API_IMAGE=bank-assistant:api-<sha7>（默认按当前 SHA 生成）
 #   GIT_SHA_OVERRIDE / GIT_BRANCH_OVERRIDE  显式部署某个提交（用于回滚演练基线）
 #   BUILD_CONTEXT=<目录>         自定义 Docker 构建上下文（默认仓库根）
+#   DOCKER_PLATFORM=linux/amd64  目标平台（服务器 x86_64；Mac arm64 交叉构建）
 #   SKIP_BUILD=1                 镜像已在服务器上时跳过构建/传输
 set -euo pipefail
 
@@ -42,6 +43,10 @@ BRANCH="${GIT_BRANCH_OVERRIDE:-$(git branch --show-current || true)}"
 SHA7="${CODE_SHA:0:7}"
 IMAGE="${API_IMAGE:-bank-assistant:api-$SHA7}"
 BUILD_CONTEXT="${BUILD_CONTEXT:-$REPO_ROOT}"
+PLATFORM="${DOCKER_PLATFORM:-linux/amd64}"
+# Docker Desktop 的 buildx 缓存默认写 ~/.docker；沙箱/CI 里用仓库内可写目录。
+export BUILDX_CONFIG="${BUILDX_CONFIG:-$REPO_ROOT/.docker-config/buildx}"
+mkdir -p "$BUILDX_CONFIG"
 
 # 只允许部署提交，不允许把未提交改动打进镜像（否则镜像 SHA 无法自证）。
 if [ "$BUILD_CONTEXT" = "$REPO_ROOT" ] && [ -n "$(git status --porcelain)" ]; then
@@ -63,11 +68,20 @@ APP_UID="$(remote id -u)"
 APP_GID="$(remote id -g)"
 
 if [ "${SKIP_BUILD:-0}" != "1" ]; then
-  echo "-- docker build（上下文 $BUILD_CONTEXT）"
-  docker build -f "$REPO_ROOT/deploy/docker/Dockerfile.api" -t "$IMAGE" "$BUILD_CONTEXT"
+  echo "-- docker build（上下文 $BUILD_CONTEXT，平台 $PLATFORM）"
+  if docker buildx version >/dev/null 2>&1; then
+    docker buildx build --platform "$PLATFORM" --load \
+      -f "$REPO_ROOT/deploy/docker/Dockerfile.api" -t "$IMAGE" "$BUILD_CONTEXT"
+  else
+    DOCKER_BUILDKIT=1 docker build --platform "$PLATFORM" \
+      -f "$REPO_ROOT/deploy/docker/Dockerfile.api" -t "$IMAGE" "$BUILD_CONTEXT"
+  fi
   IMAGE_ID="$(docker image inspect --format '{{.Id}}' "$IMAGE")"
   IMAGE_SIZE="$(docker image inspect --format '{{.Size}}' "$IMAGE")"
-  echo "   本地 image id=$IMAGE_ID size=${IMAGE_SIZE}B"
+  IMAGE_PLATFORM="$(docker image inspect --format '{{.Os}}/{{.Architecture}}' "$IMAGE")"
+  [ "$IMAGE_PLATFORM" = "$PLATFORM" ] \
+    || fail "镜像平台 $IMAGE_PLATFORM 与目标 $PLATFORM 不一致（会造成 exec format error）"
+  echo "   本地 image id=$IMAGE_ID size=${IMAGE_SIZE}B platform=$IMAGE_PLATFORM"
 
   echo "-- 传输镜像（docker save | ssh docker load）"
   REMOTE_TAR="/tmp/bank-assistant-image-$SHA7.tar"

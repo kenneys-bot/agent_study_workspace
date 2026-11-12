@@ -34,12 +34,27 @@ echo "   /health/live  → $LIVE"
 echo "   /health/ready → $READY"
 
 echo "-- 2) 端口绑定（只允许回环）"
-BINDING="$(remote "docker port bank-assistant-api 8000/tcp")" || fail "无法读取容器端口映射"
-echo "   docker port: $BINDING"
-case "$BINDING" in
-  127.0.0.1:"$API_PORT"|"[::1]:"*) ;;
-  *) fail "容器端口不是回环绑定：$BINDING" ;;
-esac
+NETWORK_MODE="$(remote "docker inspect -f '{{.HostConfig.NetworkMode}}' bank-assistant-api")" \
+  || fail "无法读取容器网络模式"
+if [ "$NETWORK_MODE" = "host" ]; then
+  # host 网络下 docker port 为空；回环保证来自 command 的 --host 127.0.0.1。
+  CMD_JSON="$(remote "docker inspect -f '{{json .Config.Cmd}}' bank-assistant-api")"
+  echo "   network_mode: host；command=$CMD_JSON"
+  case "$CMD_JSON" in
+    *"--host","127.0.0.1"*) ;;
+    *) fail "host 网络下 command 未显式绑定 127.0.0.1：$CMD_JSON" ;;
+  esac
+  case "$CMD_JSON" in
+    *0.0.0.0*) fail "host 网络下不允许绑定 0.0.0.0" ;;
+  esac
+else
+  BINDING="$(remote "docker port bank-assistant-api 8000/tcp")" || fail "无法读取容器端口映射"
+  echo "   docker port: $BINDING"
+  case "$BINDING" in
+    127.0.0.1:"$API_PORT"|"[::1]:"*) ;;
+    *) fail "容器端口不是回环绑定：$BINDING" ;;
+  esac
+fi
 LISTEN="$(remote "ss -tln 2>/dev/null | awk '\$4 ~ /:$API_PORT\$/ {print \$4}'")"
 [ -n "$LISTEN" ] || fail "ss 未看到 $API_PORT 监听"
 echo "   ss -tln: $(echo "$LISTEN" | tr '\n' ' ')"

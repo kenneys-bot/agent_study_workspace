@@ -7,7 +7,10 @@
 # - image 必须带 api-<code_sha7> 标签；不使用 build:，服务器不重建源码。
 # - 配置来自仓库外 ~/workspace/bank-assistant/.env.app（600），不进 Git、不进镜像；
 #   compose 只通过 APP_ENV_FILE 读取该文件，不复制进仓库。
-# - 端口只绑 127.0.0.1，不暴露到局域网；外部访问一律经 SSH。
+# - 使用 host 网络：DATABASE_URL 按需求写 127.0.0.1:5432（容器 bridge 网络里的
+#   127.0.0.1 是容器自己，连不到宿主 PostgreSQL；走 docker 网络又会让连接串偏离
+#   回环约定）。因此 uvicorn 在 command 里显式 --host 127.0.0.1，端口仍只回环，
+#   `ss -tln` 是唯一判据；不写 ports:（host 网络下会被忽略）。
 # - data/artifacts 是仓库外宿主目录；索引可由知识重建，不随镜像发布。
 # - 容器以宿主项目用户 uid/gid 运行（非 root），避免为了写挂载目录而放宽权限；
 #   镜像本身仍是非 root 构建（Dockerfile 的 app 用户被 user: 覆盖是刻意的）。
@@ -18,8 +21,15 @@ services:
     image: "${API_IMAGE:?API_IMAGE 必须是已加载的不可变镜像（bank-assistant:api-<code_sha7>）}"
     container_name: bank-assistant-api
     restart: unless-stopped
-    ports:
-      - "127.0.0.1:${API_PORT:-8000}:8000"
+    network_mode: host
+    # host 网络下必须显式绑回环，绝不落到 0.0.0.0。
+    command:
+      - uvicorn
+      - bank_assistant.main:app
+      - --host
+      - 127.0.0.1
+      - --port
+      - "${API_PORT:-8000}"
     user: "${APP_UID:-1000}:${APP_GID:-1000}"
     env_file:
       - path: ${APP_ENV_FILE:?APP_ENV_FILE 必须指向仓库外的 .env.app}

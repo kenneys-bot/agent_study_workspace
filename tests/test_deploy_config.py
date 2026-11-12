@@ -22,13 +22,19 @@ def load_compose() -> dict:
     return yaml.safe_load(COMPOSE_APP.read_text(encoding="utf-8"))
 
 
-def test_compose_app_uses_immutable_image_and_loopback_port():
-    """端口只绑 127.0.0.1；镜像由参数注入，不能出现 build: 或 latest。"""
+def test_compose_app_uses_immutable_image_and_loopback_binding():
+    """镜像由参数注入（不 build）；host 网络下 uvicorn 必须显式绑 127.0.0.1。"""
     api = load_compose()["services"]["api"]
 
     assert "build" not in api
     assert "${API_IMAGE:" in api["image"]
-    assert api["ports"] == ["127.0.0.1:${API_PORT:-8000}:8000"]
+    # host 网络是为了让 DATABASE_URL 的 127.0.0.1:5432 指向宿主；
+    # 端口隔离改由 command 的 --host 127.0.0.1 保证，不能出现 0.0.0.0。
+    assert api["network_mode"] == "host"
+    assert "ports" not in api
+    command = [str(part) for part in api["command"]]
+    assert command[command.index("--host") + 1] == "127.0.0.1"
+    assert "0.0.0.0" not in command
     assert api["restart"] == "unless-stopped"
     assert api["container_name"] == "bank-assistant-api"
 
