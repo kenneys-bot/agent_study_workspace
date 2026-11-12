@@ -20,9 +20,11 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 from bank_assistant.infra.models import Finding, InspectionRun, Task
-from bank_assistant.inspections.deterministic import assess_context
-from bank_assistant.inspections.evidence import annotate_evidence, check_span
-from bank_assistant.inspections.service import InspectionView
+from bank_assistant.inspections.evidence import annotate_evidence
+from bank_assistant.inspections.service import (
+    InspectionView,
+    finding_evidence_valid,
+)
 
 
 class InspectionCreateRequest(BaseModel):
@@ -109,30 +111,8 @@ def to_accepted(run: InspectionRun, task: Task) -> InspectionAccepted:
 def _evidence_valid(
     finding: Finding, view: InspectionView
 ) -> bool:
-    """读取路径重新回验证据；``hit`` 还要求证据不是否定/引用语境。"""
-    spans = list(finding.evidence or [])
-    checks = [
-        check_span(
-            span,
-            turn_contents=view.turn_contents,
-            turn_ordinals=view.turn_ordinals,
-        )
-        for span in spans
-    ]
-    if finding.machine_verdict == "hit":
-        if not checks or not all(check.valid for check in checks):
-            return False
-        return any(
-            check.valid
-            and check.turn_id is not None
-            and check.start is not None
-            and check.end is not None
-            and assess_context(
-                view.turn_contents[check.turn_id], check.start, check.end
-            ).supported
-            for check in checks
-        )
-    return all(check.valid for check in checks)
+    """读取路径重新回验证据（与人工复核共用同一实现）。"""
+    return finding_evidence_valid(finding, view)
 
 
 def _finding_public(

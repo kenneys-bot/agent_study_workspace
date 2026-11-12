@@ -38,6 +38,8 @@ from bank_assistant.infra.models import (
     RuleVersion,
     Task,
 )
+from bank_assistant.inspections.deterministic import assess_context
+from bank_assistant.inspections.evidence import check_span
 from bank_assistant.inspections.schema import (
     InspectionStatus,
     RuleSnapshot,
@@ -61,6 +63,8 @@ __all__ = [
     "InspectionView",
     "build_rule_snapshot",
     "create_inspection",
+    "effective_machine_verdict",
+    "finding_evidence_valid",
     "inspection_payload_ref",
     "invalid_knowledge_refs",
     "load_inspection",
@@ -349,3 +353,45 @@ def load_inspection(
         turn_contents=turn_contents,
         turn_ordinals=turn_ordinals,
     )
+
+
+def finding_evidence_valid(finding: Finding, view: InspectionView) -> bool:
+    """读取路径重新回验证据；``hit`` 还要求证据不是否定/引用语境（CT-08/CT-09）。
+
+    与 ``GET /inspections/{id}`` 使用同一套判断，人工复核不会把读取路径已降级
+    的 ``hit`` 当成可确认的风险。
+    """
+    spans = list(finding.evidence or [])
+    checks = [
+        check_span(
+            span,
+            turn_contents=view.turn_contents,
+            turn_ordinals=view.turn_ordinals,
+        )
+        for span in spans
+    ]
+    if finding.machine_verdict == "hit":
+        if not checks or not all(check.valid for check in checks):
+            return False
+        return any(
+            check.valid
+            and check.turn_id is not None
+            and check.start is not None
+            and check.end is not None
+            and assess_context(
+                view.turn_contents[check.turn_id], check.start, check.end
+            ).supported
+            for check in checks
+        )
+    return all(check.valid for check in checks)
+
+
+def effective_machine_verdict(finding: Finding, view: InspectionView) -> str:
+    """展示/复核用的机器判断：没有可回验证据的 ``hit`` 降级为证据不足。
+
+    原始 ``machine_verdict`` 永远保留在 finding 上供审计；人工复核的 confirm
+    只能确认这里返回的有效判断，不能把无效证据确认为命中。
+    """
+    if finding.machine_verdict == "hit" and not finding_evidence_valid(finding, view):
+        return "insufficient_evidence"
+    return finding.machine_verdict

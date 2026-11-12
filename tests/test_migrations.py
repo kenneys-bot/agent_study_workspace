@@ -19,6 +19,7 @@ SUGGESTIONS_REVISION = "0007_suggestions"
 RULES_REVISION = "0008_rules"
 FEEDBACK_REVISION = "0008_suggestion_feedback"
 INSPECTIONS_REVISION = "0009_inspections"
+REVIEWS_REVISION = "0010_reviews"
 M2_MERGE_HEAD = "cf1edc530a0c"
 M4_RULES_MERGE_HEAD = "8889f869f465"
 
@@ -108,4 +109,14 @@ def test_inspections_revision_extends_the_m4_merge_head():
     assert revision is not None
     assert revision.down_revision == M4_RULES_MERGE_HEAD
     assert INSPECTIONS_REVISION in {item.revision for item in script.walk_revisions()}
-    assert script.get_current_head() == INSPECTIONS_REVISION
+
+
+def test_reviews_revision_extends_0009_and_is_the_single_head():
+    """T20 的 review_cases/review_decisions 接在 0009 之后，保持单一 head。"""
+    script = _script()
+    revision = script.get_revision(REVIEWS_REVISION)
+
+    assert revision is not None
+    assert revision.down_revision == INSPECTIONS_REVISION
+    assert REVIEWS_REVISION in {item.revision for item in script.walk_revisions()}
+    assert script.get_current_head() == REVIEWS_REVISION
