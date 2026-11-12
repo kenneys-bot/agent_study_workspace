@@ -1,11 +1,11 @@
 # 执行进度
 
-当前里程碑：M5 已交付（待负责人验收）；M6 进行中
-当前任务：M6 T28 条件性微调（#29）进行中；T33 ADR-0006 数据库落地（#34）已执行
-当前状态：M1–M5 已交付（等待负责人验收）；M6 IN_PROGRESS（T26/T27 完成、T28 进行中）；**ADR-0006 已落地**（PostgreSQL 只在 Ubuntu，Mac 经 SSH 隧道；2026-11-12 部署已执行）
-本机代码分支：`ticket/T33`（合并后为 `feat/bank-assistant`）
-本机代码SHA：以 `git log -1` 为准（T33 合并后刷新）
-Ubuntu代码SHA：`73babc3`（服务器 checkout；数据库部署使用仓库外部署副本，未改服务器工作树）
+当前里程碑：M7 部署与恢复演练已交付（待负责人验收）；M6 中 T26/T27 已完成，T28 条件任务 BLOCKED
+当前任务：T29 部署与恢复演练（#30）已执行；T33 ADR-0006 数据库落地（#34）已执行
+当前状态：M1–M5 已交付（等待负责人验收）；M6 部分完成；**M7-01/M7-05 已真实执行**（不可变镜像部署、备份恢复演练、回滚演练、索引重建；2026-11-12）
+本机代码分支：`ticket/T29`（合并后为 `feat/bank-assistant`）
+本机代码SHA：以 `git log -1` 为准（T29 合并后刷新）
+Ubuntu代码SHA：`f4f1346`（API 部署与备份/回滚演练使用的锁定 checkout；镜像 `bank-assistant:api-f4f1346`）
 最近更新：2026-11-12（Asia/Shanghai）
 
 ## 任务状态
@@ -59,7 +59,7 @@ Ubuntu代码SHA：`73babc3`（服务器 checkout；数据库部署使用仓库�
 | `.env.example` / `.env` | `DATABASE_URL=postgresql+psycopg://bank:<password>@127.0.0.1:15432/bank_assistant_dev`；文档说明四个库 |
 | `deploy/compose.db.yml` | 仅服务器使用；`PG_DATA_DIR` 必须显式、`POSTGRES_PASSWORD` 必须由 env-file 提供，端口保持回环 |
 | `make test-unit` | 仍为无数据库依赖（conftest 显式 sqlite 替身） |
-| `make backup` / `restore-check` | 仍属 M7，未实现（非零退出）；目标库已就绪 `bank_assistant_restore_check` |
+| `make backup` / `restore-check` | M7/T29 已实现：服务器侧 pg_dump dev/demo；恢复只写 `*_restore_check` 并核对行数/哈希/alembic |
 
 **验证证据（2026-11-12，Mac 侧经隧道）**：
 
@@ -137,6 +137,21 @@ Ubuntu 与 Mac 同 SHA；两端 `uv run pytest tests -q` 均 144 用例全过（
 
 M5 报告：`docs/milestones/M5-report.md`（T25 交付）。web 48 tests、`make test-e2e` 1 passed（回放链路）、真实云模型冒烟成功（DeepSeek chat + BGE embedding）。工单 #23/#24/#25/#26 全部 DONE。
 
+## M7 部署与恢复演练（T29 / #30，2026-11-12 已执行）
+
+| 项 | 实际值 |
+|---|---|
+| 镜像 | `bank-assistant:api-f4f1346`，id `sha256:30d11a86…`，`linux/amd64`；`docker save \| ssh docker load`，tar sha256 `27cb18c2…` |
+| 代码 SHA | `f4f1346427b72b940afdaabf60b5fd31cdc2fe97`（服务器 repo 重置到同一 SHA，工作树干净） |
+| 容器 | `bank-assistant-api`，`restart=unless-stopped`，healthy；host 网络 + `--host 127.0.0.1`，`ss` 仅 `127.0.0.1:8000` |
+| 配置 | 仓库外 `.env.app`（600）；数据/产物在 `~/workspace/bank-assistant/{data,artifacts}` |
+| 索引 | `idx-20261112T110703Z-2334d03e`，校准 sha256 `136e030a…`，`BAAI/bge-small-zh-v1.5@512`，30 分块；版本页可查 |
+| 迁移 | 迁移前备份 `20261112T110515Z` → `alembic upgrade head`（0011，no-op）→ 建索引 → 备份 `20261112T110714Z` |
+| 恢复演练 | 两库恢复到 `*_restore_check`；21 张表行数一致；demo `knowledge_versions` 32 行 max `fea41b4d…` md5 `de01cec6…`；alembic 0011 |
+| 回滚演练 | `api-f4f1346` → `api-54fa344`（live/ready/版本页通过）→ 恢复 `api-f4f1346`；未降 schema、未重启服务器 |
+| 隔离 | Mac 直连服务器 8000/5432 均拒绝；服务器仅回环监听 |
+| 报告 | `docs/milestones/M7-deploy-report.md`；手册 `docs/ops/runbook.md` |
+
 ## M6 工单状态
 
 | 工单 | 状态 | 证据 |
@@ -145,6 +160,7 @@ M5 报告：`docs/milestones/M5-report.md`（T25 交付）。web 48 tests、`mak
 | #28 T27 评测脚本与基线对比 | READY_FOR_ACCEPTANCE | `make eval` 全量 replay（50 检索/48 质检，1014 条预测）；live 20 条真实 DeepSeek（p50 1.23s、p95 1.66s、¥0.338 估算）；产物 `artifacts/evals/eval-replay-…103010Z`、`eval-live-…102704Z` |
 | #34 T33 数据库迁到 Ubuntu + SSH 隧道 | DONE（部署已执行） | PG18 容器 healthy；四库 owner=bank；`make test-integration` 130 passed；`make doctor` 隧道缺失失败/建立通过；`make seed-demo` 幂等且不触达 dev/test；LAN 直连失败 |
 | #29 T28 条件性微调 | BLOCKED | 等 #28 验收 |
+| #30 T29 部署与恢复演练 | READY_FOR_ACCEPTANCE | 镜像 `api-f4f1346`；备份恢复/回滚/索引重建全部实测；`docs/milestones/M7-deploy-report.md` |
 
 ## M4 验收
 

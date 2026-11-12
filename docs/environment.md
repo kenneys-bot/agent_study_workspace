@@ -89,11 +89,26 @@ docker inspect -f '{{.State.Health.Status}}' bank-assistant-db-db-1
 
 服务器或隧道不可达时：单元测试与前端可继续；集成测试、迁移、seed、备份恢复必须**显式失败或标记 BLOCKED**，不得静默改用 SQLite/mock 并宣称验收通过。
 
+## API 部署（M7-01 / M7-05，2026-11-12 已执行）
+
+| 项 | 实测值 |
+|---|---|
+| 容器 | `bank-assistant-api`（compose 项目 `bank-assistant-app`），`healthy`，`restart=unless-stopped` |
+| 镜像 | `bank-assistant:api-<code_sha7>`（不可变；本次 `api-f4f1346`，`linux/amd64`）；服务器不重建源码 |
+| 网络/端口 | `network_mode=host` + uvicorn `--host 127.0.0.1`；`ss -tln` 仅 `127.0.0.1:8000`，不写 `ports:` |
+| 配置 | 仓库外 `~/workspace/bank-assistant/.env.app`（chmod 600）；模板 `deploy/env.app.example` |
+| 数据/产物 | `~/workspace/bank-assistant/{data,artifacts}`；索引 `data/index`、模型缓存 `data/models` |
+| 部署状态 | `~/workspace/bank-assistant/deploy/state.env`（当前/上一版镜像与 SHA，非秘密） |
+| 部署/回滚 | `make deploy` / `make rollback`；上一版镜像保留在服务器，供回滚演练 |
+| 索引 | `make deploy-index`（一次性容器，服务器侧重建）；活动版本见 `/api/v1/system/version` |
+| 备份/恢复 | `make backup` → `backups/<UTC>/`；`make restore-check` 只写 `*_restore_check` |
+| 运维手册 | `docs/ops/runbook.md`；演练报告 `docs/milestones/M7-deploy-report.md` |
+
 ## 端口约定
 
 | 端口 | 用途 | 本机 | Ubuntu |
 |---|---|---|---|
-| 8000 | API | 空闲 | 空闲 |
+| 8000 | API | 开发用（`make up`，回环） | `127.0.0.1:8000`（API 容器，仅回环） |
 | 5173 | Vite 开发服务器（M5） | 空闲 | 空闲（不在此构建） |
 | 5432 | PostgreSQL（服务器回环） | **不使用**（Mac 不部署数据库） | 容器绑定 `127.0.0.1:5432`，不对外 |
 | 15432 | SSH 本地转发端口 | 需要数据库时占用 | — |
