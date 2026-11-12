@@ -9,7 +9,9 @@
 - ``knowledge_documents`` / ``knowledge_versions``：知识来源、业务范围与版本
   生命周期（T11，M2-03）；发布后内容不可覆盖。
 - ``knowledge_chunks``：版本化索引的原文区间与 embedding 身份（T14，M3）；
-- ``model_runs`` / ``suggestions``：候选答复运行追溯与业务状态（T15，M3）。
+- ``model_runs`` / ``suggestions``：候选答复运行追溯与业务状态（T15，M3）；
+- ``suggestion_feedback``：坐席采纳/编辑/拒绝反馈，只追加、不改写（T16，M3）；
+  反馈不是正确性标签，不得作为评测的 ground-truth。
 
 所有时间列为 ``timestamptz``，写入前统一为 UTC（契约 §1）。
 """
@@ -470,6 +472,83 @@ class Suggestion(Base):
         server_default=func.now(),
         onupdate=func.now(),
     )
+
+
+FEEDBACK_ACTION_CHECK = "action IN ('adopt', 'edit', 'reject')"
+FEEDBACK_EDIT_TEXT_CHECK = (
+    "action <> 'edit' OR (edited_text IS NOT NULL AND length(trim(edited_text)) > 0)"
+)
+FEEDBACK_REJECT_REASON_CHECK = (
+    "action <> 'reject' OR (reason IS NOT NULL AND length(trim(reason)) > 0)"
+)
+FEEDBACK_EDITED_TEXT_ONLY_EDIT_CHECK = "action = 'edit' OR edited_text IS NULL"
+
+
+class FeedbackAppendOnly(RuntimeError):
+    """反馈是追加记录：任何更新尝试都必须失败，历史不能被改写。"""
+
+    def __init__(self, feedback_id: UUID) -> None:
+        self.feedback_id = feedback_id
+        super().__init__(f"建议反馈不可修改: {feedback_id}")
+
+
+class SuggestionFeedback(Base):
+    """坐席对候选答复的反馈（契约 §2）：追加写入，没有更新路径。
+
+    一条反馈通过 ``suggestion_id`` 绑定到**当时的具体建议记录**；重新生成
+    候选答复会产生新的 suggestion_id，历史反馈不会被改挂到新版本。
+
+    反馈不是正确性标签：``adopt`` 只表示坐席决定采用（原样或编辑后），
+    不表示答复在语义上正确。它不得被用作评测的 ground-truth 标签，任何
+    代码都不得把 adopt 当作“正确”。
+
+    - ``edited_text``：仅 ``edit`` 保存坐席实际改写后的文本（编辑文本留存）；
+    - ``reason``：反馈理由，``reject`` 必须给出；
+    - ``created_at``：写入时间；本表只追加，不更新。
+    """
+
+    __tablename__ = "suggestion_feedback"
+    __table_args__ = (
+        CheckConstraint(FEEDBACK_ACTION_CHECK, name="ck_suggestion_feedback_action"),
+        CheckConstraint(
+            FEEDBACK_EDIT_TEXT_CHECK, name="ck_suggestion_feedback_edit_text"
+        ),
+        CheckConstraint(
+            FEEDBACK_REJECT_REASON_CHECK,
+            name="ck_suggestion_feedback_reject_reason",
+        ),
+        CheckConstraint(
+            FEEDBACK_EDITED_TEXT_ONLY_EDIT_CHECK,
+            name="ck_suggestion_feedback_edited_text_only_edit",
+        ),
+        Index(
+            "ix_suggestion_feedback_suggestion_created",
+            "suggestion_id",
+            "created_at",
+        ),
+    )
+
+    feedback_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    suggestion_id: Mapped[UUID] = mapped_column(
+        ForeignKey("suggestions.suggestion_id", ondelete="RESTRICT"), nullable=False
+    )
+    actor_id: Mapped[UUID] = mapped_column(
+        ForeignKey("users.user_id", ondelete="RESTRICT"), nullable=False
+    )
+    action: Mapped[str] = mapped_column(String(16), nullable=False)
+    edited_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+@event.listens_for(SuggestionFeedback, "before_update")
+def _reject_feedback_update(
+    mapper: Any, connection: Any, target: SuggestionFeedback
+) -> None:
+    """ORM 层兜底：反馈只能追加，任何 UPDATE 都显式失败。"""
+    raise FeedbackAppendOnly(target.feedback_id)
 
 
 @event.listens_for(KnowledgeVersion, "before_update")

@@ -47,7 +47,7 @@
 
 ### 候选答复
 
-`answered / needs_clarification / needs_human / failed`。failed只用于系统或模型执行失败；无证据/条件不足是业务状态，不伪装成系统故障。每次生成保留独立记录，反馈关联具体版本。
+`answered / needs_clarification / needs_human / failed`。failed只用于系统或模型执行失败；无证据/条件不足是业务状态，不伪装成系统故障。每次生成保留独立记录，反馈关联具体版本。坐席反馈的采纳/编辑/拒绝只是反馈，不是正确性标签，不得作为评测的ground-truth标签。
 
 引用只允许包含本次召回的授权版本与原文片段。若生成期间知识退役，返回前校验失败后重新检索或转人工，不能继续交付失效引用。
 
@@ -107,7 +107,8 @@
 | POST /conversations | text/json内容、来源 | conversation_id与轮次 |
 | GET /conversations/{id} | — | 授权会话与轮次 |
 | POST /suggestions | conversation_id、query、业务可选 | 状态、候选答复、引用、run_id |
-| POST /suggestions/{id}/feedback | action、编辑文本、理由 | feedback_id |
+| POST /suggestions/{id}/feedback | action、编辑文本、理由 | feedback_id；追加保存，不改写历史 |
+| GET /suggestions/{id} | — | 建议内容、状态与该条建议的反馈史（追溯具体版本） |
 | POST /inspections | conversation_id、规则范围 | 202、inspection_id、task_id |
 | GET /inspections/{id} | — | 状态、逐规则判断、证据、失败原因 |
 | POST /reviews | inspection_id、assignee_id | 真实review_id与revision |
