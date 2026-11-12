@@ -1,0 +1,2201 @@
+{
+  "annotation": {
+    "annotator_count": 1,
+    "business_gold": false,
+    "double_annotated_pct": 0,
+    "human_gold": false,
+    "label_origin": "synthetic_by_construction",
+    "method": "developer_single_annotator",
+    "note": "数据与标签全部由确定性合成模板产生；唯一开发者做过抽样复核，但这不是人工金标或业务金标，也没有第二标注人，不能声称双人一致性。",
+    "reviewed_sample_pct": 10
+  },
+  "code_sha": "b4c9839ea20805101e76467d642bd41f85292e90",
+  "contains_real_customer_data": false,
+  "counts": {
+    "by_scenario": {
+      "complaint": 172,
+      "credit_card_fee": 172,
+      "lost_card": 172
+    },
+    "by_scenario_split": {
+      "complaint": {
+        "dev": 34,
+        "test": 33,
+        "train": 105
+      },
+      "credit_card_fee": {
+        "dev": 32,
+        "test": 32,
+        "train": 108
+      },
+      "lost_card": {
+        "dev": 34,
+        "test": 33,
+        "train": 105
+      }
+    },
+    "by_split": {
+      "dev": 100,
+      "test": 98,
+      "train": 318
+    },
+    "by_task": {
+      "inspection": 186,
+      "retrieval": 330
+    },
+    "by_task_split": {
+      "inspection": {
+        "dev": 22,
+        "test": 48,
+        "train": 116
+      },
+      "retrieval": {
+        "dev": 78,
+        "test": 50,
+        "train": 202
+      }
+    },
+    "group_count": 151,
+    "hard_by_scenario_split": {
+      "complaint": {
+        "dev": 10,
+        "test": 9,
+        "train": 29
+      },
+      "credit_card_fee": {
+        "dev": 8,
+        "test": 8,
+        "train": 32
+      },
+      "lost_card": {
+        "dev": 10,
+        "test": 9,
+        "train": 29
+      }
+    },
+    "hard_category_counts": {
+      "complaint": {
+        "ambiguous_intent": 8,
+        "expired_knowledge": 8,
+        "insufficient_info": 8,
+        "negation": 8,
+        "no_answer": 8,
+        "quoted_speech": 8
+      },
+      "credit_card_fee": {
+        "ambiguous_intent": 8,
+        "expired_knowledge": 8,
+        "insufficient_info": 8,
+        "negation": 8,
+        "no_answer": 8,
+        "quoted_speech": 8
+      },
+      "lost_card": {
+        "ambiguous_intent": 8,
+        "expired_knowledge": 8,
+        "insufficient_info": 8,
+        "negation": 8,
+        "no_answer": 8,
+        "quoted_speech": 8
+      }
+    },
+    "hard_samples": {
+      "complaint": {
+        "count": 48,
+        "pct": 27.91,
+        "total": 172
+      },
+      "credit_card_fee": {
+        "count": 48,
+        "pct": 27.91,
+        "total": 172
+      },
+      "lost_card": {
+        "count": 48,
+        "pct": 27.91,
+        "total": 172
+      }
+    },
+    "total": 516
+  },
+  "created_at": "2026-11-12T10:10:08.864514+00:00",
+  "dataset_id": "bank-cs-m6-synthetic",
+  "dataset_manifest_sha256": "32a43ff982c68e61fb176559733065d3d999be5a9abc2a28a56e3d83d676996a",
+  "dataset_version": "v1",
+  "files": [
+    {
+      "path": "train.jsonl",
+      "rows": 318,
+      "sha256": "538b3847bada550a5fff7ea8d858a89afc4384f7f3eba43bf9653ae7cd58588a",
+      "split": "train"
+    },
+    {
+      "path": "dev.jsonl",
+      "rows": 100,
+      "sha256": "650fc9b244dc97530976b6c40f83fc4c9f2c5a12dbb98a49f9e3dcce3037c9f1",
+      "split": "dev"
+    },
+    {
+      "path": "test.jsonl",
+      "rows": 98,
+      "sha256": "869a8bd02b231d071fe1cff3299bd587e6ccd4771675b2485327685463c70096",
+      "split": "test"
+    }
+  ],
+  "frozen": {
+    "frozen": true,
+    "rule": "同一 dataset_version 下 test 不可改写；变更数据必须提升版本。",
+    "test_group_ids": [
+      "ins:complaint:channel_explain:complaint_channel",
+      "ins:complaint:partial_complaint:complaint_registration",
+      "ins:complaint:privacy:complaint_privacy",
+      "ins:complaint:quoted_obstruction:complaint_obstruction",
+      "ins:complaint:repeated_complaint:repeated_complaint",
+      "ins:credit_card_fee:expired_fee:fee_statement",
+      "ins:credit_card_fee:overdue_boundary:overdue_fee",
+      "ins:credit_card_fee:waiver_pending:fee_waiver",
+      "ins:credit_card_fee:waiver_request:fee_waiver",
+      "ins:lost_card:claim_success:completion_claim",
+      "ins:lost_card:mixed_request:completion_claim",
+      "ins:lost_card:pwd_request:password_handling",
+      "ins:lost_card:temporary_freeze:freeze_vs_report",
+      "ret:complaint:complaint-demo-02:hard_quoted_speech",
+      "ret:complaint:complaint-demo-04:complaint_callback",
+      "ret:complaint:complaint-demo-05:batch_complaint",
+      "ret:complaint:complaint-demo-05:hard_negation",
+      "ret:complaint:complaint-demo-05:repeated_complaint",
+      "ret:complaint:complaint-demo-06:hard_quoted_speech",
+      "ret:credit_card_fee:fee-demo-01:hard_negation",
+      "ret:credit_card_fee:fee-demo-02:hard_negation",
+      "ret:credit_card_fee:fee-demo-02:installment_fee_display",
+      "ret:credit_card_fee:fee-demo-04:grace_period",
+      "ret:credit_card_fee:fee-demo-04:repayment_order",
+      "ret:credit_card_fee:fee-demo-05:hard_quoted_speech",
+      "ret:lost_card:lost-card-demo-02:hard_ambiguous_intent",
+      "ret:lost_card:lost-card-demo-04:report_effective_time",
+      "ret:lost_card:lost-card-pub-01:credit_record_retention",
+      "ret:lost_card:lost-card-pub-04:credit_dispute_reply",
+      "ret:lost_card:none:hard_no_answer"
+    ],
+    "test_items": 98,
+    "test_split_sha256": "869a8bd02b231d071fe1cff3299bd587e6ccd4771675b2485327685463c70096"
+  },
+  "groups": [
+    {
+      "group_id": "ins:complaint:angry_customer:service_recovery",
+      "hard_categories": [],
+      "intent_cluster": "service_recovery",
+      "knowledge_sources": [],
+      "scenario": "complaint",
+      "size": 4,
+      "split": "train",
+      "task": "inspection",
+      "template_family": "angry_customer"
+    },
+    {
+      "group_id": "ins:complaint:callback:callback",
+      "hard_categories": [],
+      "intent_cluster": "callback",
+      "knowledge_sources": [],
+      "scenario": "complaint",
+      "size": 4,
+      "split": "dev",
+      "task": "inspection",
+      "template_family": "callback"
+    },
+    {
+      "group_id": "ins:complaint:channel_explain:complaint_channel",
+      "hard_categories": [],
+      "intent_cluster": "complaint_channel",
+      "knowledge_sources": [],
+      "scenario": "complaint",
+      "size": 4,
+      "split": "test",
+      "task": "inspection",
+      "template_family": "channel_explain"
+    },
+    {
+      "group_id": "ins:complaint:empty_call:no_content",
+      "hard_categories": [
+        "no_answer"
+      ],
+      "intent_cluster": "no_content",
+      "knowledge_sources": [],
+      "scenario": "complaint",
+      "size": 3,
+      "split": "train",
+      "task": "inspection",
+      "template_family": "empty_call"
+    },
+    {
+      "group_id": "ins:complaint:escalation:complaint_escalation",
+      "hard_categories": [],
+      "intent_cluster": "complaint_escalation",
+      "knowledge_sources": [],
+      "scenario": "complaint",
+      "size": 4,
+      "split": "train",
+      "task": "inspection",
+      "template_family": "escalation"
+    },
+    {
+      "group_id": "ins:complaint:feedback:satisfaction_record",
+      "hard_categories": [],
+      "intent_cluster": "satisfaction_record",
+      "knowledge_sources": [],
+      "scenario": "complaint",
+      "size": 4,
+      "split": "train",
+      "task": "inspection",
+      "template_family": "feedback"
+    },
+    {
+      "group_id": "ins:complaint:future_policy:complaint_timeline",
+      "hard_categories": [
+        "expired_knowledge"
+      ],
+      "intent_cluster": "complaint_timeline",
+      "knowledge_sources": [],
+      "scenario": "complaint",
+      "size": 3,
+      "split": "dev",
+      "task": "inspection",
+      "template_family": "future_policy"
+    },
+    {
+      "group_id": "ins:complaint:insult:insulting_language",
+      "hard_categories": [],
+      "intent_cluster": "insulting_language",
+      "knowledge_sources": [],
+      "scenario": "complaint",
+      "size": 4,
+      "split": "train",
+      "task": "inspection",
+      "template_family": "insult"
+    },
+    {
+      "group_id": "ins:complaint:mediation:mediation",
+      "hard_categories": [],
+      "intent_cluster": "mediation",
+      "knowledge_sources": [],
+      "scenario": "complaint",
+      "size": 4,
+      "split": "dev",
+      "task": "inspection",
+      "template_family": "mediation"
+    },
+    {
+      "group_id": "ins:complaint:mixed_complaint:complaint_registration",
+      "hard_categories": [
+        "ambiguous_intent"
+      ],
+      "intent_cluster": "complaint_registration",
+      "knowledge_sources": [],
+      "scenario": "complaint",
+      "size": 3,
+      "split": "train",
+      "task": "inspection",
+      "template_family": "mixed_complaint"
+    },
+    {
+      "group_id": "ins:complaint:negation_obstruction:complaint_obstruction",
+      "hard_categories": [
+        "negation"
+      ],
+      "intent_cluster": "complaint_obstruction",
+      "knowledge_sources": [],
+      "scenario": "complaint",
+      "size": 3,
+      "split": "train",
+      "task": "inspection",
+      "template_family": "negation_obstruction"
+    },
+    {
+      "group_id": "ins:complaint:obstruction:complaint_obstruction",
+      "hard_categories": [],
+      "intent_cluster": "complaint_obstruction",
+      "knowledge_sources": [],
+      "scenario": "complaint",
+      "size": 4,
+      "split": "train",
+      "task": "inspection",
+      "template_family": "obstruction"
+    },
+    {
+      "group_id": "ins:complaint:partial_complaint:complaint_registration",
+      "hard_categories": [
+        "insufficient_info"
+      ],
+      "intent_cluster": "complaint_registration",
+      "knowledge_sources": [],
+      "scenario": "complaint",
+      "size": 3,
+      "split": "test",
+      "task": "inspection",
+      "template_family": "partial_complaint"
+    },
+    {
+      "group_id": "ins:complaint:privacy:complaint_privacy",
+      "hard_categories": [],
+      "intent_cluster": "complaint_privacy",
+      "knowledge_sources": [],
+      "scenario": "complaint",
+      "size": 4,
+      "split": "test",
+      "task": "inspection",
+      "template_family": "privacy"
+    },
+    {
+      "group_id": "ins:complaint:quoted_obstruction:complaint_obstruction",
+      "hard_categories": [
+        "quoted_speech"
+      ],
+      "intent_cluster": "complaint_obstruction",
+      "knowledge_sources": [],
+      "scenario": "complaint",
+      "size": 3,
+      "split": "test",
+      "task": "inspection",
+      "template_family": "quoted_obstruction"
+    },
+    {
+      "group_id": "ins:complaint:register:complaint_registration",
+      "hard_categories": [],
+      "intent_cluster": "complaint_registration",
+      "knowledge_sources": [],
+      "scenario": "complaint",
+      "size": 4,
+      "split": "train",
+      "task": "inspection",
+      "template_family": "register"
+    },
+    {
+      "group_id": "ins:complaint:repeated_complaint:repeated_complaint",
+      "hard_categories": [],
+      "intent_cluster": "repeated_complaint",
+      "knowledge_sources": [],
+      "scenario": "complaint",
+      "size": 4,
+      "split": "test",
+      "task": "inspection",
+      "template_family": "repeated_complaint"
+    },
+    {
+      "group_id": "ins:credit_card_fee:annual_fee_explain:fee_statement",
+      "hard_categories": [],
+      "intent_cluster": "fee_statement",
+      "knowledge_sources": [],
+      "scenario": "credit_card_fee",
+      "size": 4,
+      "split": "train",
+      "task": "inspection",
+      "template_family": "annual_fee_explain"
+    },
+    {
+      "group_id": "ins:credit_card_fee:billing_dispute:billing_dispute",
+      "hard_categories": [],
+      "intent_cluster": "billing_dispute",
+      "knowledge_sources": [],
+      "scenario": "credit_card_fee",
+      "size": 4,
+      "split": "dev",
+      "task": "inspection",
+      "template_family": "billing_dispute"
+    },
+    {
+      "group_id": "ins:credit_card_fee:empty_call:no_content",
+      "hard_categories": [
+        "no_answer"
+      ],
+      "intent_cluster": "no_content",
+      "knowledge_sources": [],
+      "scenario": "credit_card_fee",
+      "size": 3,
+      "split": "train",
+      "task": "inspection",
+      "template_family": "empty_call"
+    },
+    {
+      "group_id": "ins:credit_card_fee:expired_fee:fee_statement",
+      "hard_categories": [
+        "expired_knowledge"
+      ],
+      "intent_cluster": "fee_statement",
+      "knowledge_sources": [],
+      "scenario": "credit_card_fee",
+      "size": 3,
+      "split": "test",
+      "task": "inspection",
+      "template_family": "expired_fee"
+    },
+    {
+      "group_id": "ins:credit_card_fee:fee_announcement:fee_statement",
+      "hard_categories": [],
+      "intent_cluster": "fee_statement",
+      "knowledge_sources": [],
+      "scenario": "credit_card_fee",
+      "size": 4,
+      "split": "train",
+      "task": "inspection",
+      "template_family": "fee_announcement"
+    },
+    {
+      "group_id": "ins:credit_card_fee:fee_conflict:fee_statement",
+      "hard_categories": [],
+      "intent_cluster": "fee_statement",
+      "knowledge_sources": [],
+      "scenario": "credit_card_fee",
+      "size": 4,
+      "split": "dev",
+      "task": "inspection",
+      "template_family": "fee_conflict"
+    },
+    {
+      "group_id": "ins:credit_card_fee:installment_fee:installment_fee",
+      "hard_categories": [],
+      "intent_cluster": "installment_fee",
+      "knowledge_sources": [],
+      "scenario": "credit_card_fee",
+      "size": 4,
+      "split": "train",
+      "task": "inspection",
+      "template_family": "installment_fee"
+    },
+    {
+      "group_id": "ins:credit_card_fee:late_fee_review:late_fee",
+      "hard_categories": [],
+      "intent_cluster": "late_fee",
+      "knowledge_sources": [],
+      "scenario": "credit_card_fee",
+      "size": 4,
+      "split": "train",
+      "task": "inspection",
+      "template_family": "late_fee_review"
+    },
+    {
+      "group_id": "ins:credit_card_fee:minimum_payment:minimum_payment",
+      "hard_categories": [],
+      "intent_cluster": "minimum_payment",
+      "knowledge_sources": [],
+      "scenario": "credit_card_fee",
+      "size": 4,
+      "split": "train",
+      "task": "inspection",
+      "template_family": "minimum_payment"
+    },
+    {
+      "group_id": "ins:credit_card_fee:mixed_fee_request:fee_statement",
+      "hard_categories": [
+        "ambiguous_intent"
+      ],
+      "intent_cluster": "fee_statement",
+      "knowledge_sources": [],
+      "scenario": "credit_card_fee",
+      "size": 3,
+      "split": "train",
+      "task": "inspection",
+      "template_family": "mixed_fee_request"
+    },
+    {
+      "group_id": "ins:credit_card_fee:negation_fee:fee_waiver",
+      "hard_categories": [
+        "negation"
+      ],
+      "intent_cluster": "fee_waiver",
+      "knowledge_sources": [],
+      "scenario": "credit_card_fee",
+      "size": 3,
+      "split": "train",
+      "task": "inspection",
+      "template_family": "negation_fee"
+    },
+    {
+      "group_id": "ins:credit_card_fee:overdue_boundary:overdue_fee",
+      "hard_categories": [],
+      "intent_cluster": "overdue_fee",
+      "knowledge_sources": [],
+      "scenario": "credit_card_fee",
+      "size": 4,
+      "split": "test",
+      "task": "inspection",
+      "template_family": "overdue_boundary"
+    },
+    {
+      "group_id": "ins:credit_card_fee:partial_bill:fee_statement",
+      "hard_categories": [
+        "insufficient_info"
+      ],
+      "intent_cluster": "fee_statement",
+      "knowledge_sources": [],
+      "scenario": "credit_card_fee",
+      "size": 3,
+      "split": "train",
+      "task": "inspection",
+      "template_family": "partial_bill"
+    },
+    {
+      "group_id": "ins:credit_card_fee:quoted_waiver:fee_waiver",
+      "hard_categories": [
+        "quoted_speech"
+      ],
+      "intent_cluster": "fee_waiver",
+      "knowledge_sources": [],
+      "scenario": "credit_card_fee",
+      "size": 3,
+      "split": "train",
+      "task": "inspection",
+      "template_family": "quoted_waiver"
+    },
+    {
+      "group_id": "ins:credit_card_fee:repayment_order:repayment_order",
+      "hard_categories": [],
+      "intent_cluster": "repayment_order",
+      "knowledge_sources": [],
+      "scenario": "credit_card_fee",
+      "size": 4,
+      "split": "train",
+      "task": "inspection",
+      "template_family": "repayment_order"
+    },
+    {
+      "group_id": "ins:credit_card_fee:waiver_pending:fee_waiver",
+      "hard_categories": [],
+      "intent_cluster": "fee_waiver",
+      "knowledge_sources": [],
+      "scenario": "credit_card_fee",
+      "size": 4,
+      "split": "test",
+      "task": "inspection",
+      "template_family": "waiver_pending"
+    },
+    {
+      "group_id": "ins:credit_card_fee:waiver_request:fee_waiver",
+      "hard_categories": [],
+      "intent_cluster": "fee_waiver",
+      "knowledge_sources": [],
+      "scenario": "credit_card_fee",
+      "size": 4,
+      "split": "test",
+      "task": "inspection",
+      "template_family": "waiver_request"
+    },
+    {
+      "group_id": "ins:lost_card:claim_success:completion_claim",
+      "hard_categories": [],
+      "intent_cluster": "completion_claim",
+      "knowledge_sources": [],
+      "scenario": "lost_card",
+      "size": 4,
+      "split": "test",
+      "task": "inspection",
+      "template_family": "claim_success"
+    },
+    {
+      "group_id": "ins:lost_card:contact_update:contact_change",
+      "hard_categories": [],
+      "intent_cluster": "contact_change",
+      "knowledge_sources": [],
+      "scenario": "lost_card",
+      "size": 4,
+      "split": "train",
+      "task": "inspection",
+      "template_family": "contact_update"
+    },
+    {
+      "group_id": "ins:lost_card:counter_handoff:counter_handoff",
+      "hard_categories": [],
+      "intent_cluster": "counter_handoff",
+      "knowledge_sources": [],
+      "scenario": "lost_card",
+      "size": 4,
+      "split": "train",
+      "task": "inspection",
+      "template_family": "counter_handoff"
+    },
+    {
+      "group_id": "ins:lost_card:customer_upset:service_recovery",
+      "hard_categories": [],
+      "intent_cluster": "service_recovery",
+      "knowledge_sources": [],
+      "scenario": "lost_card",
+      "size": 4,
+      "split": "train",
+      "task": "inspection",
+      "template_family": "customer_upset"
+    },
+    {
+      "group_id": "ins:lost_card:dispute_materials:dispute_material",
+      "hard_categories": [],
+      "intent_cluster": "dispute_material",
+      "knowledge_sources": [],
+      "scenario": "lost_card",
+      "size": 4,
+      "split": "train",
+      "task": "inspection",
+      "template_family": "dispute_materials"
+    },
+    {
+      "group_id": "ins:lost_card:empty_call:no_content",
+      "hard_categories": [
+        "no_answer"
+      ],
+      "intent_cluster": "no_content",
+      "knowledge_sources": [],
+      "scenario": "lost_card",
+      "size": 3,
+      "split": "train",
+      "task": "inspection",
+      "template_family": "empty_call"
+    },
+    {
+      "group_id": "ins:lost_card:expired_policy:replacement_timeline",
+      "hard_categories": [
+        "expired_knowledge"
+      ],
+      "intent_cluster": "replacement_timeline",
+      "knowledge_sources": [],
+      "scenario": "lost_card",
+      "size": 3,
+      "split": "train",
+      "task": "inspection",
+      "template_family": "expired_policy"
+    },
+    {
+      "group_id": "ins:lost_card:mixed_request:completion_claim",
+      "hard_categories": [
+        "ambiguous_intent"
+      ],
+      "intent_cluster": "completion_claim",
+      "knowledge_sources": [],
+      "scenario": "lost_card",
+      "size": 3,
+      "split": "test",
+      "task": "inspection",
+      "template_family": "mixed_request"
+    },
+    {
+      "group_id": "ins:lost_card:negation_pwd:password_handling",
+      "hard_categories": [
+        "negation"
+      ],
+      "intent_cluster": "password_handling",
+      "knowledge_sources": [],
+      "scenario": "lost_card",
+      "size": 3,
+      "split": "train",
+      "task": "inspection",
+      "template_family": "negation_pwd"
+    },
+    {
+      "group_id": "ins:lost_card:overseas_loss:overseas_report",
+      "hard_categories": [],
+      "intent_cluster": "overseas_report",
+      "knowledge_sources": [],
+      "scenario": "lost_card",
+      "size": 4,
+      "split": "train",
+      "task": "inspection",
+      "template_family": "overseas_loss"
+    },
+    {
+      "group_id": "ins:lost_card:partial_case:identity_verification",
+      "hard_categories": [
+        "insufficient_info"
+      ],
+      "intent_cluster": "identity_verification",
+      "knowledge_sources": [],
+      "scenario": "lost_card",
+      "size": 3,
+      "split": "train",
+      "task": "inspection",
+      "template_family": "partial_case"
+    },
+    {
+      "group_id": "ins:lost_card:pwd_request:password_handling",
+      "hard_categories": [],
+      "intent_cluster": "password_handling",
+      "knowledge_sources": [],
+      "scenario": "lost_card",
+      "size": 4,
+      "split": "test",
+      "task": "inspection",
+      "template_family": "pwd_request"
+    },
+    {
+      "group_id": "ins:lost_card:quoted_claim:completion_claim",
+      "hard_categories": [
+        "quoted_speech"
+      ],
+      "intent_cluster": "completion_claim",
+      "knowledge_sources": [],
+      "scenario": "lost_card",
+      "size": 3,
+      "split": "dev",
+      "task": "inspection",
+      "template_family": "quoted_claim"
+    },
+    {
+      "group_id": "ins:lost_card:receipt_given:completion_receipt",
+      "hard_categories": [],
+      "intent_cluster": "completion_receipt",
+      "knowledge_sources": [],
+      "scenario": "lost_card",
+      "size": 4,
+      "split": "train",
+      "task": "inspection",
+      "template_family": "receipt_given"
+    },
+    {
+      "group_id": "ins:lost_card:replacement_fee:replacement_timeline",
+      "hard_categories": [],
+      "intent_cluster": "replacement_timeline",
+      "knowledge_sources": [],
+      "scenario": "lost_card",
+      "size": 4,
+      "split": "train",
+      "task": "inspection",
+      "template_family": "replacement_fee"
+    },
+    {
+      "group_id": "ins:lost_card:safe_code_verify:identity_verification",
+      "hard_categories": [],
+      "intent_cluster": "identity_verification",
+      "knowledge_sources": [],
+      "scenario": "lost_card",
+      "size": 4,
+      "split": "train",
+      "task": "inspection",
+      "template_family": "safe_code_verify"
+    },
+    {
+      "group_id": "ins:lost_card:temporary_freeze:freeze_vs_report",
+      "hard_categories": [],
+      "intent_cluster": "freeze_vs_report",
+      "knowledge_sources": [],
+      "scenario": "lost_card",
+      "size": 4,
+      "split": "test",
+      "task": "inspection",
+      "template_family": "temporary_freeze"
+    },
+    {
+      "group_id": "ret:complaint:complaint-demo-01:complaint_grading",
+      "hard_categories": [],
+      "intent_cluster": "complaint_grading",
+      "knowledge_sources": [
+        "complaint-demo-01"
+      ],
+      "scenario": "complaint",
+      "size": 4,
+      "split": "dev",
+      "task": "retrieval",
+      "template_family": "retrieval_paraphrase"
+    },
+    {
+      "group_id": "ret:complaint:complaint-demo-01:complaint_registration",
+      "hard_categories": [],
+      "intent_cluster": "complaint_registration",
+      "knowledge_sources": [
+        "complaint-demo-01"
+      ],
+      "scenario": "complaint",
+      "size": 4,
+      "split": "train",
+      "task": "retrieval",
+      "template_family": "retrieval_paraphrase"
+    },
+    {
+      "group_id": "ret:complaint:complaint-demo-01:hard_ambiguous_intent",
+      "hard_categories": [
+        "ambiguous_intent"
+      ],
+      "intent_cluster": "hard_ambiguous_intent",
+      "knowledge_sources": [
+        "complaint-demo-01",
+        "complaint-demo-06"
+      ],
+      "scenario": "complaint",
+      "size": 4,
+      "split": "dev",
+      "task": "retrieval",
+      "template_family": "retrieval_hard"
+    },
+    {
+      "group_id": "ret:complaint:complaint-demo-01:hard_quoted_speech",
+      "hard_categories": [
+        "quoted_speech"
+      ],
+      "intent_cluster": "hard_quoted_speech",
+      "knowledge_sources": [
+        "complaint-demo-01"
+      ],
+      "scenario": "complaint",
+      "size": 1,
+      "split": "train",
+      "task": "retrieval",
+      "template_family": "retrieval_hard"
+    },
+    {
+      "group_id": "ret:complaint:complaint-demo-02:first_response_time",
+      "hard_categories": [],
+      "intent_cluster": "first_response_time",
+      "knowledge_sources": [
+        "complaint-demo-02"
+      ],
+      "scenario": "complaint",
+      "size": 4,
+      "split": "train",
+      "task": "retrieval",
+      "template_family": "retrieval_paraphrase"
+    },
+    {
+      "group_id": "ret:complaint:complaint-demo-02:hard_negation",
+      "hard_categories": [
+        "negation"
+      ],
+      "intent_cluster": "hard_negation",
+      "knowledge_sources": [
+        "complaint-demo-02"
+      ],
+      "scenario": "complaint",
+      "size": 1,
+      "split": "train",
+      "task": "retrieval",
+      "template_family": "retrieval_hard"
+    },
+    {
+      "group_id": "ret:complaint:complaint-demo-02:hard_quoted_speech",
+      "hard_categories": [
+        "quoted_speech"
+      ],
+      "intent_cluster": "hard_quoted_speech",
+      "knowledge_sources": [
+        "complaint-demo-02"
+      ],
+      "scenario": "complaint",
+      "size": 1,
+      "split": "test",
+      "task": "retrieval",
+      "template_family": "retrieval_hard"
+    },
+    {
+      "group_id": "ret:complaint:complaint-demo-02:response_clock",
+      "hard_categories": [],
+      "intent_cluster": "response_clock",
+      "knowledge_sources": [
+        "complaint-demo-02"
+      ],
+      "scenario": "complaint",
+      "size": 4,
+      "split": "train",
+      "task": "retrieval",
+      "template_family": "retrieval_paraphrase"
+    },
+    {
+      "group_id": "ret:complaint:complaint-demo-03:complaint_escalation",
+      "hard_categories": [],
+      "intent_cluster": "complaint_escalation",
+      "knowledge_sources": [
+        "complaint-demo-03"
+      ],
+      "scenario": "complaint",
+      "size": 4,
+      "split": "train",
+      "task": "retrieval",
+      "template_family": "retrieval_paraphrase"
+    },
+    {
+      "group_id": "ret:complaint:complaint-demo-03:hard_negation",
+      "hard_categories": [
+        "negation"
+      ],
+      "intent_cluster": "hard_negation",
+      "knowledge_sources": [
+        "complaint-demo-03"
+      ],
+      "scenario": "complaint",
+      "size": 2,
+      "split": "train",
+      "task": "retrieval",
+      "template_family": "retrieval_hard"
+    },
+    {
+      "group_id": "ret:complaint:complaint-demo-03:transfer_owner",
+      "hard_categories": [],
+      "intent_cluster": "transfer_owner",
+      "knowledge_sources": [
+        "complaint-demo-03"
+      ],
+      "scenario": "complaint",
+      "size": 4,
+      "split": "dev",
+      "task": "retrieval",
+      "template_family": "retrieval_paraphrase"
+    },
+    {
+      "group_id": "ret:complaint:complaint-demo-04:complaint_callback",
+      "hard_categories": [],
+      "intent_cluster": "complaint_callback",
+      "knowledge_sources": [
+        "complaint-demo-04"
+      ],
+      "scenario": "complaint",
+      "size": 4,
+      "split": "test",
+      "task": "retrieval",
+      "template_family": "retrieval_paraphrase"
+    },
+    {
+      "group_id": "ret:complaint:complaint-demo-04:hard_negation",
+      "hard_categories": [
+        "negation"
+      ],
+      "intent_cluster": "hard_negation",
+      "knowledge_sources": [
+        "complaint-demo-04"
+      ],
+      "scenario": "complaint",
+      "size": 1,
+      "split": "dev",
+      "task": "retrieval",
+      "template_family": "retrieval_hard"
+    },
+    {
+      "group_id": "ret:complaint:complaint-demo-04:hard_quoted_speech",
+      "hard_categories": [
+        "quoted_speech"
+      ],
+      "intent_cluster": "hard_quoted_speech",
+      "knowledge_sources": [
+        "complaint-demo-04"
+      ],
+      "scenario": "complaint",
+      "size": 1,
+      "split": "train",
+      "task": "retrieval",
+      "template_family": "retrieval_hard"
+    },
+    {
+      "group_id": "ret:complaint:complaint-demo-04:satisfaction_record",
+      "hard_categories": [],
+      "intent_cluster": "satisfaction_record",
+      "knowledge_sources": [
+        "complaint-demo-04"
+      ],
+      "scenario": "complaint",
+      "size": 4,
+      "split": "train",
+      "task": "retrieval",
+      "template_family": "retrieval_paraphrase"
+    },
+    {
+      "group_id": "ret:complaint:complaint-demo-05:batch_complaint",
+      "hard_categories": [],
+      "intent_cluster": "batch_complaint",
+      "knowledge_sources": [
+        "complaint-demo-05"
+      ],
+      "scenario": "complaint",
+      "size": 4,
+      "split": "test",
+      "task": "retrieval",
+      "template_family": "retrieval_paraphrase"
+    },
+    {
+      "group_id": "ret:complaint:complaint-demo-05:hard_negation",
+      "hard_categories": [
+        "negation"
+      ],
+      "intent_cluster": "hard_negation",
+      "knowledge_sources": [
+        "complaint-demo-05"
+      ],
+      "scenario": "complaint",
+      "size": 1,
+      "split": "test",
+      "task": "retrieval",
+      "template_family": "retrieval_hard"
+    },
+    {
+      "group_id": "ret:complaint:complaint-demo-05:hard_quoted_speech",
+      "hard_categories": [
+        "quoted_speech"
+      ],
+      "intent_cluster": "hard_quoted_speech",
+      "knowledge_sources": [
+        "complaint-demo-05"
+      ],
+      "scenario": "complaint",
+      "size": 1,
+      "split": "dev",
+      "task": "retrieval",
+      "template_family": "retrieval_hard"
+    },
+    {
+      "group_id": "ret:complaint:complaint-demo-05:repeated_complaint",
+      "hard_categories": [],
+      "intent_cluster": "repeated_complaint",
+      "knowledge_sources": [
+        "complaint-demo-05"
+      ],
+      "scenario": "complaint",
+      "size": 4,
+      "split": "test",
+      "task": "retrieval",
+      "template_family": "retrieval_paraphrase"
+    },
+    {
+      "group_id": "ret:complaint:complaint-demo-06:complaint_language",
+      "hard_categories": [],
+      "intent_cluster": "complaint_language",
+      "knowledge_sources": [
+        "complaint-demo-06"
+      ],
+      "scenario": "complaint",
+      "size": 4,
+      "split": "train",
+      "task": "retrieval",
+      "template_family": "retrieval_paraphrase"
+    },
+    {
+      "group_id": "ret:complaint:complaint-demo-06:complaint_tone",
+      "hard_categories": [],
+      "intent_cluster": "complaint_tone",
+      "knowledge_sources": [
+        "complaint-demo-06"
+      ],
+      "scenario": "complaint",
+      "size": 4,
+      "split": "train",
+      "task": "retrieval",
+      "template_family": "retrieval_paraphrase"
+    },
+    {
+      "group_id": "ret:complaint:complaint-demo-06:hard_quoted_speech",
+      "hard_categories": [
+        "quoted_speech"
+      ],
+      "intent_cluster": "hard_quoted_speech",
+      "knowledge_sources": [
+        "complaint-demo-06"
+      ],
+      "scenario": "complaint",
+      "size": 1,
+      "split": "test",
+      "task": "retrieval",
+      "template_family": "retrieval_hard"
+    },
+    {
+      "group_id": "ret:complaint:complaint-pub-01:complaint_channel",
+      "hard_categories": [],
+      "intent_cluster": "complaint_channel",
+      "knowledge_sources": [
+        "complaint-pub-01"
+      ],
+      "scenario": "complaint",
+      "size": 4,
+      "split": "train",
+      "task": "retrieval",
+      "template_family": "retrieval_paraphrase"
+    },
+    {
+      "group_id": "ret:complaint:complaint-pub-01:complaint_timeline",
+      "hard_categories": [],
+      "intent_cluster": "complaint_timeline",
+      "knowledge_sources": [
+        "complaint-pub-01"
+      ],
+      "scenario": "complaint",
+      "size": 4,
+      "split": "train",
+      "task": "retrieval",
+      "template_family": "retrieval_paraphrase"
+    },
+    {
+      "group_id": "ret:complaint:complaint-pub-01:hard_ambiguous_intent",
+      "hard_categories": [
+        "ambiguous_intent"
+      ],
+      "intent_cluster": "hard_ambiguous_intent",
+      "knowledge_sources": [
+        "complaint-pub-01",
+        "complaint-demo-02"
+      ],
+      "scenario": "complaint",
+      "size": 1,
+      "split": "dev",
+      "task": "retrieval",
+      "template_family": "retrieval_hard"
+    },
+    {
+      "group_id": "ret:complaint:complaint-pub-02:complaint_material_security",
+      "hard_categories": [],
+      "intent_cluster": "complaint_material_security",
+      "knowledge_sources": [
+        "complaint-pub-02"
+      ],
+      "scenario": "complaint",
+      "size": 4,
+      "split": "train",
+      "task": "retrieval",
+      "template_family": "retrieval_paraphrase"
+    },
+    {
+      "group_id": "ret:complaint:complaint-pub-02:complaint_privacy",
+      "hard_categories": [],
+      "intent_cluster": "complaint_privacy",
+      "knowledge_sources": [
+        "complaint-pub-02"
+      ],
+      "scenario": "complaint",
+      "size": 4,
+      "split": "dev",
+      "task": "retrieval",
+      "template_family": "retrieval_paraphrase"
+    },
+    {
+      "group_id": "ret:complaint:complaint-pub-03:credit_complaint_bridge",
+      "hard_categories": [],
+      "intent_cluster": "credit_complaint_bridge",
+      "knowledge_sources": [
+        "complaint-pub-03"
+      ],
+      "scenario": "complaint",
+      "size": 4,
+      "split": "train",
+      "task": "retrieval",
+      "template_family": "retrieval_paraphrase"
+    },
+    {
+      "group_id": "ret:complaint:complaint-pub-03:credit_complaint_scope",
+      "hard_categories": [],
+      "intent_cluster": "credit_complaint_scope",
+      "knowledge_sources": [
+        "complaint-pub-03"
+      ],
+      "scenario": "complaint",
+      "size": 4,
+      "split": "train",
+      "task": "retrieval",
+      "template_family": "retrieval_paraphrase"
+    },
+    {
+      "group_id": "ret:complaint:complaint-pub-04:complaint_mediation",
+      "hard_categories": [],
+      "intent_cluster": "complaint_mediation",
+      "knowledge_sources": [
+        "complaint-pub-04"
+      ],
+      "scenario": "complaint",
+      "size": 4,
+      "split": "train",
+      "task": "retrieval",
+      "template_family": "retrieval_paraphrase"
+    },
+    {
+      "group_id": "ret:complaint:complaint-pub-04:mediation_application",
+      "hard_categories": [],
+      "intent_cluster": "mediation_application",
+      "knowledge_sources": [
+        "complaint-pub-04"
+      ],
+      "scenario": "complaint",
+      "size": 4,
+      "split": "dev",
+      "task": "retrieval",
+      "template_family": "retrieval_paraphrase"
+    },
+    {
+      "group_id": "ret:complaint:edge-future-01:hard_expired_knowledge",
+      "hard_categories": [
+        "expired_knowledge"
+      ],
+      "intent_cluster": "hard_expired_knowledge",
+      "knowledge_sources": [
+        "edge-future-01"
+      ],
+      "scenario": "complaint",
+      "size": 5,
+      "split": "train",
+      "task": "retrieval",
+      "template_family": "retrieval_hard"
+    },
+    {
+      "group_id": "ret:complaint:none:hard_insufficient_info",
+      "hard_categories": [
+        "insufficient_info"
+      ],
+      "intent_cluster": "hard_insufficient_info",
+      "knowledge_sources": [],
+      "scenario": "complaint",
+      "size": 5,
+      "split": "train",
+      "task": "retrieval",
+      "template_family": "retrieval_hard"
+    },
+    {
+      "group_id": "ret:complaint:none:hard_no_answer",
+      "hard_categories": [
+        "no_answer"
+      ],
+      "intent_cluster": "hard_no_answer",
+      "knowledge_sources": [],
+      "scenario": "complaint",
+      "size": 5,
+      "split": "train",
+      "task": "retrieval",
+      "template_family": "retrieval_hard"
+    },
+    {
+      "group_id": "ret:credit_card_fee:edge-expired-01:hard_expired_knowledge",
+      "hard_categories": [
+        "expired_knowledge"
+      ],
+      "intent_cluster": "hard_expired_knowledge",
+      "knowledge_sources": [
+        "edge-expired-01"
+      ],
+      "scenario": "credit_card_fee",
+      "size": 5,
+      "split": "train",
+      "task": "retrieval",
+      "template_family": "retrieval_hard"
+    },
+    {
+      "group_id": "ret:credit_card_fee:fee-demo-01:annual_fee_waiver",
+      "hard_categories": [],
+      "intent_cluster": "annual_fee_waiver",
+      "knowledge_sources": [
+        "fee-demo-01"
+      ],
+      "scenario": "credit_card_fee",
+      "size": 4,
+      "split": "train",
+      "task": "retrieval",
+      "template_family": "retrieval_paraphrase"
+    },
+    {
+      "group_id": "ret:credit_card_fee:fee-demo-01:hard_ambiguous_intent",
+      "hard_categories": [
+        "ambiguous_intent"
+      ],
+      "intent_cluster": "hard_ambiguous_intent",
+      "knowledge_sources": [
+        "fee-demo-01",
+        "complaint-demo-01"
+      ],
+      "scenario": "credit_card_fee",
+      "size": 1,
+      "split": "train",
+      "task": "retrieval",
+      "template_family": "retrieval_hard"
+    },
+    {
+      "group_id": "ret:credit_card_fee:fee-demo-01:hard_negation",
+      "hard_categories": [
+        "negation"
+      ],
+      "intent_cluster": "hard_negation",
+      "knowledge_sources": [
+        "fee-demo-01"
+      ],
+      "scenario": "credit_card_fee",
+      "size": 3,
+      "split": "test",
+      "task": "retrieval",
+      "template_family": "retrieval_hard"
+    },
+    {
+      "group_id": "ret:credit_card_fee:fee-demo-01:hard_quoted_speech",
+      "hard_categories": [
+        "quoted_speech"
+      ],
+      "intent_cluster": "hard_quoted_speech",
+      "knowledge_sources": [
+        "fee-demo-01"
+      ],
+      "scenario": "credit_card_fee",
+      "size": 2,
+      "split": "dev",
+      "task": "retrieval",
+      "template_family": "retrieval_hard"
+    },
+    {
+      "group_id": "ret:credit_card_fee:fee-demo-01:waiver_application",
+      "hard_categories": [],
+      "intent_cluster": "waiver_application",
+      "knowledge_sources": [
+        "fee-demo-01"
+      ],
+      "scenario": "credit_card_fee",
+      "size": 4,
+      "split": "dev",
+      "task": "retrieval",
+      "template_family": "retrieval_paraphrase"
+    },
+    {
+      "group_id": "ret:credit_card_fee:fee-demo-02:early_settlement_fee",
+      "hard_categories": [],
+      "intent_cluster": "early_settlement_fee",
+      "knowledge_sources": [
+        "fee-demo-02"
+      ],
+      "scenario": "credit_card_fee",
+      "size": 4,
+      "split": "train",
+      "task": "retrieval",
+      "template_family": "retrieval_paraphrase"
+    },
+    {
+      "group_id": "ret:credit_card_fee:fee-demo-02:hard_ambiguous_intent",
+      "hard_categories": [
+        "ambiguous_intent"
+      ],
+      "intent_cluster": "hard_ambiguous_intent",
+      "knowledge_sources": [
+        "fee-demo-02",
+        "fee-demo-01"
+      ],
+      "scenario": "credit_card_fee",
+      "size": 2,
+      "split": "train",
+      "task": "retrieval",
+      "template_family": "retrieval_hard"
+    },
+    {
+      "group_id": "ret:credit_card_fee:fee-demo-02:hard_negation",
+      "hard_categories": [
+        "negation"
+      ],
+      "intent_cluster": "hard_negation",
+      "knowledge_sources": [
+        "fee-demo-02"
+      ],
+      "scenario": "credit_card_fee",
+      "size": 1,
+      "split": "test",
+      "task": "retrieval",
+      "template_family": "retrieval_hard"
+    },
+    {
+      "group_id": "ret:credit_card_fee:fee-demo-02:hard_quoted_speech",
+      "hard_categories": [
+        "quoted_speech"
+      ],
+      "intent_cluster": "hard_quoted_speech",
+      "knowledge_sources": [
+        "fee-demo-02"
+      ],
+      "scenario": "credit_card_fee",
+      "size": 1,
+      "split": "dev",
+      "task": "retrieval",
+      "template_family": "retrieval_hard"
+    },
+    {
+      "group_id": "ret:credit_card_fee:fee-demo-02:installment_fee_display",
+      "hard_categories": [],
+      "intent_cluster": "installment_fee_display",
+      "knowledge_sources": [
+        "fee-demo-02"
+      ],
+      "scenario": "credit_card_fee",
+      "size": 4,
+      "split": "test",
+      "task": "retrieval",
+      "template_family": "retrieval_paraphrase"
+    },
+    {
+      "group_id": "ret:credit_card_fee:fee-demo-03:hard_ambiguous_intent",
+      "hard_categories": [
+        "ambiguous_intent"
+      ],
+      "intent_cluster": "hard_ambiguous_intent",
+      "knowledge_sources": [
+        "fee-demo-03",
+        "fee-demo-01"
+      ],
+      "scenario": "credit_card_fee",
+      "size": 1,
+      "split": "train",
+      "task": "retrieval",
+      "template_family": "retrieval_hard"
+    },
+    {
+      "group_id": "ret:credit_card_fee:fee-demo-03:hard_quoted_speech",
+      "hard_categories": [
+        "quoted_speech"
+      ],
+      "intent_cluster": "hard_quoted_speech",
+      "knowledge_sources": [
+        "fee-demo-03"
+      ],
+      "scenario": "credit_card_fee",
+      "size": 1,
+      "split": "train",
+      "task": "retrieval",
+      "template_family": "retrieval_hard"
+    },
+    {
+      "group_id": "ret:credit_card_fee:fee-demo-03:minimum_payment_interest",
+      "hard_categories": [],
+      "intent_cluster": "minimum_payment_interest",
+      "knowledge_sources": [
+        "fee-demo-03"
+      ],
+      "scenario": "credit_card_fee",
+      "size": 4,
+      "split": "dev",
+      "task": "retrieval",
+      "template_family": "retrieval_paraphrase"
+    },
+    {
+      "group_id": "ret:credit_card_fee:fee-demo-03:revolving_interest",
+      "hard_categories": [],
+      "intent_cluster": "revolving_interest",
+      "knowledge_sources": [
+        "fee-demo-03"
+      ],
+      "scenario": "credit_card_fee",
+      "size": 4,
+      "split": "train",
+      "task": "retrieval",
+      "template_family": "retrieval_paraphrase"
+    },
+    {
+      "group_id": "ret:credit_card_fee:fee-demo-04:grace_period",
+      "hard_categories": [],
+      "intent_cluster": "grace_period",
+      "knowledge_sources": [
+        "fee-demo-04"
+      ],
+      "scenario": "credit_card_fee",
+      "size": 4,
+      "split": "test",
+      "task": "retrieval",
+      "template_family": "retrieval_paraphrase"
+    },
+    {
+      "group_id": "ret:credit_card_fee:fee-demo-04:repayment_order",
+      "hard_categories": [],
+      "intent_cluster": "repayment_order",
+      "knowledge_sources": [
+        "fee-demo-04"
+      ],
+      "scenario": "credit_card_fee",
+      "size": 4,
+      "split": "test",
+      "task": "retrieval",
+      "template_family": "retrieval_paraphrase"
+    },
+    {
+      "group_id": "ret:credit_card_fee:fee-demo-05:collection_boundary",
+      "hard_categories": [],
+      "intent_cluster": "collection_boundary",
+      "knowledge_sources": [
+        "fee-demo-05"
+      ],
+      "scenario": "credit_card_fee",
+      "size": 4,
+      "split": "train",
+      "task": "retrieval",
+      "template_family": "retrieval_paraphrase"
+    },
+    {
+      "group_id": "ret:credit_card_fee:fee-demo-05:hard_quoted_speech",
+      "hard_categories": [
+        "quoted_speech"
+      ],
+      "intent_cluster": "hard_quoted_speech",
+      "knowledge_sources": [
+        "fee-demo-05"
+      ],
+      "scenario": "credit_card_fee",
+      "size": 1,
+      "split": "test",
+      "task": "retrieval",
+      "template_family": "retrieval_hard"
+    },
+    {
+      "group_id": "ret:credit_card_fee:fee-demo-05:overdue_fee",
+      "hard_categories": [],
+      "intent_cluster": "overdue_fee",
+      "knowledge_sources": [
+        "fee-demo-05"
+      ],
+      "scenario": "credit_card_fee",
+      "size": 4,
+      "split": "train",
+      "task": "retrieval",
+      "template_family": "retrieval_paraphrase"
+    },
+    {
+      "group_id": "ret:credit_card_fee:fee-demo-06:billing_dispute",
+      "hard_categories": [],
+      "intent_cluster": "billing_dispute",
+      "knowledge_sources": [
+        "fee-demo-06"
+      ],
+      "scenario": "credit_card_fee",
+      "size": 4,
+      "split": "dev",
+      "task": "retrieval",
+      "template_family": "retrieval_paraphrase"
+    },
+    {
+      "group_id": "ret:credit_card_fee:fee-demo-06:fee_review_flow",
+      "hard_categories": [],
+      "intent_cluster": "fee_review_flow",
+      "knowledge_sources": [
+        "fee-demo-06"
+      ],
+      "scenario": "credit_card_fee",
+      "size": 4,
+      "split": "train",
+      "task": "retrieval",
+      "template_family": "retrieval_paraphrase"
+    },
+    {
+      "group_id": "ret:credit_card_fee:fee-demo-06:hard_negation",
+      "hard_categories": [
+        "negation"
+      ],
+      "intent_cluster": "hard_negation",
+      "knowledge_sources": [
+        "fee-demo-06"
+      ],
+      "scenario": "credit_card_fee",
+      "size": 1,
+      "split": "train",
+      "task": "retrieval",
+      "template_family": "retrieval_hard"
+    },
+    {
+      "group_id": "ret:credit_card_fee:fee-pub-01:contract_fee_clause",
+      "hard_categories": [],
+      "intent_cluster": "contract_fee_clause",
+      "knowledge_sources": [
+        "fee-pub-01"
+      ],
+      "scenario": "credit_card_fee",
+      "size": 4,
+      "split": "train",
+      "task": "retrieval",
+      "template_family": "retrieval_paraphrase"
+    },
+    {
+      "group_id": "ret:credit_card_fee:fee-pub-01:fee_disclosure",
+      "hard_categories": [],
+      "intent_cluster": "fee_disclosure",
+      "knowledge_sources": [
+        "fee-pub-01"
+      ],
+      "scenario": "credit_card_fee",
+      "size": 4,
+      "split": "train",
+      "task": "retrieval",
+      "template_family": "retrieval_paraphrase"
+    },
+    {
+      "group_id": "ret:credit_card_fee:fee-pub-02:fee_notice_duty",
+      "hard_categories": [],
+      "intent_cluster": "fee_notice_duty",
+      "knowledge_sources": [
+        "fee-pub-02"
+      ],
+      "scenario": "credit_card_fee",
+      "size": 4,
+      "split": "train",
+      "task": "retrieval",
+      "template_family": "retrieval_paraphrase"
+    },
+    {
+      "group_id": "ret:credit_card_fee:fee-pub-02:fee_transparency",
+      "hard_categories": [],
+      "intent_cluster": "fee_transparency",
+      "knowledge_sources": [
+        "fee-pub-02"
+      ],
+      "scenario": "credit_card_fee",
+      "size": 4,
+      "split": "train",
+      "task": "retrieval",
+      "template_family": "retrieval_paraphrase"
+    },
+    {
+      "group_id": "ret:credit_card_fee:fee-pub-03:interest_free_period",
+      "hard_categories": [],
+      "intent_cluster": "interest_free_period",
+      "knowledge_sources": [
+        "fee-pub-03"
+      ],
+      "scenario": "credit_card_fee",
+      "size": 4,
+      "split": "dev",
+      "task": "retrieval",
+      "template_family": "retrieval_paraphrase"
+    },
+    {
+      "group_id": "ret:credit_card_fee:fee-pub-03:repayment_interest_rule",
+      "hard_categories": [],
+      "intent_cluster": "repayment_interest_rule",
+      "knowledge_sources": [
+        "fee-pub-03"
+      ],
+      "scenario": "credit_card_fee",
+      "size": 4,
+      "split": "train",
+      "task": "retrieval",
+      "template_family": "retrieval_paraphrase"
+    },
+    {
+      "group_id": "ret:credit_card_fee:fee-pub-04:annual_fee_notice",
+      "hard_categories": [],
+      "intent_cluster": "annual_fee_notice",
+      "knowledge_sources": [
+        "fee-pub-04"
+      ],
+      "scenario": "credit_card_fee",
+      "size": 4,
+      "split": "train",
+      "task": "retrieval",
+      "template_family": "retrieval_paraphrase"
+    },
+    {
+      "group_id": "ret:credit_card_fee:fee-pub-04:hard_ambiguous_intent",
+      "hard_categories": [
+        "ambiguous_intent"
+      ],
+      "intent_cluster": "hard_ambiguous_intent",
+      "knowledge_sources": [
+        "fee-pub-04",
+        "fee-demo-05"
+      ],
+      "scenario": "credit_card_fee",
+      "size": 1,
+      "split": "train",
+      "task": "retrieval",
+      "template_family": "retrieval_hard"
+    },
+    {
+      "group_id": "ret:credit_card_fee:fee-pub-04:late_fee_notice",
+      "hard_categories": [],
+      "intent_cluster": "late_fee_notice",
+      "knowledge_sources": [
+        "fee-pub-04"
+      ],
+      "scenario": "credit_card_fee",
+      "size": 4,
+      "split": "train",
+      "task": "retrieval",
+      "template_family": "retrieval_paraphrase"
+    },
+    {
+      "group_id": "ret:credit_card_fee:none:hard_insufficient_info",
+      "hard_categories": [
+        "insufficient_info"
+      ],
+      "intent_cluster": "hard_insufficient_info",
+      "knowledge_sources": [],
+      "scenario": "credit_card_fee",
+      "size": 5,
+      "split": "train",
+      "task": "retrieval",
+      "template_family": "retrieval_hard"
+    },
+    {
+      "group_id": "ret:credit_card_fee:none:hard_no_answer",
+      "hard_categories": [
+        "no_answer"
+      ],
+      "intent_cluster": "hard_no_answer",
+      "knowledge_sources": [],
+      "scenario": "credit_card_fee",
+      "size": 5,
+      "split": "dev",
+      "task": "retrieval",
+      "template_family": "retrieval_hard"
+    },
+    {
+      "group_id": "ret:lost_card:edge-expired-01:hard_expired_knowledge",
+      "hard_categories": [
+        "expired_knowledge"
+      ],
+      "intent_cluster": "hard_expired_knowledge",
+      "knowledge_sources": [
+        "edge-expired-01"
+      ],
+      "scenario": "lost_card",
+      "size": 5,
+      "split": "train",
+      "task": "retrieval",
+      "template_family": "retrieval_hard"
+    },
+    {
+      "group_id": "ret:lost_card:lost-card-demo-01:hard_ambiguous_intent",
+      "hard_categories": [
+        "ambiguous_intent"
+      ],
+      "intent_cluster": "hard_ambiguous_intent",
+      "knowledge_sources": [
+        "lost-card-demo-01",
+        "fee-demo-02"
+      ],
+      "scenario": "lost_card",
+      "size": 2,
+      "split": "train",
+      "task": "retrieval",
+      "template_family": "retrieval_hard"
+    },
+    {
+      "group_id": "ret:lost_card:lost-card-demo-01:hard_quoted_speech",
+      "hard_categories": [
+        "quoted_speech"
+      ],
+      "intent_cluster": "hard_quoted_speech",
+      "knowledge_sources": [
+        "lost-card-demo-01"
+      ],
+      "scenario": "lost_card",
+      "size": 1,
+      "split": "dev",
+      "task": "retrieval",
+      "template_family": "retrieval_hard"
+    },
+    {
+      "group_id": "ret:lost_card:lost-card-demo-01:report_channel_list",
+      "hard_categories": [],
+      "intent_cluster": "report_channel_list",
+      "knowledge_sources": [
+        "lost-card-demo-01"
+      ],
+      "scenario": "lost_card",
+      "size": 4,
+      "split": "train",
+      "task": "retrieval",
+      "template_family": "retrieval_paraphrase"
+    },
+    {
+      "group_id": "ret:lost_card:lost-card-demo-01:report_channel_verify",
+      "hard_categories": [],
+      "intent_cluster": "report_channel_verify",
+      "knowledge_sources": [
+        "lost-card-demo-01"
+      ],
+      "scenario": "lost_card",
+      "size": 4,
+      "split": "dev",
+      "task": "retrieval",
+      "template_family": "retrieval_paraphrase"
+    },
+    {
+      "group_id": "ret:lost_card:lost-card-demo-02:freeze_to_report",
+      "hard_categories": [],
+      "intent_cluster": "freeze_to_report",
+      "knowledge_sources": [
+        "lost-card-demo-02"
+      ],
+      "scenario": "lost_card",
+      "size": 4,
+      "split": "dev",
+      "task": "retrieval",
+      "template_family": "retrieval_paraphrase"
+    },
+    {
+      "group_id": "ret:lost_card:lost-card-demo-02:hard_ambiguous_intent",
+      "hard_categories": [
+        "ambiguous_intent"
+      ],
+      "intent_cluster": "hard_ambiguous_intent",
+      "knowledge_sources": [
+        "lost-card-demo-02",
+        "fee-demo-01"
+      ],
+      "scenario": "lost_card",
+      "size": 1,
+      "split": "test",
+      "task": "retrieval",
+      "template_family": "retrieval_hard"
+    },
+    {
+      "group_id": "ret:lost_card:lost-card-demo-02:hard_negation",
+      "hard_categories": [
+        "negation"
+      ],
+      "intent_cluster": "hard_negation",
+      "knowledge_sources": [
+        "lost-card-demo-02"
+      ],
+      "scenario": "lost_card",
+      "size": 2,
+      "split": "train",
+      "task": "retrieval",
+      "template_family": "retrieval_hard"
+    },
+    {
+      "group_id": "ret:lost_card:lost-card-demo-02:hard_quoted_speech",
+      "hard_categories": [
+        "quoted_speech"
+      ],
+      "intent_cluster": "hard_quoted_speech",
+      "knowledge_sources": [
+        "lost-card-demo-02"
+      ],
+      "scenario": "lost_card",
+      "size": 1,
+      "split": "dev",
+      "task": "retrieval",
+      "template_family": "retrieval_hard"
+    },
+    {
+      "group_id": "ret:lost_card:lost-card-demo-02:temporary_freeze",
+      "hard_categories": [],
+      "intent_cluster": "temporary_freeze",
+      "knowledge_sources": [
+        "lost-card-demo-02"
+      ],
+      "scenario": "lost_card",
+      "size": 4,
+      "split": "train",
+      "task": "retrieval",
+      "template_family": "retrieval_paraphrase"
+    },
+    {
+      "group_id": "ret:lost_card:lost-card-demo-03:hard_negation",
+      "hard_categories": [
+        "negation"
+      ],
+      "intent_cluster": "hard_negation",
+      "knowledge_sources": [
+        "lost-card-demo-03"
+      ],
+      "scenario": "lost_card",
+      "size": 3,
+      "split": "train",
+      "task": "retrieval",
+      "template_family": "retrieval_hard"
+    },
+    {
+      "group_id": "ret:lost_card:lost-card-demo-03:hard_quoted_speech",
+      "hard_categories": [
+        "quoted_speech"
+      ],
+      "intent_cluster": "hard_quoted_speech",
+      "knowledge_sources": [
+        "lost-card-demo-03"
+      ],
+      "scenario": "lost_card",
+      "size": 2,
+      "split": "train",
+      "task": "retrieval",
+      "template_family": "retrieval_hard"
+    },
+    {
+      "group_id": "ret:lost_card:lost-card-demo-03:replacement_fee",
+      "hard_categories": [],
+      "intent_cluster": "replacement_fee",
+      "knowledge_sources": [
+        "lost-card-demo-03"
+      ],
+      "scenario": "lost_card",
+      "size": 4,
+      "split": "train",
+      "task": "retrieval",
+      "template_family": "retrieval_paraphrase"
+    },
+    {
+      "group_id": "ret:lost_card:lost-card-demo-03:replacement_timeline",
+      "hard_categories": [],
+      "intent_cluster": "replacement_timeline",
+      "knowledge_sources": [
+        "lost-card-demo-03"
+      ],
+      "scenario": "lost_card",
+      "size": 4,
+      "split": "dev",
+      "task": "retrieval",
+      "template_family": "retrieval_paraphrase"
+    },
+    {
+      "group_id": "ret:lost_card:lost-card-demo-04:hard_ambiguous_intent",
+      "hard_categories": [
+        "ambiguous_intent"
+      ],
+      "intent_cluster": "hard_ambiguous_intent",
+      "knowledge_sources": [
+        "lost-card-demo-04",
+        "fee-demo-03"
+      ],
+      "scenario": "lost_card",
+      "size": 2,
+      "split": "train",
+      "task": "retrieval",
+      "template_family": "retrieval_hard"
+    },
+    {
+      "group_id": "ret:lost_card:lost-card-demo-04:hard_quoted_speech",
+      "hard_categories": [
+        "quoted_speech"
+      ],
+      "intent_cluster": "hard_quoted_speech",
+      "knowledge_sources": [
+        "lost-card-demo-04"
+      ],
+      "scenario": "lost_card",
+      "size": 1,
+      "split": "train",
+      "task": "retrieval",
+      "template_family": "retrieval_hard"
+    },
+    {
+      "group_id": "ret:lost_card:lost-card-demo-04:loss_liability_split",
+      "hard_categories": [],
+      "intent_cluster": "loss_liability_split",
+      "knowledge_sources": [
+        "lost-card-demo-04"
+      ],
+      "scenario": "lost_card",
+      "size": 4,
+      "split": "train",
+      "task": "retrieval",
+      "template_family": "retrieval_paraphrase"
+    },
+    {
+      "group_id": "ret:lost_card:lost-card-demo-04:report_effective_time",
+      "hard_categories": [],
+      "intent_cluster": "report_effective_time",
+      "knowledge_sources": [
+        "lost-card-demo-04"
+      ],
+      "scenario": "lost_card",
+      "size": 4,
+      "split": "test",
+      "task": "retrieval",
+      "template_family": "retrieval_paraphrase"
+    },
+    {
+      "group_id": "ret:lost_card:lost-card-demo-05:overseas_report",
+      "hard_categories": [],
+      "intent_cluster": "overseas_report",
+      "knowledge_sources": [
+        "lost-card-demo-05"
+      ],
+      "scenario": "lost_card",
+      "size": 4,
+      "split": "train",
+      "task": "retrieval",
+      "template_family": "retrieval_paraphrase"
+    },
+    {
+      "group_id": "ret:lost_card:lost-card-demo-05:remote_report",
+      "hard_categories": [],
+      "intent_cluster": "remote_report",
+      "knowledge_sources": [
+        "lost-card-demo-05"
+      ],
+      "scenario": "lost_card",
+      "size": 4,
+      "split": "train",
+      "task": "retrieval",
+      "template_family": "retrieval_paraphrase"
+    },
+    {
+      "group_id": "ret:lost_card:lost-card-demo-06:dispute_flow",
+      "hard_categories": [],
+      "intent_cluster": "dispute_flow",
+      "knowledge_sources": [
+        "lost-card-demo-06"
+      ],
+      "scenario": "lost_card",
+      "size": 4,
+      "split": "train",
+      "task": "retrieval",
+      "template_family": "retrieval_paraphrase"
+    },
+    {
+      "group_id": "ret:lost_card:lost-card-demo-06:dispute_material",
+      "hard_categories": [],
+      "intent_cluster": "dispute_material",
+      "knowledge_sources": [
+        "lost-card-demo-06"
+      ],
+      "scenario": "lost_card",
+      "size": 4,
+      "split": "train",
+      "task": "retrieval",
+      "template_family": "retrieval_paraphrase"
+    },
+    {
+      "group_id": "ret:lost_card:lost-card-pub-01:credit_record_dispute",
+      "hard_categories": [],
+      "intent_cluster": "credit_record_dispute",
+      "knowledge_sources": [
+        "lost-card-pub-01"
+      ],
+      "scenario": "lost_card",
+      "size": 4,
+      "split": "dev",
+      "task": "retrieval",
+      "template_family": "retrieval_paraphrase"
+    },
+    {
+      "group_id": "ret:lost_card:lost-card-pub-01:credit_record_retention",
+      "hard_categories": [],
+      "intent_cluster": "credit_record_retention",
+      "knowledge_sources": [
+        "lost-card-pub-01"
+      ],
+      "scenario": "lost_card",
+      "size": 4,
+      "split": "test",
+      "task": "retrieval",
+      "template_family": "retrieval_paraphrase"
+    },
+    {
+      "group_id": "ret:lost_card:lost-card-pub-02:lost_card_contract_terms",
+      "hard_categories": [],
+      "intent_cluster": "lost_card_contract_terms",
+      "knowledge_sources": [
+        "lost-card-pub-02"
+      ],
+      "scenario": "lost_card",
+      "size": 4,
+      "split": "train",
+      "task": "retrieval",
+      "template_family": "retrieval_paraphrase"
+    },
+    {
+      "group_id": "ret:lost_card:lost-card-pub-02:lost_card_dispute_notice",
+      "hard_categories": [],
+      "intent_cluster": "lost_card_dispute_notice",
+      "knowledge_sources": [
+        "lost-card-pub-02"
+      ],
+      "scenario": "lost_card",
+      "size": 4,
+      "split": "dev",
+      "task": "retrieval",
+      "template_family": "retrieval_paraphrase"
+    },
+    {
+      "group_id": "ret:lost_card:lost-card-pub-03:consumer_info_security",
+      "hard_categories": [],
+      "intent_cluster": "consumer_info_security",
+      "knowledge_sources": [
+        "lost-card-pub-03"
+      ],
+      "scenario": "lost_card",
+      "size": 4,
+      "split": "train",
+      "task": "retrieval",
+      "template_family": "retrieval_paraphrase"
+    },
+    {
+      "group_id": "ret:lost_card:lost-card-pub-03:lost_report_channel",
+      "hard_categories": [],
+      "intent_cluster": "lost_report_channel",
+      "knowledge_sources": [
+        "lost-card-pub-03"
+      ],
+      "scenario": "lost_card",
+      "size": 4,
+      "split": "dev",
+      "task": "retrieval",
+      "template_family": "retrieval_paraphrase"
+    },
+    {
+      "group_id": "ret:lost_card:lost-card-pub-04:credit_dispute_reply",
+      "hard_categories": [],
+      "intent_cluster": "credit_dispute_reply",
+      "knowledge_sources": [
+        "lost-card-pub-04"
+      ],
+      "scenario": "lost_card",
+      "size": 4,
+      "split": "test",
+      "task": "retrieval",
+      "template_family": "retrieval_paraphrase"
+    },
+    {
+      "group_id": "ret:lost_card:lost-card-pub-04:credit_dispute_timeline",
+      "hard_categories": [],
+      "intent_cluster": "credit_dispute_timeline",
+      "knowledge_sources": [
+        "lost-card-pub-04"
+      ],
+      "scenario": "lost_card",
+      "size": 4,
+      "split": "train",
+      "task": "retrieval",
+      "template_family": "retrieval_paraphrase"
+    },
+    {
+      "group_id": "ret:lost_card:none:hard_insufficient_info",
+      "hard_categories": [
+        "insufficient_info"
+      ],
+      "intent_cluster": "hard_insufficient_info",
+      "knowledge_sources": [],
+      "scenario": "lost_card",
+      "size": 5,
+      "split": "dev",
+      "task": "retrieval",
+      "template_family": "retrieval_hard"
+    },
+    {
+      "group_id": "ret:lost_card:none:hard_no_answer",
+      "hard_categories": [
+        "no_answer"
+      ],
+      "intent_cluster": "hard_no_answer",
+      "knowledge_sources": [],
+      "scenario": "lost_card",
+      "size": 5,
+      "split": "test",
+      "task": "retrieval",
+      "template_family": "retrieval_hard"
+    }
+  ],
+  "knowledge_as_of": "2026-06-01T00:00:00+00:00",
+  "knowledge_snapshot": "b8324f70baa79d240df2a5f325df779c9bbf8a8fac8edd69645f47d112375c06",
+  "mode": "synthetic_offline",
+  "rule_codes": [
+    "DEMO-ATT-01",
+    "DEMO-CLAIM-01",
+    "DEMO-CMP-01",
+    "DEMO-FEE-01",
+    "DEMO-FEE-02",
+    "DEMO-PWD-01"
+  ],
+  "rule_snapshot": "c2a5da87876d2993c9e102b2b70b6ba14d0aef9576afca85f04eba88110b0607",
+  "scenario_labels": {
+    "complaint": {
+      "business_type": "complaint",
+      "label": "投诉受理"
+    },
+    "credit_card_fee": {
+      "business_type": "credit_card_fee",
+      "label": "信用卡费用与还款咨询"
+    },
+    "lost_card": {
+      "business_type": "lost_card",
+      "label": "挂失咨询"
+    }
+  },
+  "seed": 42,
+  "self_consistency": {
+    "agreement": 1.0,
+    "checked_labels": 68,
+    "evidence_support_rate": 1.0,
+    "metric": "deterministic_relabel_self_consistency",
+    "not_inter_annotator_agreement": true,
+    "note": "两次确定性重标注的一致性，仅用于发现生成/标签漂移；不是双人标注，也不能当作人工金标或标注者间一致性。",
+    "passes": 2,
+    "sampled_items": 46,
+    "sampled_pct": 10.0,
+    "stable": true
+  },
+  "split_manifest_sha256": "aba5375a2503fa3c40740c01674522405fe83900b57058d81c1d7673c4830558",
+  "synthetic": true,
+  "worktree_clean": true
+}
