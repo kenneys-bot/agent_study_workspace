@@ -6,6 +6,7 @@ from .auth import router as auth_router
 from .conversations import router as conversations_router
 from .knowledge import install_knowledge_error_handler
 from .knowledge import router as knowledge_router
+from .inspections import router as inspections_router
 from .knowledge_base import router as knowledge_base_router
 from .script_recommender import router as script_recommender_router
 from .quality_inspector import router as quality_inspector_router
@@ -19,6 +20,7 @@ __all__ = [
     "auth_router",
     "conversations_router",
     "install_knowledge_error_handler",
+    "inspections_router",
     "knowledge_base_router",
     "knowledge_router",
     "script_recommender_router",

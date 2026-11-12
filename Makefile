@@ -3,7 +3,7 @@ SHELL := /bin/bash
 UV := uv
 COMPOSE := docker compose -f deploy/compose.yml
 
-.PHONY: help doctor test-unit test-integration test-e2e build web-install web-dev web-build web-test up down smoke seed-demo seed-demo-accounts index-rebuild index-info sync-check eval train backup restore-check clean
+.PHONY: help doctor test-unit test-integration test-e2e build web-install web-dev web-build web-test up down smoke seed-demo seed-demo-accounts index-rebuild index-info worker sync-check eval train backup restore-check clean
 
 help: ## 列出可用命令
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -64,6 +64,9 @@ index-rebuild: ## [M3] 重建版本化索引，校验后原子切换活动指针
 
 index-info: ## [M3] 打印当前活动索引版本与清单摘要
 	@$(UV) run python scripts/index_info.py
+
+worker: ## [M4] 启动质检 worker（领取租约任务、按规则快照执行）
+	@$(UV) run python -m bank_assistant.worker
 
 eval: ## [M6] 固定评测（Ubuntu）
 	@echo "NOT_IMPLEMENTED: eval 在 M6 实现；需要 EVAL_CONFIG=path" >&2; exit 2

@@ -23,6 +23,7 @@ from bank_assistant.api.errors import (
 from bank_assistant.api.routers import (
     auth_router,
     conversations_router,
+    inspections_router,
     install_knowledge_error_handler,
     install_rules_error_handler,
     knowledge_base_router,
@@ -100,6 +101,7 @@ app.include_router(knowledge_base_router, prefix=API_PREFIX)
 app.include_router(script_recommender_router, prefix=API_PREFIX)
 app.include_router(quality_inspector_router, prefix=API_PREFIX)
 app.include_router(tasks_router, prefix=API_PREFIX)
+app.include_router(inspections_router, prefix=API_PREFIX)
 app.include_router(suggestions_router, prefix=API_PREFIX)
 app.include_router(system_router, prefix=API_PREFIX)
 
