@@ -1,7 +1,7 @@
 # 执行进度
 
 当前里程碑：M1（已交付）→ M2（进行中）
-当前任务：M2 T10 登录、身份与权限（#11）
+当前任务：M2 T11/T12/T13 并行（#12/#13/#14）
 当前状态：M1 READY_FOR_ACCEPTANCE；M2 IN_PROGRESS
 本机代码分支：`feat/bank-assistant`
 本机代码SHA：`979b076`（后续提交见 git log）
@@ -30,10 +30,10 @@ Ubuntu代码SHA：见下方 M0-03 证据（同一 SHA）
 | #10 T09 PG 与迁移 | DONE | make test-integration 通过 |
 | #33 T32 知识/话术修通 | DONE | test_classify_intent 通过 |
 | #9 T08 错误码契约 | DONE | 144 passed / 0 failed |
-| #11 T10 认证 | IN_PROGRESS | worktree 中进行 |
-| #12 T11 知识生命周期 | BLOCKED | 等 #11 |
-| #13 T12 会话持久化与审计 | BLOCKED | 等 #11 |
-| #14 T13 幂等与任务表 | BLOCKED | 等 #11 的迁移线性 |
+| #11 T10 认证 | DONE | 163 passed；integration 13 passed；alembic 0001→0002 |
+| #12 T11 知识生命周期 | IN_PROGRESS | worktree 中进行（迁移 0003） |
+| #13 T12 会话持久化与审计 | IN_PROGRESS | worktree 中进行（迁移 0004） |
+| #14 T13 幂等与任务表 | IN_PROGRESS | worktree 中进行（迁移 0005） |
 
 ## 本次变更（2026-11-12）
 
@@ -41,6 +41,10 @@ Ubuntu代码SHA：见下方 M0-03 证据（同一 SHA）
 - 计划书升到 v1.1；新增 ADR-0001～0004；GLOSSARY 补 17 个词条。
 - 依赖改为 uv 单一入口；包名 `app` → `bank_assistant`；测试从包内移到仓库根。
 - ticket 已发布到 GitHub Issues：#1 总览、#2–#32 共 31 张（含 46 条原生依赖边）。
+
+## M1 双机一致性
+
+Ubuntu 与 Mac 同 SHA；两端 `uv run pytest tests -q` 均 144 用例全过（Ubuntu: Python 3.13.14 / fastapi 0.162.5）。详见 `docs/milestones/M1-report.md`。
 
 ## 已执行验证
 
