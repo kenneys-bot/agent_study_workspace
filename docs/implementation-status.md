@@ -14,7 +14,7 @@ Ubuntu代码SHA：`2c5e0d7`（M3 期间的同步点；集成分支已前进，�
 |---|---|---|---|
 | M0-01 基线 | DONE | 分支/SHA 记录；`pyproject.toml` + `uv.lock` 唯一依赖入口；`docs/environment.md` | — |
 | M0-02 配置模板 | DONE | `.env.example`（仅占位）、`.gitignore`、`docs/environment.md` | — |
-| M0-03 双机同步 | READY_FOR_ACCEPTANCE | Ubuntu `~/workspace/agent_study_workspace` 检出同一 SHA；`~/workspace/bank-assistant-*` 可写；`make sync-check` | 负责人验收 |
+| M0-03 双机同步 | READY_FOR_ACCEPTANCE | Ubuntu `~/workspace/bank-assistant/repo` 检出同一 SHA；`~/workspace/bank-assistant/{data,artifacts,backups}` 可写；`make sync-check` | 负责人验收 |
 | M0-04 状态与ADR | DONE | 本文件、`docs/environment.md`、`docs/adr/0001..0004` | — |
 | M0-05 统一入口 | DONE | `Makefile`（doctor/test-unit/build/sync-check 已实现；其余非零退出并标注里程碑）、`scripts/doctor.sh`、`scripts/sync-check.sh` | — |
 
@@ -47,7 +47,7 @@ Ubuntu代码SHA：`2c5e0d7`（M3 期间的同步点；集成分支已前进，�
 | `scripts/test-integration.sh` | 本机起 compose PG（`deploy/compose.db.yml`） | 连隧道 `127.0.0.1:15432` 的 `bank_assistant_test`；隧道不通则非零退出并说明 |
 | `.env.example` / `.env` | `DATABASE_URL=...@localhost:5432/...` | `...@127.0.0.1:15432/bank_assistant_dev`；新增 `*_demo`/`*_test`/`*_restore_check` 说明 |
 | `make seed-demo` | 连本机库 | 连隧道写 `bank_assistant_demo`，幂等，不触达测试库 |
-| `make backup` / `restore-check` | 未实现 | 在 Ubuntu 上 `pg_dump` 到 `~/workspace/bank-assistant-backups`；恢复到 `bank_assistant_restore_check`，不得覆盖源库 |
+| `make backup` / `restore-check` | 未实现 | 在 Ubuntu 上 `pg_dump` 到 `~/workspace/bank-assistant/backups`；恢复到 `bank_assistant_restore_check`，不得覆盖源库 |
 | `deploy/compose.db.yml` | 本机与服务器都用 | 仅服务器使用，保持 `127.0.0.1:5432` 回环绑定 |
 | CI/复现说明 | 默认本机有 PG | 需自备服务器 + 隧道；无数据库时只跑 `make test-unit` |
 
@@ -57,14 +57,14 @@ Ubuntu代码SHA：`2c5e0d7`（M3 期间的同步点；集成分支已前进，�
 
 按负责人要求，服务器上本项目的全部内容从 home 根目录收拢到 `~/workspace/`：
 
-| 旧位置 | 新位置 |
+| 旧位置 | 新位置（最终） |
 |---|---|
-| `~/projects/agent_study_workspace` | `~/workspace/agent_study_workspace` |
-| `~/bank-assistant-data` | `~/workspace/bank-assistant-data` |
-| `~/bank-assistant-artifacts` | `~/workspace/bank-assistant-artifacts` |
-| `~/bank-assistant-backups` | `~/workspace/bank-assistant-backups` |
+| `~/projects/agent_study_workspace` | `~/workspace/bank-assistant/repo` |
+| `~/bank-assistant-data` | `~/workspace/bank-assistant/data` |
+| `~/bank-assistant-artifacts` | `~/workspace/bank-assistant/artifacts` |
+| `~/bank-assistant-backups` | `~/workspace/bank-assistant/backups` |
 
-执行后 `~/projects` 已删除（空目录），home 根目录不再有本项目散落目录；`~/workspace/` 下与本项目并列的 `dingtalk-project-assistant` 属于另一个项目，未触碰。仓库移动后仍是同一 SHA、工作树干净、三个数据目录可写。
+第一次整理把内容从 home 根目录挪到 `~/workspace/*`（四个平级目录）；按负责人要求又收拢成**单独一个项目目录** `~/workspace/bank-assistant/`，内部再分 `repo/ data/ artifacts/ backups/`。执行后 `~/projects` 已删除，home 根目录无本项目痕迹，`~/workspace/` 顶层只有 `bank-assistant/` 与本项目无关的 `dingtalk-project-assistant/`（未触碰）。移动后仓库仍是同一 SHA、工作树干净、三个数据目录可写。
 
 文档与脚本同步更新：`docs/environment.md`、计划书 §4.2 布局、`scripts/sync-check.sh`（默认远端路径）、`scripts/doctor.sh`（提示文案）。
 

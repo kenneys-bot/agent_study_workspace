@@ -4,7 +4,7 @@ set -u
 cd "$(dirname "$0")/.."
 
 HOST="${UBUNTU_HOST:-my-ubuntu-server}"
-REMOTE_DIR="${UBUNTU_DIR:-~/workspace/agent_study_workspace}"
+REMOTE_DIR="${UBUNTU_DIR:-~/workspace/bank-assistant/repo}"
 
 local_sha=$(git rev-parse HEAD 2>/dev/null || echo "无提交")
 local_branch=$(git branch --show-current 2>/dev/null || echo "?")

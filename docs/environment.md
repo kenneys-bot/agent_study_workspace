@@ -31,15 +31,16 @@ SSH 别名 `my-ubuntu-server`（Wi-Fi `192.168.1.27`，有线 `192.168.5.10`，�
 | 前端 | **无 node/npm/pnpm** → 前端在 Mac 或容器内构建（ADR-0003） |
 | 网络 | 出口经 Mihomo/Clash TUN；GitHub HTTPS 可用（约 2.7 s），**SSH 推送不可用**；pypi 索引约 9 s（慢，安装需批量 + 缓存） |
 | 时区 | Asia/Shanghai，NTP 同步 |
-| 数据目录 | `~/workspace/bank-assistant-data`、`~/workspace/bank-assistant-artifacts`、`~/workspace/bank-assistant-backups`（已创建，可写） |
-| 项目 checkout | `~/workspace/agent_study_workspace`（HTTPS clone，按 SHA 检出） |
+| 项目根目录 | `~/workspace/bank-assistant/`（本项目在服务器上的唯一目录，下面全部内容都在这里） |
+| 项目 checkout | `~/workspace/bank-assistant/repo`（HTTPS clone，按 SHA 检出） |
+| 数据/产物/备份 | `~/workspace/bank-assistant/{data,artifacts,backups}`（已创建，可写） |
 
 ## 数据与产物目录
 
 | 位置 | 路径 | 说明 |
 |---|---|---|
 | 本机 | `.local-data/`、`.local-artifacts/`、`.local-backups/`（仓库内，已 gitignore） | 只放小型合成夹具与冒烟产物；本机沙箱不允许在仓库外写文件 |
-| Ubuntu | `~/workspace/bank-assistant-data/`、`~/workspace/bank-assistant-artifacts/`、`~/workspace/bank-assistant-backups/` | 数据集、评测产物、模型权重、备份（仓库外，不进 Git）；服务器上所有本项目内容统一放在 `~/workspace/` 下 |
+| Ubuntu | `~/workspace/bank-assistant/{data,artifacts,backups}/` | 数据集、评测产物、模型权重、备份（仓库外，不进 Git）；本项目在服务器上只占 `~/workspace/bank-assistant/` 一个目录，与其它项目（如 `dingtalk-project-assistant/`）平级 |
 
 ## 数据库（唯一实例在 Ubuntu，ADR-0006）
 
