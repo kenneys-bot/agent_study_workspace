@@ -3,9 +3,10 @@
 """
 
 import logging
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, Depends
 from typing import List
 
+from bank_assistant.api.errors import ApiError
 from bank_assistant.core.llm_client import get_llm_client, LLMClient
 from bank_assistant.core.vector_db import get_vector_db_client, VectorDBClient
 from bank_assistant.api.models.knowledge_base import (
@@ -95,7 +96,7 @@ async def extract_questions(
         
     except Exception as e:
         logger.error(f"问题抽取失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise ApiError(status_code=500) from e
 
 
 @router.post("/classify-intent", response_model=ClassifyIntentResponse)
@@ -124,7 +125,7 @@ async def classify_intent(
         
     except Exception as e:
         logger.error(f"意图分类失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise ApiError(status_code=500) from e
 
 
 @router.post("/generate-questions", response_model=GenerateQuestionsResponse)
@@ -176,7 +177,7 @@ async def generate_questions(
         
     except Exception as e:
         logger.error(f"问题生成失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise ApiError(status_code=500) from e
 
 
 @router.post("/generate-scripts", response_model=GenerateScriptsResponse)
@@ -236,7 +237,7 @@ async def generate_scripts(
         
     except Exception as e:
         logger.error(f"话术生成失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise ApiError(status_code=500) from e
 
 
 @router.post("/add-knowledge", response_model=AddKnowledgeResponse)
@@ -267,7 +268,7 @@ async def add_knowledge(
         
     except Exception as e:
         logger.error(f"添加知识失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise ApiError(status_code=500) from e
 
 
 @router.post("/search-knowledge", response_model=SearchKnowledgeResponse)
@@ -298,4 +299,4 @@ async def search_knowledge(
         
     except Exception as e:
         logger.error(f"知识搜索失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise ApiError(status_code=500) from e

@@ -3,11 +3,10 @@
 """
 
 import logging
-from fastapi import APIRouter, HTTPException, Depends, Request
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Depends, Request
 
 from bank_assistant.core.llm_client import get_llm_client
-from bank_assistant.api.errors import ErrorResponse, not_implemented_response
+from bank_assistant.api.errors import ApiError, ErrorResponse, not_implemented_response
 from bank_assistant.api.models.quality_inspector import (
     ParseConversationRequest,
     ParseConversationResponse,
@@ -91,20 +90,18 @@ async def parse_conversation(
         )
         
     except ConversationParseError as e:
-        # 非法输入：4xx + 稳定错误码，并在 details 中保留原文供调用方核对
+        # 非法输入：4xx + 稳定错误码；不把用户原文或异常细节回传。
         logger.warning(f"对话解析输入非法 [{e.code}]: {e.message}")
-        return JSONResponse(
+        raise ApiError(
             status_code=e.http_status,
-            content={
-                "code": e.code,
-                "message": e.message,
-                "retryable": False,
-                "details": {"raw_text": e.raw_text}
-            }
-        )
+            code=e.code,
+            message=e.message,
+            retryable=False,
+            details={},
+        ) from e
     except Exception as e:
         logger.error(f"对话解析失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise ApiError(status_code=500) from e
 
 
 @router.post("/transcribe", response_model=TranscribeResponse)
@@ -143,7 +140,7 @@ async def transcribe_audio(
         
     except Exception as e:
         logger.error(f"语音转文字失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise ApiError(status_code=500) from e
 
 
 @router.post("/inspect", response_model=InspectResponse)
@@ -201,7 +198,7 @@ async def inspect_conversation(
         
     except Exception as e:
         logger.error(f"质检失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise ApiError(status_code=500) from e
 
 
 @router.post(

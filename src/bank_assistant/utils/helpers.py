@@ -97,19 +97,23 @@ class StringUtils:
         suffix: str = "..."
     ) -> str:
         """
-        截断字符串
-        
+        截断字符串。
+
+        契约（与 tests/test_units.py 一致）：``max_length`` 只限制保留的正文
+        字符数，``suffix``（默认省略号）不计入长度；即结果长度最多为
+        ``max_length + len(suffix)``。未超长时原样返回，不追加后缀。
+
         Args:
             s (str): 原始字符串
-            max_length (int): 最大长度
-            suffix (str): 后缀
+            max_length (int): 保留的正文最大字符数（不含 suffix）
+            suffix (str): 截断后追加的后缀
             
         Returns:
             str: 截断后的字符串
         """
         if len(s) <= max_length:
             return s
-        return s[:max_length - len(suffix)] + suffix
+        return s[:max_length] + suffix
     
     @staticmethod
     def normalize_whitespace(s: str) -> str:
