@@ -3,7 +3,7 @@
 当前里程碑：M5 已交付（待负责人验收）；M6 进行中
 当前任务：M6 T28 条件性微调（#29）进行中；T33 ADR-0006 数据库落地（#34）已执行
 当前状态：M1–M5 已交付（等待负责人验收）；M6 IN_PROGRESS（T26/T27 完成、T28 进行中）；**ADR-0006 已落地**（PostgreSQL 只在 Ubuntu，Mac 经 SSH 隧道；2026-11-12 部署已执行）
-本机代码分支：`ticket/T33`（合并后为 `feat/bank-assistant`）
+本机代码分支：`feat/bank-assistant`（集成分支）
 本机代码SHA：以 `git log -1` 为准（T33 合并后刷新）
 Ubuntu代码SHA：`73babc3`（服务器 checkout；数据库部署使用仓库外部署副本，未改服务器工作树）
 最近更新：2026-11-12（Asia/Shanghai）
