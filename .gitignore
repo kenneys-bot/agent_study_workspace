@@ -33,3 +33,6 @@ web/dist/
 # 归档目录里历史误提交的构建产物（保留在工作区，不入 Git）
 .langgraph_api/
 *.pckl
+
+# uv 本地缓存（沙箱内）
+.uv-cache/
