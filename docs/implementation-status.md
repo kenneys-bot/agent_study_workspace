@@ -1,11 +1,11 @@
 # 执行进度
 
-当前里程碑：M7 部署与恢复演练已交付（待负责人验收）；M6 已交付（T28 真实训练 NOT_RUN）
-当前任务：T29 部署与恢复演练（#30）已执行；T28 条件性微调（#29）READY_FOR_ACCEPTANCE；T33 ADR-0006 数据库落地（#34）已执行
-当前状态：M1–M5 已交付（等待负责人验收）；M6 已交付（T26/T27 完成、T28 harness 交付但真实训练 NOT_RUN）；**M7-01/M7-05 已真实执行**（不可变镜像部署、备份恢复演练、回滚演练、索引重建；2026-11-12）
+当前里程碑：M7 部署/恢复（T29）与监控/日志/安全（T30）已交付，待负责人验收；M6 已交付（T28 真实训练 NOT_RUN）
+当前任务：T30 监控、日志与安全测试（#31）READY_FOR_ACCEPTANCE；T29 部署与恢复演练（#30）已执行；T28 条件性微调（#29）READY_FOR_ACCEPTANCE；T33 ADR-0006 数据库落地（#34）已执行
+当前状态：M1–M5 已交付（等待负责人验收）；M6 已交付（T26/T27 完成、T28 harness 交付但真实训练 NOT_RUN）；**M7-01/M7-02/M7-03/M7-04/M7-05 已真实执行**（不可变镜像部署、备份恢复/回滚/索引重建、指标与脱敏日志、限流/输入上限/安全测试；2026-11-12）
 本机代码分支：`feat/bank-assistant`（集成分支）
-本机代码SHA：以 `git log -1` 为准（T29 合并后刷新）
-Ubuntu代码SHA：`1fb91b6`（合并 `feat/bank-assistant` 后的部署提交；镜像 `bank-assistant:api-1fb91b6`）
+本机代码SHA：`59a5869`（T30 合并 `feat/bank-assistant`；实现提交 `f27c216`）
+Ubuntu代码SHA：`59a5869`（与合并提交一致；镜像 `bank-assistant:api-59a5869`）
 最近更新：2026-11-12（Asia/Shanghai）
 
 ## 任务状态
@@ -142,8 +142,8 @@ M5 报告：`docs/milestones/M5-report.md`（T25 交付）。web 48 tests、`mak
 | 工单 | 状态 | 证据 |
 |---|---|---|
 | #30 T29 部署与恢复演练 | DONE | 服务器 bank-assistant-api healthy、仅 127.0.0.1:8000；备份恢复行数与哈希一致；回滚演练通过 |
-| #31 T30 监控/日志/安全测试 | IN_PROGRESS | worktree 中进行 |
-| #32 T31 发布包与运维手册 | BLOCKED | 等 #31 |
+| #31 T30 监控/日志/安全测试 | READY_FOR_ACCEPTANCE | 650 unit + 138 integration；真实 `/metrics`/trace_id 日志/密文扫描 0；`docs/milestones/M7-observability-report.md` |
+| #32 T31 发布包与运维手册 | BLOCKED | 等 #31 负责人验收 |
 
 ## M6 验收
 
@@ -158,6 +158,16 @@ M6 报告：`docs/milestones/M6-report.md`（READY_FOR_ACCEPTANCE，含未达门
 | #34 T33 数据库迁到 Ubuntu + SSH 隧道 | DONE（部署已执行） | PG18 容器 healthy；四库 owner=bank；`make test-integration` 130 passed；`make doctor` 隧道缺失失败/建立通过；`make seed-demo` 幂等且不触达 dev/test；LAN 直连失败 |
 | #29 T28 条件性微调 | READY_FOR_ACCEPTANCE | `make train` 默认 dry-run（train 202/test 50，数据哈希校验通过）；真实训练 `NOT_RUN`（GPU 1457 MiB 被 `dingtalk-embed` 占用、模型权重未缓存）；见 [M6 微调报告](milestones/M6-tuning-report.md) |
 | #30 T29 部署与恢复演练 | READY_FOR_ACCEPTANCE | 镜像 `api-1fb91b6`；备份恢复/回滚/索引重建全部实测；`docs/milestones/M7-deploy-report.md` |
+
+## M7 监控/日志/安全测试（T30 / #31，2026-11-12 已执行）
+
+| 项 | 实际值 |
+|---|---|
+| 自动化 | `uv run pytest tests -m "not integration"` 650 passed；`make test-integration` 138 passed |
+| 真实服务器 | 部署 `api-59a5869`；live/ready 200；`/metrics` 含 HTTP/模型/任务/DB 序列；仅回环 |
+| 日志 | 访问日志单行 JSON 带 trace_id；秘密匹配 0、演示会话关键词 0 |
+| 恢复 | 仅重启 `bank-assistant-api` 后 live/ready 200、healthy |
+| 报告 | `docs/milestones/M7-observability-report.md`；手册 `docs/ops/runbook.md` §10 |
 
 ## M7 部署与恢复演练（T29 / #30，2026-11-12 已执行）
 
