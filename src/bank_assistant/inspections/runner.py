@@ -1,4 +1,4 @@
-"""worker 侧的一次质检执行与幂等收尾（T18，M4-03；契约 §3，CT-11）。
+"""worker 侧的一次质检执行与幂等收尾（T18+T19，M4-03；契约 §3/§4，CT-09/CT-11）。
 
 执行顺序固定，且严格遵守契约 §3「幂等与事务」：
 
@@ -13,6 +13,10 @@
 5. 收尾后 :meth:`TaskQueue.complete` 写任务终态；租约已失效时抛
    :class:`LeaseLostError`，本次写入被放弃（findings 已由合法持有者写入或将被
    新持有者幂等补写）。
+
+写入前还会再核验一次：``hit`` 的证据必须能按码点逐字回验且不在否定/转述
+语境，知识引用必须能在当前 ``scope_id`` 内解析到分块（CT-09），否则整次运行
+以 ``EVIDENCE_INVALID`` 失败而不写 findings。
 
 失败处理：模型/校验失败先写 ``error_code`` 与安全诊断，再由任务队列决定
 重排队（默认上限 3）还是终结为 ``failed``。任务一旦终结为 ``failed``，运行也
@@ -42,6 +46,11 @@ from bank_assistant.infra.task_queue import (
     TaskQueue,
     TaskStatus,
     is_lease_active,
+)
+from bank_assistant.inspections.deterministic import assess_context
+from bank_assistant.inspections.evidence import (
+    EvidenceError,
+    ensure_hit_evidence_valid,
 )
 from bank_assistant.inspections.schema import (
     INSPECTION_PROMPT_VERSION,
@@ -130,7 +139,10 @@ class InspectionRunner:
     # ------------------------------------------------------------------ 入口
     def process(self, task: Task, *, owner: str, queue: TaskQueue) -> ExecutionOutcome:
         """执行一条任务；所有失败都转成显式 ``error_code``，不静默丢问题。"""
-        from bank_assistant.inspections.service import parse_inspection_payload_ref
+        from bank_assistant.inspections.service import (
+            invalid_knowledge_refs,
+            parse_inspection_payload_ref,
+        )
 
         inspection_id = parse_inspection_payload_ref(task.payload_ref)
         if inspection_id is None:
@@ -170,7 +182,10 @@ class InspectionRunner:
             return self._lease_lost(inspection_id, task.attempts)
 
         judgments: list[tuple[RuleSnapshotEntry, RuleJudgment]] = []
-        turn_ids = {turn["turn_id"] for turn in prepared.turns}
+        turn_contents = {
+            UUID(str(turn["turn_id"])): str(turn["content"])
+            for turn in prepared.turns
+        }
         last_result: ModelResult | None = None
         for rule in prepared.snapshot.rules:
             try:
@@ -203,7 +218,11 @@ class InspectionRunner:
                 )
             try:
                 judgment = parse_judgment(
-                    result.data, turn_ids=turn_ids, rule_code=rule.rule_code
+                    result.data,
+                    turns=turn_contents,
+                    rule_code=rule.rule_code,
+                    applicability=rule.applicability,
+                    business_type=prepared.snapshot.business_type,
                 )
             except ValidationError as exc:
                 return self.record_failure(
@@ -229,6 +248,28 @@ class InspectionRunner:
                     rule_code=rule.rule_code,
                     model_result=result,
                 )
+            if judgment.knowledge_refs:
+                with self._session() as session:
+                    invalid_refs = invalid_knowledge_refs(
+                        session,
+                        judgment.knowledge_refs,
+                        scope_id=prepared.scope_id,
+                    )
+                if invalid_refs:
+                    return self.record_failure(
+                        task_id=task.task_id,
+                        inspection_id=inspection_id,
+                        owner=owner,
+                        queue=queue,
+                        error_code=InspectionErrorCode.EVIDENCE_INVALID,
+                        message=(
+                            f"规则 {rule.rule_code} 的知识引用不在当前范围内："
+                            + ", ".join(str(ref) for ref in invalid_refs[:3])
+                        ),
+                        retryable=True,
+                        rule_code=rule.rule_code,
+                        model_result=result,
+                    )
             judgments.append((rule, judgment))
 
         return self._finalize_success(
@@ -237,6 +278,7 @@ class InspectionRunner:
             queue=queue,
             inspection_id=inspection_id,
             judgments=judgments,
+            turn_contents=turn_contents,
             model_result=last_result,
             attempts=task.attempts,
         )
@@ -272,6 +314,7 @@ class InspectionRunner:
             conversation_id = run.conversation_id
             expected_hash = run.conversation_hash
             snapshot_data = run.rule_snapshot
+            scope_id = run.scope_id
 
         try:
             snapshot = validate_rule_snapshot(snapshot_data)
@@ -314,7 +357,7 @@ class InspectionRunner:
                 "会话原文哈希与创建质检时不一致",
                 retryable=False,
             )
-        return _PreparedRun(snapshot=snapshot, turns=turns)
+        return _PreparedRun(snapshot=snapshot, turns=turns, scope_id=scope_id)
 
     def _mark_running(self, inspection_id: UUID) -> bool:
         """短事务：running + 本次尝试的 model_runs 追溯行。"""
@@ -368,10 +411,51 @@ class InspectionRunner:
         queue: TaskQueue,
         inspection_id: UUID,
         judgments: list[tuple[RuleSnapshotEntry, RuleJudgment]],
+        turn_contents: dict[UUID, str],
         model_result: ModelResult | None,
         attempts: int,
     ) -> ExecutionOutcome:
         """幂等最终化：条件更新命中才写 findings，重复/并发收尾不会写第二份。"""
+        # 写入前最后一道证据闸门：hit 必须有能逐字回验、且不在否定/转述语境的
+        # 原句。正常情况下 parse_judgment 已保证；这里防止未来代码路径绕过它。
+        for rule, judgment in judgments:
+            if judgment.verdict != "hit":
+                continue
+            try:
+                ensure_hit_evidence_valid(
+                    judgment.evidence, turn_contents=turn_contents
+                )
+            except EvidenceError as exc:
+                return self.record_failure(
+                    task_id=task_id,
+                    inspection_id=inspection_id,
+                    owner=owner,
+                    queue=queue,
+                    error_code=InspectionErrorCode.EVIDENCE_INVALID,
+                    message=f"规则 {rule.rule_code} 证据未通过写入前复核：{exc}",
+                    retryable=False,
+                    rule_code=rule.rule_code,
+                    model_result=model_result,
+                )
+            if not any(
+                assess_context(
+                    turn_contents[span.turn_id], span.start, span.end
+                ).supported
+                for span in judgment.evidence
+            ):
+                return self.record_failure(
+                    task_id=task_id,
+                    inspection_id=inspection_id,
+                    owner=owner,
+                    queue=queue,
+                    error_code=InspectionErrorCode.EVIDENCE_INVALID,
+                    message=(
+                        f"规则 {rule.rule_code} 的命中证据落在否定或引用他人话语的语境"
+                    ),
+                    retryable=False,
+                    rule_code=rule.rule_code,
+                    model_result=model_result,
+                )
         now = self._now()
         with self._session() as session:
             task_row = session.scalar(
@@ -758,6 +842,7 @@ class InspectionRunner:
 class _PreparedRun:
     snapshot: RuleSnapshot
     turns: tuple[dict[str, object], ...]
+    scope_id: str
 
 
 class _InspectionFailure(Exception):

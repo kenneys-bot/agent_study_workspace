@@ -20,7 +20,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
@@ -31,6 +31,9 @@ from bank_assistant.infra.models import (
     Conversation,
     Finding,
     InspectionRun,
+    KnowledgeChunk,
+    KnowledgeDocument,
+    KnowledgeVersion,
     RuleSet,
     RuleVersion,
     Task,
@@ -43,11 +46,13 @@ from bank_assistant.inspections.schema import (
 )
 from bank_assistant.rules.lifecycle import RuleStatus
 from bank_assistant.rules.schema import (
+    KnowledgeRef,
     RuleApplicability,
     RuleCriteria,
     RuleSourceRef,
 )
 from bank_assistant.security.identity import Identity
+from bank_assistant.services.conversations import load_conversation
 
 __all__ = [
     "TASK_TYPE",
@@ -57,6 +62,7 @@ __all__ = [
     "build_rule_snapshot",
     "create_inspection",
     "inspection_payload_ref",
+    "invalid_knowledge_refs",
     "load_inspection",
     "parse_inspection_payload_ref",
     "select_applicable_rule_versions",
@@ -80,11 +86,17 @@ class InspectionInputError(Exception):
 
 @dataclass(frozen=True, slots=True)
 class InspectionView:
-    """一次质检的读取视图：运行、逐规则判断与快照里的规则编号。"""
+    """一次质检的读取视图：运行、逐规则判断、快照规则与不可变原文轮次。
+
+    ``turn_contents`` / ``turn_ordinals`` 用于读取路径重新核验证据；原文按
+    T12 不可变，因此创建时记录的证据坐标仍可逐字回验（契约 §4）。
+    """
 
     run: InspectionRun
     findings: tuple[Finding, ...]
     rules_by_version: dict[UUID, RuleSnapshotEntry]
+    turn_contents: dict[UUID, str] = field(default_factory=dict)
+    turn_ordinals: dict[UUID, int] = field(default_factory=dict)
 
     @property
     def rule_count(self) -> int:
@@ -251,6 +263,47 @@ def create_inspection(
     return inspection, task
 
 
+def invalid_knowledge_refs(
+    session: Session,
+    refs: Sequence[KnowledgeRef],
+    *,
+    scope_id: str,
+) -> list[UUID]:
+    """CT-09：返回无法在当前访问范围内解析到原文分块的引用。
+
+    契约 §4 要求后端校验引用的访问范围；模型自报的 ``version_id``/
+    ``chunk_id`` 必须同时存在、彼此对应，且所属知识文档在当前 ``scope_id`` 内。
+    不要求版本仍为 published（规则/判断可能引用历史依据），但绝不接受不存在
+    或跨范围的引用。
+    """
+    if not refs:
+        return []
+    wanted = {(ref.version_id, ref.chunk_id) for ref in refs}
+    chunk_ids = [chunk_id for _, chunk_id in wanted]
+    rows = session.execute(
+        select(
+            KnowledgeChunk.version_id,
+            KnowledgeChunk.chunk_id,
+            KnowledgeDocument.scope_id,
+        )
+        .join(
+            KnowledgeVersion,
+            KnowledgeVersion.version_id == KnowledgeChunk.version_id,
+        )
+        .join(
+            KnowledgeDocument,
+            KnowledgeDocument.document_id == KnowledgeVersion.document_id,
+        )
+        .where(KnowledgeChunk.chunk_id.in_(chunk_ids))
+    ).all()
+    found = {
+        (version_id, chunk_id)
+        for version_id, chunk_id, doc_scope in rows
+        if doc_scope == scope_id
+    }
+    return [chunk_id for _, chunk_id in sorted(wanted - found, key=str)]
+
+
 def load_inspection(
     session: Session,
     identity: Identity,
@@ -276,4 +329,23 @@ def load_inspection(
         snapshot = None
     if snapshot is not None:
         rules_by_version = {rule.rule_version_id: rule for rule in snapshot.rules}
-    return InspectionView(run=run, findings=findings, rules_by_version=rules_by_version)
+
+    # 读取路径重新核验证据：原文不可变（T12），坏证据只能被标红，不能被当成命中。
+    conversation = load_conversation(session, run.conversation_id)
+    turn_contents = (
+        {turn.turn_id: turn.content for turn in conversation.turns}
+        if conversation is not None
+        else {}
+    )
+    turn_ordinals = (
+        {turn.turn_id: turn.ordinal for turn in conversation.turns}
+        if conversation is not None
+        else {}
+    )
+    return InspectionView(
+        run=run,
+        findings=findings,
+        rules_by_version=rules_by_version,
+        turn_contents=turn_contents,
+        turn_ordinals=turn_ordinals,
+    )

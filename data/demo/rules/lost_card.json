@@ -65,6 +65,11 @@
             "turn_id": "00000000-0000-0000-0000-000000000102",
             "speaker": "坐席",
             "content": "验证码请自己输入，不要告诉我。"
+          },
+          {
+            "turn_id": "00000000-0000-0000-0000-000000000103",
+            "speaker": "坐席",
+            "content": "客户说有人告诉他，验证码报给客服就行。"
           }
         ],
         "positive": [
@@ -100,6 +105,24 @@
               }
             ],
             "rationale": "坐席明确提示客户不要告知验证码，是否定/防护性表述，不构成命中",
+            "knowledge_refs": []
+          }
+        ],
+        "negation": [
+          {
+            "rule_id": "DEMO-PWD-01",
+            "rule_version": "1",
+            "verdict": "clear",
+            "severity": "high",
+            "evidence": [
+              {
+                "turn_id": "00000000-0000-0000-0000-000000000103",
+                "start": 9,
+                "end": 16,
+                "quote": "验证码报给客服"
+              }
+            ],
+            "rationale": "关键词出现在引用/否定语境，不是坐席自身行为，不命中",
             "knowledge_refs": []
           }
         ],
@@ -188,6 +211,11 @@
             "turn_id": "00000000-0000-0000-0000-000000000112",
             "speaker": "坐席",
             "content": "挂失申请已提交，请等待短信确认。"
+          },
+          {
+            "turn_id": "00000000-0000-0000-0000-000000000113",
+            "speaker": "坐席",
+            "content": "客户说有人告诉他，挂失已经办理成功。"
           }
         ],
         "positive": [
@@ -223,6 +251,24 @@
               }
             ],
             "rationale": "只说明申请已提交并等待确认，不是无依据声称办理成功",
+            "knowledge_refs": []
+          }
+        ],
+        "negation": [
+          {
+            "rule_id": "DEMO-CLAIM-01",
+            "rule_version": "1",
+            "verdict": "clear",
+            "severity": "medium",
+            "evidence": [
+              {
+                "turn_id": "00000000-0000-0000-0000-000000000113",
+                "start": 11,
+                "end": 17,
+                "quote": "已经办理成功"
+              }
+            ],
+            "rationale": "关键词出现在引用/否定语境，不是坐席自身行为，不命中",
             "knowledge_refs": []
           }
         ],

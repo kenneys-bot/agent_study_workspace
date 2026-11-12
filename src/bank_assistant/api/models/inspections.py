@@ -4,7 +4,9 @@
   状态、规则快照、任务与错误码全部由服务端生成，客户端不能指定。
 - 响应给出状态、逐规则判断（含证据 JSON 与知识引用）以及失败原因
   （``error_code`` + 安全诊断信息）。诊断只含错误码/规则编码/校验原因，
-  不含会话正文、模型原始输出或凭据（契约 §1）。
+  不含会话正文、模型原始输出或凭据（契约 §1）。T19 起证据在读取时重新按
+  码点回验，并补上 ``turn_ordinal`` 与 ``validated``；无效证据的 hit 绝不
+  以 hit 返回（``raw_machine_verdict`` 保留原始机器判断供审计）。
 - 机器判断 ``machine_verdict`` 只读；人工复核走后续票的 ReviewDecision，
   不会覆盖这里的判断（契约 §2）。
 """
@@ -18,6 +20,8 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 from bank_assistant.infra.models import Finding, InspectionRun, Task
+from bank_assistant.inspections.deterministic import assess_context
+from bank_assistant.inspections.evidence import annotate_evidence, check_span
 from bank_assistant.inspections.service import InspectionView
 
 
@@ -64,6 +68,10 @@ class FindingPublic(BaseModel):
     rationale: str
     evidence: list[dict[str, Any]] = Field(default_factory=list)
     knowledge_refs: list[dict[str, Any]] = Field(default_factory=list)
+    # T19：证据是否全部通过码点回验；无效证据的 hit 不能以 hit 暴露。
+    evidence_valid: bool = True
+    # 仅在读取路径发现无效证据、把展示判断降级时保留原始机器判断。
+    raw_machine_verdict: str | None = None
     created_at: datetime
 
 
@@ -98,21 +106,63 @@ def to_accepted(run: InspectionRun, task: Task) -> InspectionAccepted:
     )
 
 
+def _evidence_valid(
+    finding: Finding, view: InspectionView
+) -> bool:
+    """读取路径重新回验证据；``hit`` 还要求证据不是否定/引用语境。"""
+    spans = list(finding.evidence or [])
+    checks = [
+        check_span(
+            span,
+            turn_contents=view.turn_contents,
+            turn_ordinals=view.turn_ordinals,
+        )
+        for span in spans
+    ]
+    if finding.machine_verdict == "hit":
+        if not checks or not all(check.valid for check in checks):
+            return False
+        return any(
+            check.valid
+            and check.turn_id is not None
+            and check.start is not None
+            and check.end is not None
+            and assess_context(
+                view.turn_contents[check.turn_id], check.start, check.end
+            ).supported
+            for check in checks
+        )
+    return all(check.valid for check in checks)
+
+
 def _finding_public(
     finding: Finding, view: InspectionView
 ) -> FindingPublic:
     rule = view.rules_by_version.get(finding.rule_version_id)
+    evidence_valid = _evidence_valid(finding, view)
+    machine_verdict = finding.machine_verdict
+    raw_machine_verdict: str | None = None
+    if machine_verdict == "hit" and not evidence_valid:
+        # 契约 §3/§7：没有可回验证据的 hit 绝不能作为命中展示；保留原始判断供审计。
+        raw_machine_verdict = machine_verdict
+        machine_verdict = "insufficient_evidence"
     return FindingPublic(
         finding_id=finding.finding_id,
         rule_version_id=finding.rule_version_id,
         rule_id=rule.rule_id if rule is not None else None,
         rule_code=rule.rule_code if rule is not None else None,
         version_no=rule.version_no if rule is not None else None,
-        machine_verdict=finding.machine_verdict,
+        machine_verdict=machine_verdict,
         severity=finding.severity,
         rationale=finding.rationale,
-        evidence=list(finding.evidence or []),
+        evidence=annotate_evidence(
+            list(finding.evidence or []),
+            turn_contents=view.turn_contents,
+            turn_ordinals=view.turn_ordinals,
+        ),
         knowledge_refs=list(finding.knowledge_refs or []),
+        evidence_valid=evidence_valid,
+        raw_machine_verdict=raw_machine_verdict,
         created_at=finding.created_at,
     )
 
