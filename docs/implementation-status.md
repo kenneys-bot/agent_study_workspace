@@ -1,8 +1,8 @@
 # 执行进度
 
 当前里程碑：M5（进行中）；M1–M4 已交付
-当前任务：M5 T25 演示脚本与端到端（#26）；M6 T27 评测脚本（#28）并行
-当前状态：M1–M4 READY_FOR_ACCEPTANCE；M5 IN_PROGRESS（数据库部署方案已于 2026-11-12 调整，见 ADR-0006；实现待办见下）
+当前任务：M5 T25 演示脚本与端到端（#26）已完成；M6 T27 评测脚本（#28）并行
+当前状态：M1–M4 READY_FOR_ACCEPTANCE；M5 T25 DONE（待负责人验收）；M6 IN_PROGRESS（数据库部署方案已于 2026-11-12 调整，见 ADR-0006；实现待办见下）
 本机代码分支：`feat/bank-assistant`
 本机代码SHA：`979b076`（后续提交见 git log）
 Ubuntu代码SHA：`2c5e0d7`（M3 期间的同步点；集成分支已前进，下次合并后刷新）
@@ -103,7 +103,16 @@ Ubuntu 与 Mac 同 SHA；两端 `uv run pytest tests -q` 均 144 用例全过（
 | #23 T22 前端骨架+登录+版本页 | DONE | web build/test 通过；GET /system/version 真实数据、无密钥 |
 | #24 T23 坐席工作台页 | DONE | web 24 tests；引用可打开原文 |
 | #25 T24 质检复核页 | DONE | web 47 tests；409 冲突刷新 + 完成门禁 |
-| #26 T25 演示脚本与端到端 | IN_PROGRESS | worktree 中进行 |
+| #26 T25 演示脚本与端到端 | DONE | 6 段合成会话 + 3 个回放待复核任务；demo-reset 安全单测；Playwright 1/1；真实 chat+embedding 冒烟通过；见 [M5 报告](milestones/M5-report.md) |
+
+## M5 T25 验收证据（2026-11-12）
+
+- `data/demo/conversations/*.json`：S1/S2/S3 × normal/risk 共 6 段，全部合成、正文不含数字。
+- `make seed-demo`：幂等导入账号/知识/规则/会话，并用**真实 worker + 显式回放**生成 3 个待复核任务；重复执行 0 新建。
+- `make demo-reset`：只允许 `DB=bank_assistant_demo CONFIRM=yes`，URL 库名必须精确匹配；拒绝 dev/test/restore 与 staging/production；dry-run 与真实清空均验证。
+- `make test-e2e`：一次性本机 compose 数据库 + 隔离后端（replay）+ 前端 preview；Playwright 1 passed，截图在 `web/e2e/screenshots/`（gitignore）。
+- `make demo-real-model-smoke`：DeepSeek chat `status=succeeded` + fastembed embedding 512 维成功，未打印密钥。
+- **ADR-0006 过渡做法**：e2e 暂用本机 compose 的独立 `bank_assistant_demo`，不是隧道 + `*_test`；TODO 指向后续数据库访问工单，落地后移除本机 compose 依赖。
 
 ## M6 工单状态
 

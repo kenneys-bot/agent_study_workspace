@@ -37,6 +37,10 @@ WORKDIR /app
 
 COPY --from=builder --chown=app:app /app/.venv /app/.venv
 
+# 运行时数据/产物目录：容器内可写（演示报告导出），宿主挂载会覆盖。
+RUN mkdir -p /app/data /app/artifacts /app/.local-artifacts \
+    && chown -R app:app /app/data /app/artifacts /app/.local-artifacts
+
 USER app
 
 EXPOSE 8000

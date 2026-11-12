@@ -1,0 +1,12 @@
+{
+  "id": "s3-complaint-risk",
+  "story": "S3",
+  "story_title": "投诉受理",
+  "scenario": "risk",
+  "title": "投诉受理（风险会话）",
+  "business_type": "complaint",
+  "description": "合成风险会话：客户明确投诉，坐席用“不可能处理”“投诉也没用”阻碍投诉，并出现“你别再打了”的强硬表达。回放会把后者误判为侮辱性表达，用于演示人工驳回误报。",
+  "data_classification": "synthetic_demo",
+  "create_inspection": true,
+  "content": "客户：我要投诉你们，上次的问题一直没解决。\n坐席：不可能处理，你别再打了，投诉也没用。\n客户：你这是什么态度？\n坐席：就这个态度，随便你。\n客户：那我去找监管部门。\n坐席：你去吧，反正结果一样。\n客户：你们必须给我一个说法，我要投诉。"
+}

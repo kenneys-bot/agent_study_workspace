@@ -199,7 +199,9 @@ def create_embedding_provider(
     normalized = kind.strip().lower()
     if normalized == "fake":
         return FakeEmbeddingProvider()
-    if normalized == "fastembed":
+    # ``local`` 是旧 .env 里的历史别名：语义就是本机 fastembed，不是云 embedding。
+    # 保留别名避免本地演示因旧配置直接失败；新配置请写 ``fastembed``。
+    if normalized in {"fastembed", "local"}:
         return FastEmbedProvider(model_name=model_name or DEFAULT_EMBEDDING_MODEL)
     raise ValueError(f"未知的 embedding provider：{kind!r}（可选 fastembed / fake）")
 

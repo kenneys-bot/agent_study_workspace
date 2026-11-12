@@ -17,14 +17,18 @@ import {
   ApiRequestError,
   asApiRequestError,
   completeReview,
+  createReport,
   fetchConversation,
   fetchInspection,
+  fetchReport,
   fetchReview,
   submitReviewDecision,
 } from '../api/client'
 import type {
   ConversationPublic,
   InspectionDetail,
+  ReportExportDetail,
+  ReportFormat,
   ReviewAction,
   ReviewDecisionInput,
   ReviewDetail,
@@ -160,6 +164,9 @@ export default function ReviewDetailPage() {
   const [actionBusy, setActionBusy] = useState(false)
   const [completeBusy, setCompleteBusy] = useState(false)
   const [pendingConfirmation, setPendingConfirmation] = useState(false)
+  const [exportBusy, setExportBusy] = useState<ReportFormat | null>(null)
+  const [exportError, setExportError] = useState<ApiRequestError | null>(null)
+  const [lastExport, setLastExport] = useState<ReportExportDetail | null>(null)
 
   const handleUnauthorized = useCallback(
     (error: ApiRequestError): boolean => {
@@ -377,6 +384,46 @@ export default function ReviewDetailPage() {
     }
   }
 
+  async function handleExport(format: ReportFormat) {
+    if (review === null || exportBusy !== null) {
+      return
+    }
+    setExportBusy(format)
+    setExportError(null)
+    try {
+      const summary = await createReport({
+        inspection_id: review.inspection_id,
+        format,
+        review_revision: review.revision,
+      })
+      const detail = await fetchReport(summary.export_id)
+      setLastExport(detail)
+      const serialized =
+        format === 'json'
+          ? JSON.stringify(detail.content, null, 2)
+          : String(detail.content)
+      const blob = new Blob([serialized], {
+        type: format === 'json' ? 'application/json' : 'text/html',
+      })
+      const url = URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = `report-${detail.export_id}.${format}`
+      document.body.appendChild(anchor)
+      anchor.click()
+      anchor.remove()
+      URL.revokeObjectURL(url)
+    } catch (cause) {
+      const error = asApiRequestError(cause)
+      if (handleUnauthorized(error)) {
+        return
+      }
+      setExportError(error)
+    } finally {
+      setExportBusy(null)
+    }
+  }
+
   if (state.status === 'loading') {
     return (
       <section className="reviews" data-testid="review-detail-page">
@@ -486,6 +533,52 @@ export default function ReviewDetailPage() {
             <strong>最近一次重新打开的理由</strong>
             <span>{current.last_reopen_reason}</span>
           </div>
+        )}
+      </section>
+
+      <section className="panel report-export" aria-labelledby="report-export-title">
+        <h2 id="report-export-title">报告导出</h2>
+        <p className="muted">
+          报告固定 <code>inspection_id</code> 与当前复核 revision{' '}
+          <strong>{current.revision}</strong> 的快照；导出后再改判，旧报告内容不变，并记录内容哈希。
+        </p>
+        <div className="actions">
+          <button
+            type="button"
+            className="button"
+            onClick={() => void handleExport('json')}
+            disabled={exportBusy !== null}
+            data-testid="export-json"
+          >
+            {exportBusy === 'json' ? '导出中…' : '导出 JSON 报告'}
+          </button>
+          <button
+            type="button"
+            className="button"
+            onClick={() => void handleExport('html')}
+            disabled={exportBusy !== null}
+            data-testid="export-html"
+          >
+            {exportBusy === 'html' ? '导出中…' : '导出 HTML 报告'}
+          </button>
+        </div>
+        {exportError !== null && <ApiErrorNotice error={exportError} prefix="报告导出" />}
+        {lastExport !== null && (
+          <dl className="detail-list export-result" data-testid="export-result">
+            <div>
+              <dt>最近导出</dt>
+              <dd>
+                <code>{lastExport.export_id}</code>（{lastExport.format}，revision{' '}
+                {lastExport.review_revision}）
+              </dd>
+            </div>
+            <div>
+              <dt>内容哈希</dt>
+              <dd>
+                <code>{lastExport.content_hash}</code>
+              </dd>
+            </div>
+          </dl>
         )}
       </section>
 

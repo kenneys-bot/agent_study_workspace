@@ -37,6 +37,12 @@ artifacts/
 web/node_modules/
 web/dist/
 
+# 浏览器端到端（T25）：运行产物与截图不入库
+.e2e/
+web/e2e/screenshots/
+web/e2e/test-results/
+web/e2e/playwright-report/
+
 # 归档目录里历史误提交的构建产物（保留在工作区，不入 Git）
 .langgraph_api/
 *.pckl
