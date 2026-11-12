@@ -1,8 +1,8 @@
 # 执行进度
 
-当前里程碑：M1（已交付）→ M2（进行中）
-当前任务：M2 T11 知识生命周期（#12）
-当前状态：M1 READY_FOR_ACCEPTANCE；M2 IN_PROGRESS
+当前里程碑：M3（进行中）；M1/M2 已交付
+当前任务：M3 T14 演示知识与版本化索引（#15）
+当前状态：M1/M2 READY_FOR_ACCEPTANCE；M3 IN_PROGRESS
 本机代码分支：`feat/bank-assistant`
 本机代码SHA：`979b076`（后续提交见 git log）
 Ubuntu代码SHA：见下方 M0-03 证据（同一 SHA）
@@ -31,7 +31,7 @@ Ubuntu代码SHA：见下方 M0-03 证据（同一 SHA）
 | #33 T32 知识/话术修通 | DONE | test_classify_intent 通过 |
 | #9 T08 错误码契约 | DONE | 144 passed / 0 failed |
 | #11 T10 认证 | DONE | 163 passed；integration 13 passed；alembic 0001→0002 |
-| #12 T11 知识生命周期 | IN_PROGRESS | worktree 中进行（迁移 0003） |
+| #12 T11 知识生命周期 | DONE | 迁移 0003；集成 53 passed |
 | #13 T12 会话持久化与审计 | DONE | 迁移 0004 + merge revision；integration 40 passed |
 | #14 T13 幂等与任务表 | DONE | 迁移 0005；幂等/租约集成测试通过 |
 
@@ -62,6 +62,10 @@ Ubuntu 与 Mac 同 SHA；两端 `uv run pytest tests -q` 均 144 用例全过（
 
 - Ubuntu 整机重启：需负责人逐次准许。
 - GPU 分时：M6 微调（#28）前需确认 `dingtalk-train` 空闲。
+
+## M2 双机与迁移
+
+M2 报告：`docs/milestones/M2-report.md`。迁移单一 head `cf1edc530a0c`（两条 merge revision 收口并行分叉）。
 
 ## 下一次执行入口
 
