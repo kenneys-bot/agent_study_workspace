@@ -36,3 +36,6 @@ web/dist/
 
 # uv 本地缓存（沙箱内）
 .uv-cache/
+
+# implement-spec 并行 worktree
+.worktrees/
