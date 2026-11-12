@@ -5,17 +5,21 @@
 
 import logging
 from contextlib import asynccontextmanager
-from uuid import uuid4
 
 from fastapi import FastAPI, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 
 from bank_assistant.config.settings import settings
 from bank_assistant.config.constants import API_PREFIX
 from bank_assistant.infra.db import ping_database
 from bank_assistant.utils.logger import LoggerConfig
+from bank_assistant.api.errors import (
+    TraceIdMiddleware,
+    error_response,
+    install_error_handlers,
+    resolve_trace_id,
+)
 from bank_assistant.api.routers import (
     knowledge_base_router,
     script_recommender_router,
@@ -57,29 +61,21 @@ app = FastAPI(
 )
 
 
-# 配置CORS
+# 中间件：trace_id 必须覆盖所有响应（含错误与 CORS 预检），因此放在最外层；
+# CORS 同时暴露 x-trace-id，便于前端把错误与后端日志关联。
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # 生产环境应限制为特定域名
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["x-trace-id"],
 )
+app.add_middleware(TraceIdMiddleware)
 
 
-# 异常处理
-@app.exception_handler(Exception)
-async def global_exception_handler(request, exc):
-    """全局异常处理器"""
-    logger.error(f"未捕获的异常: {str(exc)}", exc_info=True)
-    return JSONResponse(
-        status_code=500,
-        content={
-            "success": False,
-            "message": "内部服务器错误",
-            "error": str(exc) if settings.DEBUG else "请稍后重试"
-        }
-    )
+# 异常处理：所有端点统一使用契约 §1 的错误结构（T08）
+install_error_handlers(app)
 
 
 # 注册路由
@@ -122,20 +118,18 @@ async def health_live():
 @app.get("/health/ready")
 async def health_ready(request: Request):
     """必需依赖（PostgreSQL）是否可用"""
-    trace_id = request.headers.get("x-trace-id") or uuid4().hex
+    trace_id = resolve_trace_id(request)
     try:
         await run_in_threadpool(ping_database)
     except Exception as exc:  # 连接失败、超时、驱动错误都视为不可用
         logger.warning("readiness 检查失败: %s", type(exc).__name__)
-        return JSONResponse(
+        return error_response(
             status_code=503,
-            content={
-                "code": "DEPENDENCY_UNAVAILABLE",
-                "message": "数据库暂不可用",
-                "trace_id": trace_id,
-                "retryable": True,
-                "details": {"dependency": "postgresql"},
-            },
+            code="DEPENDENCY_UNAVAILABLE",
+            message="数据库暂不可用",
+            request=request,
+            retryable=True,
+            details={"dependency": "postgresql"},
         )
     return {
         "status": "ready",
