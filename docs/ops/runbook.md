@@ -1,4 +1,4 @@
-# 部署与运维手册（v0.1.1 / M7；T29+T30+T31+T37）
+# 部署与运维手册（v0.1.1 / M7；T29+T30+T31+T37+T38）
 
 本手册是 Ubuntu 服务器上 API 部署、索引重建、备份恢复、回滚、监控排查与
 **发布校验**的**可执行步骤**。所有命令都在 Mac 的仓库根执行（除标注“服务器”的
@@ -511,7 +511,138 @@ ssh my-ubuntu-server 'docker logs --since 24h bank-assistant-api 2>&1 | grep -c 
 手册中的服务器命令（`docker`/`curl`/`psql`/`ss`/`sed`/`python3`）均为 **Ubuntu 已安装的
 系统命令 + 已部署镜像内命令**，不要求在服务器安装 Python 项目依赖或 node。
 
-## 13. 变更记录
+## 13. 容量压测、稳定性探测与受控故障演练（T38）
+
+本节命令全部在 Mac 仓库根发起，实际动作在服务器执行；不暴露 LAN，不改线上
+`.env.app`，不重启服务器整机，不触碰 `redis-redis-1` / `dingtalk-*`。
+
+### 13.1 10 并发 / 10 分钟非模型 API 压测
+
+脚本 `scripts/load_test.py`（纯逻辑有离线单测；只读 HTTP）。把脚本复制到服务器产物
+目录，用**已部署镜像**运行，避免在宿主安装依赖：
+
+```bash
+ART=/home/jack/workspace/bank-assistant/artifacts/loadtest/T38
+ssh my-ubuntu-server "mkdir -p $ART"
+scp scripts/load_test.py my-ubuntu-server:$ART/load_test.py
+ssh my-ubuntu-server "cd $ART && docker run --rm --network host \
+  --user \"\$(id -u):\$(id -g)\" -v \"\$PWD:/work\" \
+  -e LOADTEST_PASSWORD=\"\${DEMO_PASSWORD:?公开演示密码}\" \
+  --entrypoint python bank-assistant:api-3a04952 /work/load_test.py \
+  --base-url http://127.0.0.1:8000 --duration-seconds 600 --concurrency 10 \
+  --inspection-id <已存在的演示质检 UUID> --output-dir /work/nonmodel"
+```
+
+输出：`nonmodel/summary.json`（报告数字来源）、`buckets.jsonl`（10 秒桶）、
+`metrics-before.txt` / `metrics-after.txt`。复跑前先确认没有别的压测在跑；
+不要用 `RATE_LIMIT_ENABLED=false` 绕过线上限流。
+
+候选答复（replay，避免烧钱）用**临时实例**，不改线上容器：
+
+```bash
+# 1) 克隆演示库（测后删除；不碰 demo/dev/test）
+ssh my-ubuntu-server 'docker exec bank-assistant-db-db-1 createdb -U bank bank_assistant_loadtest'
+ssh my-ubuntu-server "docker exec bank-assistant-db-db-1 sh -c 'pg_dump -U bank bank_assistant_demo | psql -q -U bank bank_assistant_loadtest'"
+
+# 2) 生成仓库外 replay env（600）：MODEL_MODE=replay + 指向 loadtest 库
+ssh my-ubuntu-server 'cd ~/workspace/bank-assistant && \
+  sed -e "s#^MODEL_MODE=.*#MODEL_MODE=replay#" \
+      -e "s#^DATABASE_URL=\(.*\)/bank_assistant_demo#DATABASE_URL=\1/bank_assistant_loadtest#" \
+      .env.app > .env.replay && chmod 600 .env.replay'
+
+# 3) 临时 replay 实例（8011，仅回环；限流关闭只在本实例）
+ssh my-ubuntu-server 'cd ~/workspace/bank-assistant && docker run -d --rm \
+  --name bank-assistant-replay-t38 --network host --user 1000:1000 \
+  --env-file .env.replay -e RATE_LIMIT_ENABLED=false \
+  -e GIT_SHA=replay -e GIT_BRANCH=replay \
+  -e INDEX_DIR=/app/data/index -e DATA_ROOT=/app/data -e ARTIFACT_ROOT=/app/artifacts \
+  -e FASTEMBED_CACHE_PATH=/app/data/models -e HOME=/app/data/home \
+  -v ~/workspace/bank-assistant/data:/app/data \
+  -v ~/workspace/bank-assistant/artifacts:/app/artifacts \
+  bank-assistant:api-3a04952 uvicorn bank_assistant.main:app --host 127.0.0.1 --port 8011'
+
+# 4) 2 分钟 / 5 并发
+ssh my-ubuntu-server "cd $ART && docker run --rm --network host --user \"\$(id -u):\$(id -g)\" \
+  -v \"\$PWD:/work\" -e LOADTEST_PASSWORD=\"\${DEMO_PASSWORD}\" \
+  --entrypoint python bank-assistant:api-3a04952 /work/load_test.py \
+  --base-url http://127.0.0.1:8011 --phase suggestion --endpoints suggestion \
+  --duration-seconds 120 --concurrency 5 --output-dir /work/replay"
+
+# 5) 清理（顺序不能反：先删实例，再删库与 env）
+ssh my-ubuntu-server 'docker rm -f bank-assistant-replay-t38'
+ssh my-ubuntu-server 'docker exec bank-assistant-db-db-1 dropdb -U bank bank_assistant_loadtest'
+ssh my-ubuntu-server 'rm -f ~/workspace/bank-assistant/.env.replay'
+```
+
+### 13.2 24 小时稳定性探测
+
+脚本 `scripts/probe_uptime.py`（仅标准库，宿主 `python3` 运行）：
+
+```bash
+# 启动
+ssh my-ubuntu-server 'mkdir -p ~/workspace/bank-assistant/artifacts/probe && \
+  cp ~/workspace/bank-assistant/artifacts/loadtest/T38/probe_uptime.py \
+     ~/workspace/bank-assistant/artifacts/probe/ && \
+  cd ~/workspace/bank-assistant/artifacts/probe && \
+  nohup python3 probe_uptime.py --out-dir . \
+    --base-url http://127.0.0.1:8000 > probe.log 2>&1 </dev/null &'
+
+# 状态 / 摘要
+ssh my-ubuntu-server 'cat ~/workspace/bank-assistant/artifacts/probe/probe.pid; \
+  cat ~/workspace/bank-assistant/artifacts/probe/summary.json'
+
+# 停止（SIGTERM 会补写 summary.json 并删除 pidfile）
+ssh my-ubuntu-server 'kill "$(cat ~/workspace/bank-assistant/artifacts/probe/probe.pid)"'
+```
+
+- 频率：5 分钟 health，30 分钟 metrics + 容器状态；`probe.jsonl` 超过 5 MiB 轮转
+  （`.1/.2/.3`）；metrics 原文保留 96 份。
+- 单实例保护：`probe.pid` 存活时拒绝重复启动；换目录或先停止。
+- 快速验证：`python3 scripts/probe_uptime.py --out-dir /tmp/probe-check --once`。
+- 该探测**不是**业务可用性 SLA；`/metrics` 仅回环，跨机需 SSH（R-09）。
+
+### 13.3 受控故障演练（只重启本项目容器）
+
+先确认事实：`docker inspect` 记录 API/DB/redis 的 `StartedAt` 与重启计数；
+演练期间不要跑压测或 worker。
+
+```bash
+# 通用 readiness 观察器：0.2s 一次，记录到 drill-*.log
+cd ~/workspace/bank-assistant/artifacts/loadtest/T38   # 服务器上
+rm -f drill-api.log drill-api.stop
+( while [ ! -f drill-api.stop ]; do
+    printf '%s %s\n' "$(date +%s.%N)" \
+      "$(curl -s -o /dev/null -w '%{http_code}' --max-time 1 http://127.0.0.1:8000/health/ready)"
+    sleep 0.2
+  done ) > drill-api.log 2>&1 &
+watcher=$!; sleep 2
+date +%s.%N > drill-api.restart-start
+docker restart bank-assistant-api
+date +%s.%N > drill-api.restart-end
+until [ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 1 http://127.0.0.1:8000/health/ready)" = 200 ]; do sleep 0.25; done
+touch drill-api.stop; wait $watcher
+```
+
+数据库演练把 `bank-assistant-api` 换成 `bank-assistant-db-db-1`；预期 readiness
+出现 `503` 后恢复 `200`。API 进程重启时端口不可达，观察到的是 `000`（连接拒绝）
+→ `200`，不是 503——不要改写观测值。
+
+演练后核对（真实库）：
+
+```bash
+ssh my-ubuntu-server "docker exec -i bank-assistant-db-db-1 psql -U bank -d bank_assistant_demo -At -F'|' -f - < /tmp/t38-invariants.sql"
+```
+
+期望：`running_tasks=0`、`running_runs=0`、`queued_tasks=0`、历史 `succeeded=3`、
+`dup_task_runs=0`、`dup_findings=0`、`dup_final_runs=0`。若出现永久 `running`，
+按 §8.2 查租约与 worker，**不要手工改状态**。
+
+**硬限制**：不重启服务器；不动 `redis-redis-1`/`dingtalk-*`；不降 schema；不把
+`000` 记成 `503`。T38 实测参考：API 重启 1.863s（首次失败→200，命令→200 2.166s），
+DB 重启 1.820s（首次 503→200，命令→200 2.127s）；完整数据见
+[M7 性能报告](../milestones/M7-performance-report.md)。
+
+## 14. 变更记录
 
 | 日期 | 变更 |
 |---|---|
@@ -519,3 +650,4 @@ ssh my-ubuntu-server 'docker logs --since 24h bank-assistant-api 2>&1 | grep -c 
 | 2026-11-12（T30） | 增补 §10 监控/日志/限流/安全观测 |
 | 2026-11-12（T31） | 增补发布记录/清单与 `make release-verify`（§2.4）、配置矩阵（§1.1）、事故第一响应与 worker 运维（§8.2）、命令索引（§12）；核对全部 `make` 命令存在 |
 | 2026-11-13（T37） | 发布 v0.1.1（`api-3a04952`，索引 `idx-20261113T025706Z-f7974a6a`）；§2.3 补索引文本形态/内容身份/指针备份与 `make index-activate`（§2.3.1）；§7 回滚演练补索引指针步骤与镜像/索引配对约束 |
+| 2026-11-13（T38） | 新增 §13：10 并发压测、24h 探测启停、受控 API/DB 重启演练与任务不变量核对；§14 为原变更记录 |
