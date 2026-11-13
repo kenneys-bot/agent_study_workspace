@@ -160,3 +160,61 @@ def test_price_lookup_returns_configured_prices(tmp_path: Path) -> None:
     assert price.source.startswith("https://")
     with pytest.raises(EvalConfigError):
         config.price_for("deepseek", "unknown-model")
+
+
+def test_retrieval_options_default_to_t27_behaviour(tmp_path: Path) -> None:
+    path = tmp_path / "eval.json"
+    path.write_text(json.dumps(_payload()), encoding="utf-8")
+    options = load_eval_config(path).retrieval
+    assert options.embedding_text == "chunk"
+    assert options.business_filter == "hard"
+    assert options.rerank_alpha == 0.0
+    assert options.scenario_overrides == {}
+
+
+def test_retrieval_options_are_parsed_and_overridable_per_scenario(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "eval.json"
+    path.write_text(
+        json.dumps(
+            _payload(
+                retrieval={
+                    "embedding_text": "title_chunk",
+                    "business_filter": "soft",
+                    "business_bonus": 0.05,
+                    "rerank_alpha": 0.2,
+                    "rerank_pool": 10,
+                    "scenario_overrides": {
+                        "complaint": {"business_filter": "hard", "top_k": 7}
+                    },
+                }
+            )
+        ),
+        encoding="utf-8",
+    )
+    options = load_eval_config(path).retrieval
+    assert options.embedding_text == "title_chunk"
+    assert options.business_filter == "soft"
+    assert options.rerank_alpha == 0.2
+    override = options.for_scenario("complaint")
+    assert override.business_filter == "hard"
+    assert override.top_k == 7
+    assert options.for_scenario("lost_card").business_filter is None
+
+
+def test_unknown_retrieval_option_fails_loudly(tmp_path: Path) -> None:
+    path = tmp_path / "eval.json"
+    path.write_text(
+        json.dumps(_payload(retrieval={"embedding_text": "chunk", "typo": 1})),
+        encoding="utf-8",
+    )
+    with pytest.raises(EvalConfigError) as excinfo:
+        load_eval_config(path)
+    assert "typo" in str(excinfo.value)
+    path.write_text(
+        json.dumps(_payload(retrieval={"embedding_text": "magic"})),
+        encoding="utf-8",
+    )
+    with pytest.raises(EvalConfigError):
+        load_eval_config(path)
