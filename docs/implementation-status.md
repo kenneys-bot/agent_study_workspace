@@ -2,7 +2,7 @@
 
 当前里程碑：M0–M7 全部 **ACCEPTED**（负责人 2026-11-13 明确签收）；继续推进 M7 后续风险项与真实微调实验。M6 已交付（T28 harness、T35 真实 QLoRA 已执行；T36 已把 test 核心诉求 Recall@5 提到 0.944）
 当前任务：T35 真实微调已完成（2026-11-13）；T36、T37 已完成（T37 已发布 v0.1.1，检索改进落到生产链路）
-当前状态：M1–M5 已交付（等待负责人验收）；M6 已交付（T26/T27 完成、T28 harness 交付、**T35 真实训练已执行：tuned 0.76 vs baseline 0.64 / macro-F1 0.7441 vs 0.6138，n=50**；T36 检索改进 test R@5 0.944；引用支持度 NOT_MEASURED）；**M7-01～M7-06 已交付**（不可变镜像部署、备份恢复/回滚/索引重建、指标与脱敏日志、限流/输入上限/安全测试、发布清单与 `make release-verify`；2026-11-12）。T37 已把 title_chunk + 确定性重排落到生产并重建线上索引（v0.1.1）。计划 §7 的 Recall@5/引用支持度/24h/压测门槛仍未达成，见 [M7 报告](milestones/M7-report.md) 与 [风险清单](ops/risk-register.md)
+当前状态：M1–M5 已交付（等待负责人验收）；M6 已交付（T26/T27 完成、T28 harness 交付、**T35 真实训练已执行：tuned 0.76 vs baseline 0.64 / macro-F1 0.7441 vs 0.6138，n=50**；T36 检索改进 test R@5 0.944；引用支持度 NOT_MEASURED）；**M7-01～M7-06 已交付**（不可变镜像部署、备份恢复/回滚/索引重建、指标与脱敏日志、限流/输入上限/安全测试、发布清单与 `make release-verify`；2026-11-12）。T37 已把 title_chunk + 确定性重排落到生产并重建线上索引（v0.1.1）。计划 §7 的 10 并发压测已由 T38 实测达标（P95 最大 43.224ms、0 错误），DB 停机/RTO 已实测；Recall@5/引用支持度/24h 满窗仍未全部达成，见 [M7 报告](milestones/M7-report.md)、[M7 性能报告](milestones/M7-performance-report.md) 与 [风险清单](ops/risk-register.md)
 本机代码分支：`feat/bank-assistant`（集成分支；T31 在 `ticket/T31` 打包，T35 在 `ticket/T35` 执行真实微调，T37 在 `ticket/T37` 落地检索改进）
 发布代码SHA：`3a04952`（`v0.1.1` 镜像身份；后续文档提交不改变镜像）
 Ubuntu代码SHA：`3a04952`（服务镜像与服务器 checkout 一致；镜像 `bank-assistant:api-3a04952`；T35 微调执行 SHA `1746d16` 仅用于训练产物，不是服务镜像）
@@ -156,6 +156,21 @@ M5 报告：`docs/milestones/M5-report.md`（T25 交付）。web 48 tests、`mak
 | #30 T29 部署与恢复演练 | DONE | 服务器 bank-assistant-api healthy、仅 127.0.0.1:8000；备份恢复行数与哈希一致；回滚演练通过 |
 | #31 T30 监控/日志/安全测试 | READY_FOR_ACCEPTANCE | 650 unit + 138 integration；真实 `/metrics`/trace_id 日志/密文扫描 0；`docs/milestones/M7-observability-report.md` |
 | #32 T31 发布包与运维手册 | READY_FOR_ACCEPTANCE | `docs/releases/v0.1.0.md` + `release.json`（SHA/镜像/传输校验/Alembic/索引/模型）；`make release-verify` PASS；`docs/ops/{dependency-audit,risk-register,runbook}.md`；[M7 验收报告](milestones/M7-report.md) |
+| #38 T38 容量压测 / 24h 探测 / 受控故障演练 | DONE（24h 探测 IN_PROGRESS） | 10 并发×600s：344,734 请求、0 错误、P95 最大 43.224ms；探测已启动（observed 25 分钟）；API/DB 重启恢复 1.863s/1.820s、任务不变量 0 running/0 重复；见 [M7 性能报告](milestones/M7-performance-report.md) |
+
+## T38 容量压测、稳定性探测与受控故障演练（#38，2026-11-13）
+
+| 项 | 实测/结果 |
+|---|---|
+| 非模型 API 压测 | 10 并发 × 600.017s，344,734 请求、0 错误、574.54 req/s；四端点 P95 最大 **43.224ms**（`/health/live` 3.848、`ready` 21.446、`version` 30.265、`inspections/{id}` 43.224）；门槛 PASS |
+| 候选答复 replay | 独立 `127.0.0.1:8011` 临时实例、5 并发×120.25s、1,514 请求、0 错误、P95 **464.291ms**；非模型质量证据 |
+| 资源 | 压测后 API 88.47→96.14 MiB、DB 80.13→110.80 MiB；`bank_db_probe_errors_total` 0、非模型 5xx 0 |
+| 24h 探测 | 2026-11-13T03:28:12Z 启动，5 分钟 health / 30 分钟 metrics；脚本 `scripts/probe_uptime.py`，产物 `~/workspace/bank-assistant/artifacts/probe/`；截至报告 25 分钟、无失败；未满 24h |
+| API 重启 | 只重启 `bank-assistant-api`；`000`→`200` 1.863s（命令→200 2.166s）；日志 ERROR/Traceback 0 |
+| DB 重启 | 只重启 `bank-assistant-db-db-1`；`503`→`200` 1.820s（命令→200 2.127s）；`running_tasks=0`、`dup_task_runs=0`、`dup_findings=0` |
+| 边界 | 未重启服务器、未触碰 redis/dingtalk、未降 schema；同机回环/单实例，不外推 LAN/多实例 |
+| 测试 | `uv run pytest tests`：**681 passed, 138 deselected**（新增压测/探测纯逻辑 17 例） |
+| 报告/脚本 | [M7 性能报告](milestones/M7-performance-report.md)；`scripts/load_test.py`、`scripts/probe_uptime.py`；运维手册 §13 |
 
 ## T31 发布包（#32，2026-11-12）
 
