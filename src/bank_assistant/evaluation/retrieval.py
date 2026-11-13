@@ -41,6 +41,13 @@ from bank_assistant.datasets.corpus import CORPUS_AS_OF, Corpus
 from bank_assistant.evaluation.errors import BudgetExceeded
 from bank_assistant.evaluation.metrics import RetrievalRecord, Usage, estimate_tokens
 from bank_assistant.knowledge.embedding import EmbeddingProvider
+from bank_assistant.knowledge.ranking import (
+    EMBEDDING_TEXT_CHUNK,
+    EMBEDDING_TEXT_MODES,
+    RerankCandidate,
+    build_embedding_input,
+    rerank_candidates,
+)
 
 __all__ = [
     "QueryPlan",
@@ -61,32 +68,15 @@ STRATEGIES: tuple[str, ...] = (
 )
 
 # T36：可配置的检索增强。全部是 harness 构造参数，默认值就是 T27 旧行为，
-# 因此任何一项都可以在 EVAL_CONFIG 里单独关掉回退。
-EMBEDDING_TEXT_CHUNK = "chunk"
-EMBEDDING_TEXT_TITLE_CHUNK = "title_chunk"
-EMBEDDING_TEXT_TITLE_SOURCE_CHUNK = "title_source_chunk"
-EMBEDDING_TEXT_MODES: frozenset[str] = frozenset(
-    {
-        EMBEDDING_TEXT_CHUNK,
-        EMBEDDING_TEXT_TITLE_CHUNK,
-        EMBEDDING_TEXT_TITLE_SOURCE_CHUNK,
-    }
-)
+# 因此任何一项都可以在 EVAL_CONFIG 里单独关掉回退。索引文本形态与重排公式
+# 由 ``knowledge.ranking`` 提供：T37 起生产与评测共用同一份实现。
 BUSINESS_FILTER_HARD = "hard"
 BUSINESS_FILTER_SOFT = "soft"
 BUSINESS_FILTER_OFF = "off"
 BUSINESS_FILTER_MODES: frozenset[str] = frozenset(
     {BUSINESS_FILTER_HARD, BUSINESS_FILTER_SOFT, BUSINESS_FILTER_OFF}
 )
-_CJK_OR_LATIN = re.compile(r"[0-9a-z\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]+")
-
-
-def _char_grams(text: str) -> frozenset[str]:
-    """字符二元组集合；用于确定性的本地词面重排，不引入外部模型/网络。"""
-    cleaned = "".join(_CJK_OR_LATIN.findall(text.lower()))
-    if len(cleaned) <= 1:
-        return frozenset({cleaned}) if cleaned else frozenset()
-    return frozenset(cleaned[index : index + 2] for index in range(len(cleaned) - 1))
+# 只用于日志/错误信息的短标识；检索文本与重排公式在 knowledge.ranking。
 
 
 class QueryStrategy:
@@ -257,11 +247,12 @@ class RetrievalHarness:
         return self._chunks
 
     def _embedding_input(self, chunk: SnapshotChunk) -> str:
-        if self.embedding_text == EMBEDDING_TEXT_CHUNK:
-            return chunk.text
-        if self.embedding_text == EMBEDDING_TEXT_TITLE_CHUNK:
-            return f"{chunk.title}\n{chunk.text}"
-        return f"{chunk.title}\n来源类型：{chunk.source_type}\n{chunk.text}"
+        return build_embedding_input(
+            chunk.text,
+            title=chunk.title,
+            source_type=chunk.source_type,
+            mode=self.embedding_text,
+        )
 
     def _override(self, scenario: str | None) -> Mapping[str, Any]:
         if scenario is None:
@@ -339,19 +330,23 @@ class RetrievalHarness:
             # 确定性本地重排：只在候选池内用「查询词面覆盖率」修正排序，
             # 不调用模型、不联网；alpha=0 时完全跳过，可单独回退。
             pool = scored[: max(self.rerank_pool, limit)]
-            query_grams = _char_grams(text)
-            reranked: list[tuple[float, ScoredHit]] = []
-            for effective, hit in pool:
-                chunk = self._chunk_by_key[hit.chunk_key]
-                chunk_grams = _char_grams(f"{chunk.title}\n{chunk.text}")
-                coverage = (
-                    len(query_grams & chunk_grams) / len(query_grams)
-                    if query_grams
-                    else 0.0
+            hit_by_key = {hit.chunk_key: hit for _, hit in scored}
+            candidates = [
+                RerankCandidate(
+                    key=hit.chunk_key,
+                    title=self._chunk_by_key[hit.chunk_key].title,
+                    text=self._chunk_by_key[hit.chunk_key].text,
+                    score=effective,
                 )
-                reranked.append((effective + self.rerank_alpha * coverage, hit))
-            reranked.sort(key=lambda pair: (-pair[0], pair[1].chunk_key))
-            return tuple(hit for _, hit in reranked[:limit])
+                for effective, hit in pool
+            ]
+            reranked = rerank_candidates(
+                text,
+                candidates,
+                alpha=self.rerank_alpha,
+                pool=len(candidates),
+            )
+            return tuple(hit_by_key[candidate.key] for candidate in reranked[:limit])
         return tuple(hit for _, hit in scored[:limit])
 
     def is_no_answer(

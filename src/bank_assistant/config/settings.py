@@ -87,6 +87,19 @@ class Settings(BaseSettings):
         default="BAAI/bge-small-zh-v1.5",
         validation_alias="EMBEDDING_MODEL_NAME",
     )
+    # T37（#37）：检索改进的**生产**开关，默认值与 T36 采用的评测配置一致
+    # （configs/eval/replay.yaml:retrieval）：标题拼入 embedding 输入 +
+    # 候选池内确定性本地重排 α=0.2。改 RETRIEVAL_EMBEDDING_TEXT 会改变索引
+    # 向量，必须按 ADR-0005 重建索引（新 index_version）。
+    RETRIEVAL_EMBEDDING_TEXT: str = Field(
+        default="title_chunk", validation_alias="RETRIEVAL_EMBEDDING_TEXT"
+    )
+    RETRIEVAL_RERANK_ALPHA: float = Field(
+        default=0.2, ge=0.0, le=1.0, validation_alias="RETRIEVAL_RERANK_ALPHA"
+    )
+    RETRIEVAL_RERANK_POOL: int = Field(
+        default=20, ge=1, validation_alias="RETRIEVAL_RERANK_POOL"
+    )
 
     # 任务队列（契约 §3）：重试上限默认 3；worker 租约默认 60 秒。
     TASK_MAX_ATTEMPTS: int = Field(

@@ -1,27 +1,29 @@
 {
   "release": {
-    "version": "v0.1.0",
-    "date": "2026-11-12",
+    "version": "v0.1.1",
+    "date": "2026-11-13",
     "kind": "personal_showcase_release",
     "production_authorization": false,
-    "statement": "个人展示项目的可追溯发布记录，不是任何机构的生产部署授权；全部业务数据为合成数据。"
+    "statement": "个人展示项目的可追溯发布记录，不是任何机构的生产部署授权；全部业务数据为合成数据。",
+    "previous_version": "v0.1.0",
+    "note": "T37（#37）：检索改进落地生产（title_chunk 索引文本 + 确定性重排 α=0.2）并重建线上索引。"
   },
   "code": {
-    "git_sha": "59a586976093b2e9359fec97baec6d2f1ee4d6ad",
-    "short_sha": "59a5869",
-    "branch": "ticket/T30",
+    "git_sha": "3a04952ceb228fe2838ea2203508f4f25db63f78",
+    "short_sha": "3a04952",
+    "branch": "ticket/T37",
     "repository": "github.com/kenneys-bot/agent_study_workspace"
   },
   "image": {
-    "tag": "bank-assistant:api-59a5869",
-    "id": "sha256:1c7dc47e2a95908a35f7870f4b49dc8cb32213ad30fa3bf98a57073f5f7496be",
-    "repo_digest": "bank-assistant@sha256:1c7dc47e2a95908a35f7870f4b49dc8cb32213ad30fa3bf98a57073f5f7496be",
+    "tag": "bank-assistant:api-3a04952",
+    "id": "sha256:77090b26a8280d6c2eee5b4fc8024db1af460ee4b8ba98e2e031279e295a8b6d",
+    "repo_digest": "bank-assistant@sha256:77090b26a8280d6c2eee5b4fc8024db1af460ee4b8ba98e2e031279e295a8b6d",
     "platform": "linux/amd64",
-    "size_bytes": 210228068,
+    "size_bytes": 210256160,
     "transfer": {
       "method": "docker save | ssh docker load",
-      "tar_sha256": "779f9a9e9436f472462a03343051efd06d22a1eb1a3d6c587053d893de245a94",
-      "note": "在打包机上用部署镜像重算 docker save 的 sha256；docker save 对同一 image id 逐字节稳定（已用 T29 记录的 tar_sha256 7aeeca3b… 复核），image id 与服务器一致，故该字节流即传输内容。"
+      "tar_sha256": "13b99beff9b238bd3ad7575a3dae69fa3c39f53695db5457412417f6cc168b9f",
+      "note": "make deploy 传输时由服务器侧 tee 后 sha256sum 计算；两端 image id 一致。"
     }
   },
   "deployment": {
@@ -36,9 +38,9 @@
     "env_file": "~/workspace/bank-assistant/.env.app (chmod 600, 仓库外)",
     "data_root": "~/workspace/bank-assistant/data",
     "artifact_root": "~/workspace/bank-assistant/artifacts",
-    "deployed_at": "2026-11-12T11:33:16Z",
-    "previous_image": "bank-assistant:api-1fb91b6",
-    "previous_sha": "1fb91b6b22085dd8064ec6fe128420b2e598f755"
+    "deployed_at": "2026-11-13T02:56:08Z",
+    "previous_image": "bank-assistant:api-59a5869",
+    "previous_sha": "59a586976093b2e9359fec97baec6d2f1ee4d6ad"
   },
   "database": {
     "engine": "postgresql-18",
@@ -49,19 +51,33 @@
     "alembic_head": "0011_report_exports"
   },
   "index": {
-    "index_version": "idx-20261112T110703Z-2334d03e",
+    "index_version": "idx-20261113T025706Z-f7974a6a",
     "calibration_sha256": "136e030a6da8397756dd2d2547891ee66797d595a9b61d2d14611f89659c4004",
     "embedding_model": "BAAI/bge-small-zh-v1.5",
     "embedding_model_version": "BAAI/bge-small-zh-v1.5@512",
     "embedding_runtime": "fastembed/onnx-cpu",
+    "embedding_text": "title_chunk",
+    "index_content_sha256": "08542afdc8fee41fe4338128010dc1533a2cc1e4898e18dc19385e48fdad32ee",
     "chunk_count": 30,
     "indexed_knowledge_versions": 30,
-    "active_pointer": "data/index/active.json"
+    "active_pointer": "data/index/active.json",
+    "previous_index_version": "idx-20261112T110703Z-2334d03e",
+    "rebuild_verification": {
+      "first_index_version": "idx-20261113T025638Z-860a2398",
+      "second_index_version": "idx-20261113T025706Z-f7974a6a",
+      "same_content_sha256": true,
+      "same_ranking": true,
+      "note": "两次重建内容身份与排序一致；index_version 每次唯一（ADR-0005），chunk_id 随 index_version 变化。"
+    }
   },
   "models": {
     "generation_provider": "deepseek",
     "generation_model": "deepseek-chat",
-    "mode": "live"
+    "mode": "live",
+    "retrieval_embedding_text": "title_chunk",
+    "rerank_mode": "lexical_char_ngram",
+    "rerank_alpha": 0.2,
+    "rerank_pool": 20
   },
   "dependencies": {
     "python_lock": "uv.lock",
@@ -80,7 +96,10 @@
   },
   "demo_data": {
     "scope_id": "demo-bank",
-    "accounts": ["demo-author", "demo-reviewer"],
+    "accounts": [
+      "demo-author",
+      "demo-reviewer"
+    ],
     "knowledge_versions": 32,
     "rule_versions": 6,
     "conversations": 6,

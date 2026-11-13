@@ -1,12 +1,14 @@
-# 部署与运维手册（v0.1.0 / M7；T29+T30+T31）
+# 部署与运维手册（v0.1.1 / M7；T29+T30+T31+T37）
 
 本手册是 Ubuntu 服务器上 API 部署、索引重建、备份恢复、回滚、监控排查与
 **发布校验**的**可执行步骤**。所有命令都在 Mac 的仓库根执行（除标注“服务器”的
 只读检查）；**不包含任何密码、密钥或连接串**。部署形态是个人项目的生产就绪演练，
 不是任何机构的正式上线。
 
-当前发布：`v0.1.0`，代码 `59a5869`，镜像 `bank-assistant:api-59a5869`。
-发布记录 [docs/releases/v0.1.0.md](../releases/v0.1.0.md)、机器可读清单
+当前发布：`v0.1.1`，代码 `3a04952`，镜像 `bank-assistant:api-3a04952`，
+活动索引 `idx-20261113T025706Z-f7974a6a`（`embedding_text=title_chunk`）。
+发布记录 [docs/releases/v0.1.1.md](../releases/v0.1.1.md)（上一版
+[v0.1.0](../releases/v0.1.0.md) 保留为回滚点）、机器可读清单
 [release.json](../../release.json)、风险清单 [risk-register.md](risk-register.md)、
 依赖审计 [dependency-audit.md](dependency-audit.md)。
 
@@ -20,10 +22,10 @@
 | API 容器 | `bank-assistant-api`（compose 项目 `bank-assistant-app`） |
 | API 端口 | **只绑服务器回环** `127.0.0.1:8000`；外部访问走 SSH（`ss -tln` 判据） |
 | 容器网络 | `network_mode: host`（让 `DATABASE_URL=127.0.0.1:5432` 指向宿主 PG）；端口隔离由 uvicorn `--host 127.0.0.1` 保证，不写 `ports:` |
-| 镜像 | `bank-assistant:api-<code_sha7>`，不可变；服务器不重建源码；当前 `api-59a5869` |
+| 镜像 | `bank-assistant:api-<code_sha7>`，不可变；服务器不重建源码；当前 `api-3a04952`（回滚点 `api-59a5869`） |
 | 配置 | 仓库外 `~/workspace/bank-assistant/.env.app`（chmod 600），模板 `deploy/env.app.example` |
 | compose | 仓库 `deploy/compose.app.yml`；服务器运行副本 `~/workspace/bank-assistant/deploy/compose.app.yml` |
-| 索引/模型缓存 | `~/workspace/bank-assistant/data/{index,models}`（可重建，不随镜像发布） |
+| 索引/模型缓存 | `~/workspace/bank-assistant/data/{index,models}`（可重建，不随镜像发布）；当前索引 `idx-20261113T025706Z-f7974a6a`，上一版 `idx-20261112T110703Z-2334d03e` 保留 |
 | 备份 | `~/workspace/bank-assistant/backups/<UTC timestamp>/` |
 | 部署状态 | `~/workspace/bank-assistant/deploy/state.env`（当前/上一版镜像与 SHA，非秘密） |
 | 发布清单 | 仓库根 `release.json`；`make release-verify` 对照线上实例 |
@@ -95,13 +97,48 @@ make deploy-index
 
 ```
 index_version=idx-...
+embedding_text=title_chunk
+index_content_sha256=...
 calibration_vector_sha256=...
 embedding_model_version=BAAI/bge-small-zh-v1.5@512
 chunk_count=...
 ```
 
+索引文本形态由 `RETRIEVAL_EMBEDDING_TEXT` 决定（T37 起默认 `title_chunk`：标题拼入
+**embedding 输入**，分块正文与码点区间不变，引用仍可逐字回验）。改这个值会改变
+向量，必须新建/重建索引（ADR-0005），不能用旧集合冒充。`index_content_sha256`
+是内容身份：同语料 + 同 provider + 同参数重建两次应完全一致；`index_version`
+每次唯一（旧集合保留可回滚），两次重建的 `chunk_id` 会因包含 `index_version`
+而不同，但区间与相似度分数一致。
+
 索引是**可重建产物**，不随镜像发布；失败时旧指针保留。重建只写
 `data/index/{chroma,manifests,active.json}`，不写源码树。
+
+**重建前先备份活动指针**（回滚点）：
+
+```bash
+ssh my-ubuntu-server 'cd ~/workspace/bank-assistant && cp data/index/active.json   deploy/index-active-before-$(date -u +%Y%m%dT%H%M%SZ).json'
+```
+
+### 2.3.1 切回旧索引（回滚演练 / 索引事故）
+
+索引版本只增不改，回滚不需要重建，只把活动指针指回旧清单：
+
+```bash
+make index-activate INDEX_VERSION=idx-20261112T110703Z-2334d03e
+```
+
+`scripts/index_activate.sh` 用**当前已部署镜像**跑一次性容器，执行
+`python scripts/index_activate.py --index-version ...`：切换前用当前 provider
+重算校准哈希并核对集合条数，校验不过就失败且不改指针；成功后自动跑
+`verify_deployment.sh`（版本页 index_version 必须变成目标值）。再切回新索引：
+
+```bash
+make index-activate INDEX_VERSION=idx-20261113T025706Z-f7974a6a
+make release-verify
+```
+
+索引指针是单机文件（风险 R-11），切换只影响 API 进程的读路径，不需要重启。
 
 ### 2.4 发布包与发布校验（每次发布必做）
 
@@ -206,16 +243,30 @@ make restore-check
 ## 7. 回滚演练
 
 ```bash
+# 1) 索引指针回退（先切索引，再切镜像，顺序可换但两步都要做）
+make index-activate INDEX_VERSION=idx-20261112T110703Z-2334d03e
+
+# 2) 镜像回退演练：上一版 → 校验 → 自动恢复当前版
 make rollback
+
+# 3) 指针切回新索引并复核
+make index-activate INDEX_VERSION=idx-20261113T025706Z-f7974a6a
+make release-verify
 ```
 
-步骤：读取 `state.env` 的上一版 → 用**上一版不可变镜像** `up -d --wait` →
-校验 `/health/live`、`/health/ready`、版本页 `code_sha`=上一版 SHA →
-再切回当前镜像并校验。全程不重启服务器、不降 schema、不动数据库容器。
+`make rollback` 步骤：读取 `state.env` 的上一版 → 用**上一版不可变镜像**
+`up -d --wait` → 校验 `/health/live`、`/health/ready`、版本页 `code_sha`
+（=上一版 SHA）与当时的活动索引版本 → 再切回当前镜像并校验。全程不重启
+服务器、不降 schema、不动数据库/`dingtalk-*`/redis 容器。
 
 - 上一版镜像必须仍在服务器上（部署脚本保留 tag，不自动清理）；
 - 若 `state.env` 没有上一版（首次部署），用 `BACK_TO=<镜像> make rollback` 指定；
-- 回滚后 `state.env` 不改写：下一次 `make deploy` 仍会记录正确的回滚点。
+- 回滚后 `state.env` 不改写：下一次 `make deploy` 仍会记录正确的回滚点；
+- 索引回滚点 = 旧清单仍存在（`data/index/manifests/<旧 index_version>.json`）
+  且旧集合未被删除；指针备份在 `deploy/index-active-before-*.json`；
+- **镜像与索引要配对回滚**：旧镜像可以读旧索引（T37 前清单没有
+  `embedding_text`，按正文口径），新镜像也能读旧索引，但检索收益会退回
+  T36 之前；回滚演练必须同时验证版本页的 `code_sha` 与 `index_version`。
 
 ## 8. 故障排查与事故第一响应
 
@@ -445,7 +496,8 @@ ssh my-ubuntu-server 'docker logs --since 24h bank-assistant-api 2>&1 | grep -c 
 | 命令 | 实现 | 说明 |
 |---|---|---|
 | `make deploy` | `scripts/deploy.sh` | 构建/传输/对齐 SHA/compose up/校验 |
-| `make deploy-index` | `scripts/deploy_index.sh` | 服务器一次性容器重建索引 |
+| `make deploy-index` | `scripts/deploy_index.sh` | 服务器一次性容器重建索引（默认 `title_chunk`） |
+| `make index-activate` | `scripts/index_activate.sh` | T37 新增：指针切回旧索引版本（`INDEX_VERSION=idx-...`） |
 | `make verify-deploy` | `scripts/verify_deployment.sh` | live/ready/回环/版本页 |
 | `make release-verify` | `scripts/release_verify.sh` | T31 新增：对照 `release.json` |
 | `make backup` | `scripts/backup.sh`（经 SSH） | 只读源库，仓库外备份 |
@@ -466,3 +518,4 @@ ssh my-ubuntu-server 'docker logs --since 24h bank-assistant-api 2>&1 | grep -c 
 | 2026-11-12（T29） | 初版：部署、索引、备份/恢复、回滚、日常检查 |
 | 2026-11-12（T30） | 增补 §10 监控/日志/限流/安全观测 |
 | 2026-11-12（T31） | 增补发布记录/清单与 `make release-verify`（§2.4）、配置矩阵（§1.1）、事故第一响应与 worker 运维（§8.2）、命令索引（§12）；核对全部 `make` 命令存在 |
+| 2026-11-13（T37） | 发布 v0.1.1（`api-3a04952`，索引 `idx-20261113T025706Z-f7974a6a`）；§2.3 补索引文本形态/内容身份/指针备份与 `make index-activate`（§2.3.1）；§7 回滚演练补索引指针步骤与镜像/索引配对约束 |

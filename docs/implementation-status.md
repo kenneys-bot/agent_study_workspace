@@ -1,11 +1,11 @@
 # 执行进度
 
 当前里程碑：M0–M7 全部 **ACCEPTED**（负责人 2026-11-13 明确签收）；继续推进 M7 后续风险项与真实微调实验。M6 已交付（T28 harness、T35 真实 QLoRA 已执行；T36 已把 test 核心诉求 Recall@5 提到 0.944）
-当前任务：T37 检索改进落地生产并重建线上索引执行中；T35 真实微调已完成（2026-11-13，结论见 M6 微调报告）；T36 已完成
-当前状态：M1–M5 已交付（等待负责人验收）；M6 已交付（T26/T27 完成、T28 harness 交付、**T35 真实训练已执行：tuned 0.76 vs baseline 0.64 / macro-F1 0.7441 vs 0.6138，n=50**；T36 检索改进 test R@5 0.944；引用支持度 NOT_MEASURED）；**M7-01～M7-06 已交付**（不可变镜像部署、备份恢复/回滚/索引重建、指标与脱敏日志、限流/输入上限/安全测试、发布清单与 `make release-verify`；2026-11-12）。计划 §7 的 Recall@5/引用支持度/24h/压测门槛仍未达成，见 [M7 报告](milestones/M7-report.md) 与 [风险清单](ops/risk-register.md)
-本机代码分支：`feat/bank-assistant`（集成分支；T31 在 `ticket/T31` 打包，T35 在 `ticket/T35` 执行真实微调）
-发布代码SHA：`59a5869`（`v0.1.0` 镜像身份；T31 文档提交不改变镜像）
-Ubuntu代码SHA：`1746d16`（T35 微调执行 SHA，微调在工作树外产物中；v0.1.0 服务镜像仍为 `59a5869`）
+当前任务：T35 真实微调已完成（2026-11-13）；T36、T37 已完成（T37 已发布 v0.1.1，检索改进落到生产链路）
+当前状态：M1–M5 已交付（等待负责人验收）；M6 已交付（T26/T27 完成、T28 harness 交付、**T35 真实训练已执行：tuned 0.76 vs baseline 0.64 / macro-F1 0.7441 vs 0.6138，n=50**；T36 检索改进 test R@5 0.944；引用支持度 NOT_MEASURED）；**M7-01～M7-06 已交付**（不可变镜像部署、备份恢复/回滚/索引重建、指标与脱敏日志、限流/输入上限/安全测试、发布清单与 `make release-verify`；2026-11-12）。T37 已把 title_chunk + 确定性重排落到生产并重建线上索引（v0.1.1）。计划 §7 的 Recall@5/引用支持度/24h/压测门槛仍未达成，见 [M7 报告](milestones/M7-report.md) 与 [风险清单](ops/risk-register.md)
+本机代码分支：`feat/bank-assistant`（集成分支；T31 在 `ticket/T31` 打包，T35 在 `ticket/T35` 执行真实微调，T37 在 `ticket/T37` 落地检索改进）
+发布代码SHA：`3a04952`（`v0.1.1` 镜像身份；后续文档提交不改变镜像）
+Ubuntu代码SHA：`3a04952`（服务镜像与服务器 checkout 一致；镜像 `bank-assistant:api-3a04952`；T35 微调执行 SHA `1746d16` 仅用于训练产物，不是服务镜像）
 最近更新：2026-11-13（Asia/Shanghai）
 
 ## 2026-11-13 继续推进（签收后）
@@ -14,7 +14,7 @@ Ubuntu代码SHA：`1746d16`（T35 微调执行 SHA，微调在工作树外产物
 |---|---|---|
 | #36 T36 complaint 检索召回改进 | DONE | test R@5 0.9444（原 0.833）、complaint 0.8667（原 0.600）；冻结测试集哈希未变 |
 | #35 T35 真实 QLoRA 微调 | DONE | 2026-11-13 Ubuntu：status=SUCCEEDED、26 steps、wall 130.4s、vram_peak 2.706 GiB；冻结 test 0.64 → 0.76（macro-F1 0.6138 → 0.7441，n=50）；不 kill `dingtalk-embed`；见 [M6 微调报告](milestones/M6-tuning-report.md) |
-| #37 T37 检索改进落地生产 | IN_PROGRESS | 标题入索引 + 生产重排 + 重建线上索引与新镜像 |
+| #37 T37 检索改进落地生产 | DONE | `title_chunk` + α=0.2 重排已上生产；镜像 `api-3a04952`，索引 `idx-20261113T025706Z-f7974a6a`（内容身份 `08542afd…`，两次重建一致）；`make release-verify` PASS；会话与固定查询端到端引用打开原文 6/6；镜像/索引回滚演练 PASS。见 [v0.1.1 发布记录](releases/v0.1.1.md) |
 
 ## 负责人验收（2026-11-13）
 

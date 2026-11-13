@@ -123,6 +123,9 @@ verify-deploy: ## [M7] 校验已部署实例：live/ready、回环端口、版�
 deploy-index: ## [M7] 用已部署镜像在服务器重建索引（一次性容器，不写源码树）
 	@DEPLOY_HOST=$(DEPLOY_HOST) REMOTE_ROOT=$(REMOTE_ROOT) bash scripts/deploy_index.sh
 
+index-activate: ## [T37] 把活动索引指针切回指定旧版本（INDEX_VERSION=idx-...，回滚用）
+	@DEPLOY_HOST=$(DEPLOY_HOST) REMOTE_ROOT=$(REMOTE_ROOT) INDEX_VERSION=$(INDEX_VERSION) bash scripts/index_activate.sh
+
 release-verify: ## [M7] 对照 release.json 核对线上 image id/alembic head/索引/health/version，不一致非零退出
 	@DEPLOY_HOST=$(DEPLOY_HOST) bash scripts/release_verify.sh
 

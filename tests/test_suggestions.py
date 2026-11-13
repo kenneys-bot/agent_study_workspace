@@ -174,7 +174,9 @@ class World:
         self.session.flush()
         return version
 
-    def build_index(self, *, business_type: str | None = None) -> str:
+    def build_index(
+        self, *, business_type: str | None = None, embedding_text: str = "chunk"
+    ) -> str:
         result = build_index(
             self.session,
             provider=self.provider,
@@ -183,6 +185,7 @@ class World:
             index_dir=self.index_dir,
             at=self.now,
             business_type=business_type,
+            embedding_text=embedding_text,
         )
         self.index_version = result.index_version
         return result.index_version
@@ -203,7 +206,12 @@ class World:
         rewriter=None,
         clock=None,
         max_distance: float = 0.55,
+        rerank_alpha: float = 0.0,
+        rerank_pool: int = 20,
     ) -> SuggestionService:
+        # 本文件的历史用例验证的是「纯向量排序 + 过滤」的旧行为，因此显式
+        # 关掉 T37 的确定性重排；重排本身由 test_retrieval_production.py
+        # 单独覆盖（那里显式打开 α=0.2）。
         return SuggestionService(
             gateway=gateway,
             embedding_provider=self.provider,
@@ -212,6 +220,8 @@ class World:
             rewriter=rewriter,
             clock=clock or (lambda: self.now),
             max_distance=max_distance,
+            rerank_alpha=rerank_alpha,
+            rerank_pool=rerank_pool,
         )
 
     def conversation(self, contents: list[str]) -> Conversation:

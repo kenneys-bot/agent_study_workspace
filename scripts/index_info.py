@@ -55,6 +55,8 @@ def main(argv: list[str] | None = None) -> int:
     print(f"  活动索引版本：{manifest['index_version']}")
     print(f"  集合：{manifest['collection']}")
     print(f"  embedding 模型：{manifest['embedding_model_version']}")
+    print(f"  索引文本形态：{manifest.get('embedding_text', 'chunk（旧清单未记录）')}")
+    print(f"  内容身份 sha256：{manifest.get('index_content_sha256', '旧清单未记录')}")
     print(f"  校准向量 sha256：{manifest['calibration_vector_sha256']}")
     print(f"  创建时间：{manifest['created_at']}")
     print(f"  切换时间：{pointer.get('switched_at', '未知')}")
