@@ -62,9 +62,8 @@ start() {
     # 而不是要求手工处理；只有确认不是我们的转发时才失败，绝不杀未知进程。
     local existing cmd
     existing=$(lsof -nP -iTCP:"$PORT" -sTCP:LISTEN -t 2>/dev/null | head -1 || true)
-    cmd=""
-    [ -n "$existing" ] && cmd=$(ps -p "$existing" -o command= 2>/dev/null || true)
-    if [ -n "$existing" ] && printf '%s' "$cmd" | grep -q "ssh" && printf '%s' "$cmd" | grep -q -- "-L 127.0.0.1:${PORT}:127.0.0.1:5432"; then
+    cmd=$(lsof -nP -iTCP:"$PORT" -sTCP:LISTEN -F c 2>/dev/null | sed -n 's/^c//p' | head -1 || true)
+    if [ -n "$existing" ] && [ "$cmd" = "ssh" ]; then
       printf '%s\n' "$existing" > "$PIDFILE"
       echo "pg-tunnel: 接管已存在的等价隧道 pid=${existing}（pidfile 已修复）"
       return 0
