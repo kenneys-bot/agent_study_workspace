@@ -1,7 +1,7 @@
 # M6 验收报告：效果证据与模型优化
 
-状态：READY_FOR_ACCEPTANCE（含明确的未达门槛与 NOT_RUN 项）
-实现代码SHA：`feat/bank-assistant`（T26/T27/T28 合并后）
+状态：READY_FOR_ACCEPTANCE（含明确的未达门槛；微调已由 T35 补真实执行，见 §"条件性微调"）
+实现代码SHA：`feat/bank-assistant`（T26/T27/T28 合并后；T35 微调执行 `1746d16`；T37 服务镜像 `api-3a04952`，索引 `idx-20261113T025706Z-f7974a6a`）
 本机/Ubuntu一致性：Ubuntu 上**未复跑评测**（待负责人给 GPU/时间窗后补，见遗留）
 相关需求：FR-09；计划书 M6、§7 验收门槛
 
@@ -12,6 +12,7 @@
 | #27 T26 | 合成数据集构建 + 分组拆分 + 冻结 manifest | `b4c9839`、`89fc32d` |
 | #28 T27 | 评测 harness、replay 全量与 live 小样本、run manifest 落 ARTIFACT_ROOT | `716ff47`、`b5926a6` |
 | #29 T28 | 4-bit QLoRA 训练 harness + 资源探测 + dry-run + `NOT_RUN` 报告 | `55cc799` |
+| #35 T35 | 真实 4-bit QLoRA（Qwen3-1.7B）+ 冻结 test 对比：baseline 0.64 → tuned 0.76 | `1746d16` |
 
 ## 数据集（已冻结）
 
@@ -136,17 +137,16 @@ complaint 分母只有 15，2 条未命中就等于 13.3 个百分点，单条�
 | 候选答复 P95 | ≤ 15 s | live p95 1.66 s（120 次调用） | 达标（小样本） |
 | 评测可复跑 | `make eval EVAL_CONFIG=` | replay 全量 + live 小样本均可复跑 | 达标（Ubuntu 复跑待补） |
 
-## 条件性微调：NOT_RUN（有证据的未执行）
+## 条件性微调：T28 `NOT_RUN` → T35 真实执行（2026-11-13）
 
-- GPU 事实（2026-11-12 18:48 SSH 只读）：RTX 3060 Ti 8192 MiB，已用 1457 / 空闲 6361 MiB，util 0%；唯一 compute app 是用户的 `dingtalk-embed`（1280 MiB），**未杀、未排队**。
-- 依赖（train 组约 2–3 GB）与权重（Qwen3-0.6B 约 1.5 GB）未就绪；未获 GPU 分时授权。
-- 已执行：dry-run（train 202 / test 50、哈希复算、token p95=115、CPU 微型 Qwen2+LoRA 一次 fwd/bwd loss=4.8894），manifest `e20b982d…`、`vram_peak=null` 且有说明。
-- 不宣称效果：无 baseline vs tuned 对比；只给多数类参考（accuracy 0.30 / macro-F1 0.1538）。
-- 若要执行：负责人给 GPU 时间窗/共享授权 + 允许装 2–3 GB 依赖并下载 1.5 GB 权重，0.6B 预估 5–15 分钟。
+- **T28 为什么未跑（保留原证据）**：2026-11-12 18:48 SSH 只读，RTX 3060 Ti 8192 MiB，已用 1457 / 空闲 6361 MiB，util 0%；唯一 compute app 是用户的 `dingtalk-embed`（1280 MiB），**未杀、未排队**。依赖（train 组约 2–3 GB）与权重（Qwen3-0.6B 约 1.5 GB）未就绪；未获 GPU 分时授权。当时交付 dry-run（train 202 / test 50、哈希复算、token p95=115、CPU 微型 Qwen2+LoRA 一次 fwd/bwd loss=4.8894），manifest `e20b982d…`、`vram_peak=null`，不宣称效果。
+- **T35 真实执行（2026-11-13，负责人授权 GPU）**：Qwen3-1.7B 4-bit QLoRA，`status=SUCCEEDED`，26 optimizer steps、wall 130.4 s、`vram_peak_gib=2.706`、末次 loss 0.3179、seed 42；全程未 kill `dingtalk-embed`、未重启服务器。冻结 test：baseline（zero-shot）accuracy 0.64（32/50）/ macro-F1 0.6138 → tuned 0.76（38/50）/ 0.7441，配对 McNemar p=0.0312；主残差仍为 `lost_card → credit_card_fee`（9/18）。
+- **结论口径**：有提升，但 n=50、合成数据、单人构造标注，**不宣称统计显著/业务有效**，adapter 不发布、不接生产。详见 [M6 微调报告](M6-tuning-report.md)。
+- 若要复跑：见微调报告 §8 的 Ubuntu 命令（uv sync train 组、下载 Qwen3-1.7B、dry-run、`--execute`）。
 
 ## 交付规则核对
 
-- `docs/milestones/M6-tuning-report.md`：模型卡 + 资源证据 + NOT_RUN 决策与后续条件。
+- `docs/milestones/M6-tuning-report.md`：模型卡 + T28 资源证据（原有）+ T35 真实运行/评测结论与复现命令。
 - run manifest 按契约 §6：`artifacts/evals/eval-replay-…`（sha256 `a98b2d11…`）、`artifacts/evals/eval-live-…`（sha256 `d1ab369e…`），均含 code_sha、worktree_clean、dataset/split 哈希、index/knowledge/rule 快照、模型标识与时间。
 - T36 最终 test run：`artifacts/evals/eval-replay-bank-cs-m6-synthetic-v1-20261113T024431Z/`（merge 后干净复跑，`code_sha=90bc7d9`、`worktree_clean=true`；与提交前 run `…T024251Z` 指标逐项一致），manifest 记录 `retrieval_options`、新 `index_version`、`calibration_vector_sha256`；冻结 test 哈希 `869a8bd0…` 未变。
 - 测试集未参与训练或调参（`split_guard` + 训练脚本拒收非 train split；有测试）。
@@ -156,7 +156,7 @@ complaint 分母只有 15，2 条未命中就等于 13.3 个百分点，单条�
 1. **Ubuntu 复跑未执行**：`make eval` 目前在 Mac 上跑（DB 经隧道），需在 Ubuntu 上复跑一次才算完全满足计划书 M6 门槛。
 2. **引用支持度/人工相关性未标注**：需要人工抽检 ≥50 条，属负责人/业务侧工作，模型不能自称完成。
 3. ~~**Recall@5 未达 0.85**：complaint 场景 0.600 是主要短板~~ → T36 已把 test 核心诉求 Recall@5 提到 0.944（complaint 0.867），见上方「检索（T36 改进后）」。~~生产索引尚未落地标题拼入~~ → T37（#37）已在生产落地 `title_chunk` + α=0.2 重排并重建线上索引（`idx-20261113T025706Z-f7974a6a`，镜像 `api-3a04952`）。残余风险：complaint 分母 15、单条敏感；生产侧只做了端到端与索引身份验证，未重测生产语义质量。
-4. 微调为条件任务，默认不阻塞 M7；如需执行，等待 GPU 窗口与安装授权。
+4. 微调已由 T35 真实执行（2026-11-13）：有提升但 n=50 不宣称显著；后续若继续，应预注册更大训练预算并另做新 test，不得在本次 test 上调参/挑 checkpoint。
 5. relay 无公开价目表，成本为估算值，已在报告中标注。
 
 ## 负责人验收
