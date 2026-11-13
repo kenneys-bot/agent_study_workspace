@@ -138,7 +138,7 @@ complaint 分母只有 15，2 条未命中就等于 13.3 个百分点，单条�
 
 - `docs/milestones/M6-tuning-report.md`：模型卡 + 资源证据 + NOT_RUN 决策与后续条件。
 - run manifest 按契约 §6：`artifacts/evals/eval-replay-…`（sha256 `a98b2d11…`）、`artifacts/evals/eval-live-…`（sha256 `d1ab369e…`），均含 code_sha、worktree_clean、dataset/split 哈希、index/knowledge/rule 快照、模型标识与时间。
-- T36 最终 test run：`artifacts/evals/eval-replay-bank-cs-m6-synthetic-v1-20261113T024251Z/`，manifest 记录 `retrieval_options`、新 `index_version`、`calibration_vector_sha256`；冻结 test 哈希 `869a8bd0…` 未变。
+- T36 最终 test run：`artifacts/evals/eval-replay-bank-cs-m6-synthetic-v1-20261113T024431Z/`（merge 后干净复跑，`code_sha=90bc7d9`、`worktree_clean=true`；与提交前 run `…T024251Z` 指标逐项一致），manifest 记录 `retrieval_options`、新 `index_version`、`calibration_vector_sha256`；冻结 test 哈希 `869a8bd0…` 未变。
 - 测试集未参与训练或调参（`split_guard` + 训练脚本拒收非 train split；有测试）。
 
 ## 遗留与下一步
