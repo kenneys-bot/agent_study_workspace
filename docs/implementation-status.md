@@ -1,19 +1,19 @@
 # 执行进度
 
-当前里程碑：M0–M7 全部 **ACCEPTED**（负责人 2026-11-13 明确签收）；继续推进 M7 后续风险项与真实微调实验。M6 已交付（T28 真实训练 NOT_RUN，Recall@5 0.833 未达门槛）
-当前任务：T35 真实 QLoRA 微调执行中；T37 检索改进落地生产并重建线上索引执行中；T36 已完成
-当前状态：M1–M5 已交付（等待负责人验收）；M6 已交付（T26/T27 完成、T28 harness 交付但真实训练 NOT_RUN；引用支持度 NOT_MEASURED）；**M7-01～M7-06 已交付**（不可变镜像部署、备份恢复/回滚/索引重建、指标与脱敏日志、限流/输入上限/安全测试、发布清单与 `make release-verify`；2026-11-12）。计划 §7 的 Recall@5/引用支持度/24h/压测门槛仍未达成，见 [M7 报告](milestones/M7-report.md) 与 [风险清单](ops/risk-register.md)
-本机代码分支：`feat/bank-assistant`（集成分支；T31 在 `ticket/T31` 打包）
+当前里程碑：M0–M7 全部 **ACCEPTED**（负责人 2026-11-13 明确签收）；继续推进 M7 后续风险项与真实微调实验。M6 已交付（T28 harness、T35 真实 QLoRA 已执行；T36 已把 test 核心诉求 Recall@5 提到 0.944）
+当前任务：T37 检索改进落地生产并重建线上索引执行中；T35 真实微调已完成（2026-11-13，结论见 M6 微调报告）；T36 已完成
+当前状态：M1–M5 已交付（等待负责人验收）；M6 已交付（T26/T27 完成、T28 harness 交付、**T35 真实训练已执行：tuned 0.76 vs baseline 0.64 / macro-F1 0.7441 vs 0.6138，n=50**；T36 检索改进 test R@5 0.944；引用支持度 NOT_MEASURED）；**M7-01～M7-06 已交付**（不可变镜像部署、备份恢复/回滚/索引重建、指标与脱敏日志、限流/输入上限/安全测试、发布清单与 `make release-verify`；2026-11-12）。计划 §7 的 Recall@5/引用支持度/24h/压测门槛仍未达成，见 [M7 报告](milestones/M7-report.md) 与 [风险清单](ops/risk-register.md)
+本机代码分支：`feat/bank-assistant`（集成分支；T31 在 `ticket/T31` 打包，T35 在 `ticket/T35` 执行真实微调）
 发布代码SHA：`59a5869`（`v0.1.0` 镜像身份；T31 文档提交不改变镜像）
-Ubuntu代码SHA：`59a5869`（与发布镜像一致；镜像 `bank-assistant:api-59a5869`）
-最近更新：2026-11-12（Asia/Shanghai）
+Ubuntu代码SHA：`1746d16`（T35 微调执行 SHA，微调在工作树外产物中；v0.1.0 服务镜像仍为 `59a5869`）
+最近更新：2026-11-13（Asia/Shanghai）
 
 ## 2026-11-13 继续推进（签收后）
 
 | 工单 | 状态 | 证据 |
 |---|---|---|
 | #36 T36 complaint 检索召回改进 | DONE | test R@5 0.9444（原 0.833）、complaint 0.8667（原 0.600）；冻结测试集哈希未变 |
-| #35 T35 真实 QLoRA 微调 | IN_PROGRESS | GPU 已释放（空闲约 6GB），训练依赖/权重准备中 |
+| #35 T35 真实 QLoRA 微调 | DONE | 2026-11-13 Ubuntu：status=SUCCEEDED、26 steps、wall 130.4s、vram_peak 2.706 GiB；冻结 test 0.64 → 0.76（macro-F1 0.6138 → 0.7441，n=50）；不 kill `dingtalk-embed`；见 [M6 微调报告](milestones/M6-tuning-report.md) |
 | #37 T37 检索改进落地生产 | IN_PROGRESS | 标题入索引 + 生产重排 + 重建线上索引与新镜像 |
 
 ## 负责人验收（2026-11-13）
@@ -173,7 +173,7 @@ M5 报告：`docs/milestones/M5-report.md`（T25 交付）。web 48 tests、`mak
 
 ## M6 验收
 
-M6 报告：`docs/milestones/M6-report.md`（READY_FOR_ACCEPTANCE，含未达门槛与 NOT_RUN 明示）。数据集 330/186 冻结；replay 全量 + live 20 条；Recall@5 replay 0.833 **未达 0.85**；引用支持度/人工相关性 NOT_MEASURED；微调 NOT_RUN（GPU 未获授权）。
+M6 报告：`docs/milestones/M6-report.md`（READY_FOR_ACCEPTANCE，含未达门槛与 NOT_RUN 明示）。数据集 330/186 冻结；replay 全量 + live 20 条；Recall@5 replay 0.833 **未达 0.85**；引用支持度/人工相关性 NOT_MEASURED；微调：T28 `NOT_RUN`（2026-11-12，GPU 未获授权）→ **T35 真实执行（2026-11-13）**：Qwen3-1.7B 4-bit QLoRA，冻结 test accuracy 0.64 → 0.76、macro-F1 0.6138 → 0.7441（n=50，不宣称显著），见 [M6 微调报告](milestones/M6-tuning-report.md)。
 
 ## M6 工单状态
 
@@ -183,6 +183,7 @@ M6 报告：`docs/milestones/M6-report.md`（READY_FOR_ACCEPTANCE，含未达门
 | #28 T27 评测脚本与基线对比 | READY_FOR_ACCEPTANCE | `make eval` 全量 replay（50 检索/48 质检，1014 条预测）；live 20 条真实 DeepSeek（p50 1.23s、p95 1.66s、¥0.338 估算）；产物 `artifacts/evals/eval-replay-…103010Z`、`eval-live-…102704Z` |
 | #34 T33 数据库迁到 Ubuntu + SSH 隧道 | DONE（部署已执行） | PG18 容器 healthy；四库 owner=bank；`make test-integration` 130 passed；`make doctor` 隧道缺失失败/建立通过；`make seed-demo` 幂等且不触达 dev/test；LAN 直连失败 |
 | #29 T28 条件性微调 | READY_FOR_ACCEPTANCE | `make train` 默认 dry-run（train 202/test 50，数据哈希校验通过）；真实训练 `NOT_RUN`（GPU 1457 MiB 被 `dingtalk-embed` 占用、模型权重未缓存）；见 [M6 微调报告](milestones/M6-tuning-report.md) |
+| #35 T35 真实 QLoRA 意图分类微调 | DONE | 2026-11-13 Ubuntu 3060 Ti：`status=SUCCEEDED`、26 steps、wall 130.4s、vram_peak 2.706 GiB、逐次 loss 0.3179；冻结 test baseline 0.64 → tuned 0.76、macro-F1 0.6138 → 0.7441（32/50 → 38/50，n=50）；`code_sha=1746d16`、数据哈希/seed 见 manifest；不 kill `dingtalk-embed`；见 [M6 微调报告](milestones/M6-tuning-report.md) |
 | #30 T29 部署与恢复演练 | READY_FOR_ACCEPTANCE | 镜像 `api-1fb91b6`；备份恢复/回滚/索引重建全部实测；`docs/milestones/M7-deploy-report.md` |
 
 ## M7 监控/日志/安全测试（T30 / #31，2026-11-12 已执行）

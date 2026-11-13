@@ -628,7 +628,9 @@ def run_experiment(
         "detail": (
             f"adapter={training['adapter_path']} "
             f"train_seconds={round(training_seconds, 1)} "
-            f"vram_peak={training['vram_peak_gib']} GiB"
+            f"vram_peak={training['vram_peak_gib']} GiB "
+            f"steps={training['global_steps']} "
+            f"final_train_loss={training['training_loss']}"
         ),
     }
     steps.append(
@@ -672,6 +674,9 @@ def run_experiment(
             "tiny_cpu_smoke": smoke_result,
             "dependencies": dependencies,
             "training_seconds": round(training_seconds, 2),
+            "training_loss": training["training_loss"],
+            "global_steps": training["global_steps"],
+            "vram_peak_reserved_gib": training["vram_peak_reserved_gib"],
             "allow_download": allow_download,
             "majority_metrics": majority_metrics.to_dict(),
         },
@@ -777,6 +782,11 @@ def _finalize(
             "allow_download": dry_run_payload.get("allow_download")
             if dry_run_payload
             else None,
+            "training_loss": (dry_run_payload or {}).get("training_loss"),
+            "global_steps": (dry_run_payload or {}).get("global_steps"),
+            "vram_peak_reserved_gib": (dry_run_payload or {}).get(
+                "vram_peak_reserved_gib"
+            ),
             "tiny_cpu_smoke": (dry_run_payload or {}).get("tiny_cpu_smoke"),
             "tokenization": (dry_run_payload or {}).get("tokenization"),
         },
@@ -933,8 +943,41 @@ def _train_qlora(
         train_dataset=_Rows(),
         data_collator=collate,
     )
-    trainer.train()
+    train_result = trainer.train()
     vram_peak_gib = round(torch.cuda.max_memory_allocated() / 1024**3, 3)
+    vram_peak_reserved_gib = round(torch.cuda.max_memory_reserved() / 1024**3, 3)
+    training_loss = (
+        round(float(train_result.training_loss), 6)
+        if train_result.training_loss is not None
+        else None
+    )
+    global_steps = int(trainer.state.global_step)
+    # 训练日志落盘：最终 loss、步数与逐次 logging 记录，供报告复核。
+    (run_dir / "training-log.json").write_text(
+        json.dumps(
+            {
+                "train_runtime_seconds": round(
+                    float(train_result.metrics.get("train_runtime", 0.0)), 3
+                ),
+                "train_samples_per_second": train_result.metrics.get(
+                    "train_samples_per_second"
+                ),
+                "global_steps": global_steps,
+                "training_loss": training_loss,
+                "log_history": trainer.state.log_history,
+                "vram_peak_allocated_gib": vram_peak_gib,
+                "vram_peak_reserved_gib": vram_peak_reserved_gib,
+                "bf16": bf16,
+            },
+            ensure_ascii=False,
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    # 评测前切到 eval：LoRA dropout 必须关闭，baseline/tuned 用同一确定性解码。
+    model.eval()
 
     adapter_dir = run_dir / "adapter"
     model.save_pretrained(adapter_dir)
@@ -983,6 +1026,9 @@ def _train_qlora(
     return {
         "adapter_path": str(adapter_dir.relative_to(run_dir.parent)),
         "vram_peak_gib": vram_peak_gib,
+        "vram_peak_reserved_gib": vram_peak_reserved_gib,
+        "training_loss": training_loss,
+        "global_steps": global_steps,
         "baseline_metrics": baseline_metrics,
         "tuned_metrics": tuned_metrics,
         "eval_paths": {
@@ -992,6 +1038,7 @@ def _train_qlora(
         },
         "artifacts": {
             "adapter": "adapter",
+            "training_log": "training-log.json",
             "baseline_predictions": "eval/baseline.predictions.jsonl",
             "tuned_predictions": "eval/tuned.predictions.jsonl",
             "comparison": "eval/comparison.json",
