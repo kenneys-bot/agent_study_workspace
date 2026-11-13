@@ -1,16 +1,34 @@
 # 执行进度
 
 当前里程碑：M0–M7 全部 **ACCEPTED**（负责人 2026-11-13 明确签收）；继续推进 M7 后续风险项与真实微调实验。M6 已交付（T28 harness、T35 真实 QLoRA 已执行；T36 已把 test 核心诉求 Recall@5 提到 0.944）
-当前任务：T35 真实微调已完成（2026-11-13）；T36、T37 已完成（T37 已发布 v0.1.1，检索改进落到生产链路）；T39 已完成质检 P95 实测与供应商故障演练
-当前状态：M1–M5 已交付（等待负责人验收）；M6 已交付（T26/T27 完成、T28 harness 交付、**T35 真实训练已执行：tuned 0.76 vs baseline 0.64 / macro-F1 0.7441 vs 0.6138，n=50**；T36 检索改进 test R@5 0.944；引用支持度 NOT_MEASURED）；**M7-01～M7-06 已交付**（不可变镜像部署、备份恢复/回滚/索引重建、指标与脱敏日志、限流/输入上限/安全测试、发布清单与 `make release-verify`；2026-11-12）。T37 已把 title_chunk + 确定性重排落到生产并重建线上索引（v0.1.1）。计划 §7 的 10 并发压测已由 T38 实测达标（P95 最大 43.224ms、0 错误），DB 停机/RTO 已实测；T39 实测质检接收 P95 **245.244ms**、完成 P95 **41.879s**（n=60），但成功率仅 **10/60**（50 次 `EVIDENCE_INVALID`），并完成 429/504/503/502 四类供应商故障映射演练。Recall@5/引用支持度/24h 满窗/质检成功率仍未全部达成，见 [M7 报告](milestones/M7-report.md)、[M7 性能报告](milestones/M7-performance-report.md) 与 [风险清单](ops/risk-register.md)
+当前任务：T35 真实微调已完成（2026-11-13）；T36、T37 已完成（T37 已发布 v0.1.1，检索改进落到生产链路）；T39 已完成质检 P95 实测与供应商故障演练；T40 已完成质检 quote-first 证据定位修复（R-19 关闭）
+当前状态：M1–M5 已交付（等待负责人验收）；M6 已交付（T26/T27 完成、T28 harness 交付、**T35 真实训练已执行：tuned 0.76 vs baseline 0.64 / macro-F1 0.7441 vs 0.6138，n=50**；T36 检索改进 test R@5 0.944；引用支持度 NOT_MEASURED）；**M7-01～M7-06 已交付**（不可变镜像部署、备份恢复/回滚/索引重建、指标与脱敏日志、限流/输入上限/安全测试、发布清单与 `make release-verify`；2026-11-12）。T37 已把 title_chunk + 确定性重排落到生产并重建线上索引（v0.1.1）。计划 §7 的 10 并发压测已由 T38 实测达标（P95 最大 43.224ms、0 错误），DB 停机/RTO 已实测；T39 实测质检接收 P95 **245.244ms**、完成 P95 **41.879s**（n=60），但成功率仅 **10/60**（50 次 `EVIDENCE_INVALID`）；T40 改为 quote-first + 后端确定性定位后 **60/60 succeeded、hit 证据 100/100 回验**（详见下方 T40 小节）。Recall@5/引用支持度/24h 满窗仍未全部达成，见 [M7 报告](milestones/M7-report.md)、[M7 性能报告](milestones/M7-performance-report.md) 与 [风险清单](ops/risk-register.md)
 本机代码分支：`feat/bank-assistant`（集成分支；T31 在 `ticket/T31` 打包，T35 在 `ticket/T35` 执行真实微调，T37 在 `ticket/T37` 落地检索改进）
 发布代码SHA：`3a04952`（`v0.1.1` 镜像身份；后续文档提交不改变镜像）
 Ubuntu代码SHA：`3a04952`（服务镜像与服务器 checkout 一致；镜像 `bank-assistant:api-3a04952`；T35 微调执行 SHA `1746d16` 仅用于训练产物，不是服务镜像）
 最近更新：2026-11-13（Asia/Shanghai）
 
+## T40 质检 quote-first 证据定位（#40，2026-11-13）
+
+| 项 | 实测/结果 |
+|---|---|
+| 问题 | T39 的 R-19：模型自报 offset/quote 被当权威坐标，60 次真实质检 50 次 `EVIDENCE_INVALID`（成功率 16.7%） |
+| 修复 | 提示词 `inspection-v2:f9740dfe9eb83145`：逐规则输出 `verdict/rationale/evidence_quotes`，offset 仅提示；后端 `inspections/locator.py` 精确→NFKC/空白/标点归一化→映射回原码点；找不到则 finding `insufficient_evidence` + `EVIDENCE_NOT_LOCATABLE`，run 不失败；`hit` span、授权知识引用与系统失败语义不变 |
+| 环境 | Mac 临时 API `127.0.0.1:18080`（未触碰线上）、`bank_assistant_test`（隧道 15432，迁移 `0011`，空库重导 32 知识/6 规则/6 会话）、5 个 live worker、`deepseek-chat` |
+| 样本 | 5 并发、两批各 30 次，共 **60 次**；每任务 2 条规则；提交遇 429 时按 `Retry-After` 有界重试（62 次重试后全部 202） |
+| 成功率 | **60/60 succeeded（100%）**、0 failed；T39 为 10/60（16.7%） |
+| 证据核验 | **hit spans 100/100（100%）**、全部 spans 221/221；41 条 hit 均有精确 span；0 条定位失败降级 |
+| verdict 分布 | hit 41 / clear 49 / insufficient_evidence 30 / not_applicable 0（120 条 findings） |
+| 延迟 | POST P50/P95/P99 267.001/**454.871**/557.768ms（≤1s PASS）；完成 11.526/**15.042**/16.127s（P95 ≤60s PASS） |
+| 成本 | 120 次 live 调用全部 succeeded；134,280 in / 18,956 out；估算 **¥0.4202**（正式两批；含预跑/冒烟总试跑约 ¥0.5737，预算 ¥5） |
+| 测试 | `uv run pytest tests -q`：**713 passed, 138 deselected**；`make test-integration`：**138 passed**（新增定位器 9 项、降级/写入不变式/测量汇总 3 项及既有用例更新） |
+| 清理/边界 | 临时 API 与 5 个 worker 已停止；`bank_assistant_test` 已重置（可丢弃）；未重启服务器、未触碰线上容器；合成演示会话，不外推真实银行数据 |
+| 风险 | **R-19 CLOSED**（合成数据）；见 [M7 性能报告](milestones/M7-performance-report.md) §14、[风险清单](ops/risk-register.md) §4 |
+| 报告/脚本 | `scripts/inspection_latency_measure.py`（新增 verdict/证据回验/429 重试）；产物 `.local-data/t40-artifacts/`（gitignore） |
+
 ## 2026-11-13 质检延迟与供应商故障演练（T39）
 
-真实 DeepSeek、`bank_assistant_test`、60 次：接收 P95 245.2ms（达标）、完成 P50/P95/P99 24.00/41.88/46.30s（P95 ≤60s 达标）、成功任务 P95 32.15s；**成功率仅 16.7%（10/60），50 次 EVIDENCE_INVALID** → 风险 R-19（功能不健康），正在由 #40 修复。故障演练：429/504/503/502 四类映射全部正确、无假成功、无零分报告。
+真实 DeepSeek、`bank_assistant_test`、60 次：接收 P95 245.2ms（达标）、完成 P50/P95/P99 24.00/41.88/46.30s（P95 ≤60s 达标）、成功任务 P95 32.15s；**成功率仅 16.7%（10/60），50 次 EVIDENCE_INVALID** → 风险 R-19（功能不健康），已由 T40 修复（见上方 T40 小节，60/60 succeeded）。故障演练：429/504/503/502 四类映射全部正确、无假成功、无零分报告。
 
 ## 2026-11-13 性能与稳定性
 
@@ -165,7 +183,7 @@ M5 报告：`docs/milestones/M5-report.md`（T25 交付）。web 48 tests、`mak
 | #31 T30 监控/日志/安全测试 | READY_FOR_ACCEPTANCE | 650 unit + 138 integration；真实 `/metrics`/trace_id 日志/密文扫描 0；`docs/milestones/M7-observability-report.md` |
 | #32 T31 发布包与运维手册 | READY_FOR_ACCEPTANCE | `docs/releases/v0.1.0.md` + `release.json`（SHA/镜像/传输校验/Alembic/索引/模型）；`make release-verify` PASS；`docs/ops/{dependency-audit,risk-register,runbook}.md`；[M7 验收报告](milestones/M7-report.md) |
 | #38 T38 容量压测 / 24h 探测 / 受控故障演练 | DONE（24h 探测 IN_PROGRESS） | 10 并发×600s：344,734 请求、0 错误、P95 最大 43.224ms；探测已启动（observed 25 分钟）；API/DB 重启恢复 1.863s/1.820s、任务不变量 0 running/0 重复；见 [M7 性能报告](milestones/M7-performance-report.md) |
-| #39 T39 质检 P95 与真实供应商故障演练 | DONE（成功率风险 R-19 开放） | 真实 DeepSeek、5 worker/5 并发、60 次质检：POST P95 245.244ms、完成 P95 41.879s、成功 P95 32.146s；成功 10/60、失败 50/60 均 `EVIDENCE_INVALID` 且 findings=0；token 256,621/37,309、估算 ¥0.8117；429/504/503/502 四类映射全部正确、无假成功；见 [M7 性能报告 §12/§13](milestones/M7-performance-report.md) |
+| #39 T39 质检 P95 与真实供应商故障演练 | DONE（R-19 已由 T40 关闭） | 真实 DeepSeek、5 worker/5 并发、60 次质检：POST P95 245.244ms、完成 P95 41.879s、成功 P95 32.146s；成功 10/60、失败 50/60 均 `EVIDENCE_INVALID` 且 findings=0；token 256,621/37,309、估算 ¥0.8117；429/504/503/502 四类映射全部正确、无假成功；见 [M7 性能报告 §12/§13](milestones/M7-performance-report.md) |
 
 ## T38 容量压测、稳定性探测与受控故障演练（#38，2026-11-13）
 
@@ -194,7 +212,7 @@ M5 报告：`docs/milestones/M5-report.md`（T25 交付）。web 48 tests、`mak
 | token/成本 | 235 次 live 模型调用全部 `succeeded`；输入 256,621 / 输出 37,309；按 2025-02-09 官方价目快照估算 **¥0.8117**（预算 ¥5） |
 | 供应商故障演练 | 本地假供应商 + 临时 API `18081`：429→`MODEL_RATE_LIMITED`、2s 超时→504 `MODEL_TIMEOUT`、连接被拒→503 `MODEL_UNAVAILABLE`、非法 JSON→502 `MODEL_INVALID_STRUCTURE`；4 条建议 `failed`/answer 空、4 条质检 `failed`/findings 0；trace `t39-drill-drill2-*` |
 | 清理/边界 | 临时 API、假供应商、5 个 worker 已停止；`bank_assistant_dev`/`bank_assistant_demo` 本轮 T39 任务 0；测试库保留实测行（可 reset）；未重启服务器、未触碰线上容器 |
-| 风险 | 新增 **R-19**（live 质检成功率 16.7%）；§7 延迟 PASS 不能代表功能健康 |
+| 风险 | T39 新发现 **R-19**（live 质检成功率 16.7%）；已由 T40 修复，60/60 succeeded、hit 证据 100% 回验（见上方 T40 小节），§7 延迟 PASS 不能代表功能健康 |
 | 测试 | `uv run pytest tests -q`：**699 passed, 138 deselected**（新增 18 个离线纯逻辑测试：分位/成本/token 解析/契约映射/假成功断言） |
 | 报告/脚本 | [M7 性能报告](milestones/M7-performance-report.md) §12/§13；`scripts/inspection_latency_measure.py`、`scripts/fake_supplier.py`、`scripts/supplier_failure_drill.py` |
 

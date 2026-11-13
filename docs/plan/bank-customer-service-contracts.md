@@ -91,6 +91,8 @@
 
 该JSON仅说明结构，不是实际银行规则。后端校验turn归属、区间合法、原文完全匹配、规则适用性及引用访问范围。模型自报confidence不能当经过校准的概率；首版可不提供。
 
+T40（#40）起 live 质检采用 **quote-first**：模型逐规则输出 `evidence_quotes`（逐字 quote，可选 `turn_ordinal`），数字 `start/end` 仅作提示、不要求输出；后端在不可变原文上确定性定位（精确优先，失败再做 NFKC/空白/标点归一化并映射回原码点）并回填 span，持久化的 `quote` 以 `content[start:end]` 为准。单条 quote 无法定位时，该 finding 记 `insufficient_evidence`（原因码 `EVIDENCE_NOT_LOCATABLE`），**不影响整次 run**；任何 `hit` 仍必须带精确可回验的 span。
+
 ## 5. 最小API目标
 
 所有接口需认证和资源权限，登录及健康检查除外。列表支持分页与允许的过滤字段；拒绝客户端任意指定SQL字段。

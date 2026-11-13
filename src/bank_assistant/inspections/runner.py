@@ -33,6 +33,7 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID, uuid4
 
 from pydantic import ValidationError
@@ -186,6 +187,10 @@ class InspectionRunner:
             UUID(str(turn["turn_id"])): str(turn["content"])
             for turn in prepared.turns
         }
+        turn_ordinals = {
+            UUID(str(turn["turn_id"])): int(str(turn["ordinal"]))
+            for turn in prepared.turns
+        }
         last_result: ModelResult | None = None
         for rule in prepared.snapshot.rules:
             try:
@@ -223,6 +228,7 @@ class InspectionRunner:
                     rule_code=rule.rule_code,
                     applicability=rule.applicability,
                     business_type=prepared.snapshot.business_type,
+                    turn_ordinals=turn_ordinals,
                 )
             except ValidationError as exc:
                 return self.record_failure(
@@ -457,6 +463,16 @@ class InspectionRunner:
                     model_result=model_result,
                 )
         now = self._now()
+        # T40/R-19：定位失败只降级单条 finding，run 照常 succeeded；原因码写进
+        # run diagnostics，prompt_version 也随成功记录留痕，便于审计与复测。
+        diagnostics: dict[str, Any] = {"prompt_version": INSPECTION_PROMPT_VERSION}
+        downgrades = [
+            {"rule_code": rule.rule_code, "reason": judgment.evidence_issue}
+            for rule, judgment in judgments
+            if judgment.evidence_issue
+        ]
+        if downgrades:
+            diagnostics["evidence_downgrades"] = downgrades
         with self._session() as session:
             task_row = session.scalar(
                 select(Task).where(Task.task_id == task_id).with_for_update()
@@ -479,7 +495,7 @@ class InspectionRunner:
                     status=InspectionStatus.SUCCEEDED.value,
                     finished_at=now,
                     error_code=None,
-                    diagnostics={},
+                    diagnostics=diagnostics,
                     updated_at=now,
                 )
             )
