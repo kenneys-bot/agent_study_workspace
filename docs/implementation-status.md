@@ -1,12 +1,16 @@
 # 执行进度
 
-当前里程碑：M7 全部子项（T29/T30/T31）已交付，**READY_FOR_ACCEPTANCE**；负责人尚未签收，无里程碑为 ACCEPTED。M6 已交付（T28 真实训练 NOT_RUN，Recall@5 0.833 未达门槛）
-当前任务：T31 发布包与运维手册（#32）READY_FOR_ACCEPTANCE；T30 监控、日志与安全测试（#31）READY_FOR_ACCEPTANCE；T29 部署与恢复演练（#30）已执行；T28 条件性微调（#29）READY_FOR_ACCEPTANCE；T33 ADR-0006 数据库落地（#34）已执行
+当前里程碑：M0–M7 全部 **ACCEPTED**（负责人 2026-11-13 明确签收）；继续推进 M7 后续风险项与真实微调实验。M6 已交付（T28 真实训练 NOT_RUN，Recall@5 0.833 未达门槛）
+当前任务：T35 真实 QLoRA 意图分类微调（GPU 已释放，执行中）；T36 complaint 检索召回改进（待办）
 当前状态：M1–M5 已交付（等待负责人验收）；M6 已交付（T26/T27 完成、T28 harness 交付但真实训练 NOT_RUN；引用支持度 NOT_MEASURED）；**M7-01～M7-06 已交付**（不可变镜像部署、备份恢复/回滚/索引重建、指标与脱敏日志、限流/输入上限/安全测试、发布清单与 `make release-verify`；2026-11-12）。计划 §7 的 Recall@5/引用支持度/24h/压测门槛仍未达成，见 [M7 报告](milestones/M7-report.md) 与 [风险清单](ops/risk-register.md)
 本机代码分支：`feat/bank-assistant`（集成分支；T31 在 `ticket/T31` 打包）
 发布代码SHA：`59a5869`（`v0.1.0` 镜像身份；T31 文档提交不改变镜像）
 Ubuntu代码SHA：`59a5869`（与发布镜像一致；镜像 `bank-assistant:api-59a5869`）
 最近更新：2026-11-12（Asia/Shanghai）
+
+## 负责人验收（2026-11-13）
+
+负责人在对话中明确「已签收」，因此 M0–M7 全部报告状态记为 ACCEPTED。执行模型只记录该事实，未代填验收结论。签收后负责人授权继续推进，并说明另一项目已停止、GPU 资源可交由本项目使用。
 
 ## 任务状态
 
