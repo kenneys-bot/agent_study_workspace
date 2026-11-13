@@ -24,6 +24,7 @@ from typing import Any, Mapping
 
 from bank_assistant.datasets.corpus import CORPUS_AS_OF
 from bank_assistant.datasets.split_guard import require_frozen_test_split
+from bank_assistant.knowledge.ranking import EMBEDDING_TEXT_MODES
 
 __all__ = [
     "BUSINESS_FILTER_MODES",
@@ -45,9 +46,7 @@ MODES: frozenset[str] = frozenset({"replay", "live"})
 TASKS: tuple[str, ...] = ("retrieval", "inspection")
 EMBEDDING_PROVIDERS: frozenset[str] = frozenset({"replay_lexical", "fastembed"})
 # T36：检索改进必须可单独回退，因此全部走 EVAL_CONFIG 的 retrieval 段。
-EMBEDDING_TEXT_MODES: frozenset[str] = frozenset(
-    {"chunk", "title_chunk", "title_source_chunk"}
-)
+# 索引文本形态与生产共用 ``knowledge.ranking`` 的定义，避免两边漂移。
 BUSINESS_FILTER_MODES: frozenset[str] = frozenset({"hard", "soft", "off"})
 
 _TOP_LEVEL_KEYS: frozenset[str] = frozenset(

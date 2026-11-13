@@ -7,6 +7,8 @@
    跨范围不进入索引）；
 2. 用 ``EMBEDDING_PROVIDER``（默认 fastembed + bge-small-zh-v1.5）生成分块向量，
    写入 Chroma 集合 ``knowledge_<index_version>`` 与 ``knowledge_chunks`` 行；
+   索引文本形态由 ``RETRIEVAL_EMBEDDING_TEXT`` 决定（T37 默认 ``title_chunk``：
+   标题拼入 embedding 输入，分块正文与区间不变）；
 3. 写清单（含校准向量哈希与知识快照），校验集合条数；
 4. 原子切换 ``data/index/active.json``；失败保留旧索引与旧指针并非零退出。
 
@@ -28,12 +30,12 @@ from bank_assistant.knowledge.embedding import (
 )
 from bank_assistant.knowledge.indexing import (
     ChromaVectorStore,
-    IndexBuildError,
     KnowledgeIndexError,
     build_index,
     load_active_index,
     read_active_pointer,
 )
+from bank_assistant.knowledge.ranking import EMBEDDING_TEXT_MODES
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -59,6 +61,15 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=settings.DEMO_SCOPE_ID,
         help="只索引该访问范围的知识版本",
     )
+    parser.add_argument(
+        "--embedding-text",
+        default=settings.RETRIEVAL_EMBEDDING_TEXT,
+        choices=sorted(EMBEDDING_TEXT_MODES),
+        help=(
+            "索引文本形态（默认 RETRIEVAL_EMBEDDING_TEXT，T37 为 title_chunk）；"
+            "改动会改变向量，必须新建 index_version"
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -82,6 +93,7 @@ def main(argv: list[str] | None = None) -> int:
                 store=store,
                 scope_id=args.scope_id,
                 index_dir=index_dir,
+                embedding_text=args.embedding_text,
             )
         # 切换后再读一次活动索引，验证加载路径（校准哈希 + 集合条数）。
         _, verified = load_active_index(index_dir, provider=provider, store=store)
@@ -96,8 +108,10 @@ def main(argv: list[str] | None = None) -> int:
 
     print(f"index-rebuild: scope={args.scope_id}")
     print(f"  embedding：{result.manifest['embedding_model_version']}")
+    print(f"  索引文本形态：{result.manifest['embedding_text']}")
     print(f"  索引版本：{result.index_version}（集合 {result.collection}）")
     print(f"  知识版本 {result.version_count} 个，分块 {result.chunk_count} 条")
+    print(f"  内容身份 sha256：{result.manifest['index_content_sha256']}")
     print(
         "  校准向量 sha256："
         f"{result.manifest['calibration_vector_sha256']}"

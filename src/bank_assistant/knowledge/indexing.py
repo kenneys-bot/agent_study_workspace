@@ -7,12 +7,18 @@
   旧集合保留，重建不覆盖旧索引；
 - 清单 JSON（``data/index/manifests/<index_version>.json``）记录
   ``index_version``、``embedding_model_version``、知识快照（version_id +
-  content_hash）与**校准向量哈希**（固定校准串向量的 SHA-256）；
+  content_hash）、**校准向量哈希**（固定校准串向量的 SHA-256）、索引文本形态
+  （``embedding_text``）与**内容身份** ``index_content_sha256``（由 embedding
+  输入确定性派生，两次同内容重建一致）；
 - 构建并校验成功后，原子切换活动指针 ``data/index/active.json``
   （临时文件 + ``os.replace``，同一文件系统内原子）；构建失败删除临时集合、
   回滚分块行、保留旧指针，并抛出 ``IndexBuildError``；
 - 加载索引前用当前 provider 重新计算校准哈希，不一致即判定 embedding 模型
   漂移，拒绝使用（``EmbeddingDrift``）。
+
+T37（#37）：embedding 输入可以按 ``embedding_text`` 拼入标题/来源（默认由
+``settings.RETRIEVAL_EMBEDDING_TEXT`` 提供，与评测采用同一形态）。**只改
+embedding 输入**：``KnowledgeChunk.text`` 与码点区间仍是原文，引用可逐字回验。
 
 ``ChunkVectorStore`` 是向量库 seam：生产用 ``ChromaVectorStore``，测试用内存
 替身，因此构建/切换/失败路径都能离线验证。
@@ -49,6 +55,11 @@ from bank_assistant.knowledge.embedding import (
     EmbeddingProvider,
     calibration_vector_sha256,
     ensure_dimension,
+)
+from bank_assistant.knowledge.ranking import (
+    EMBEDDING_TEXT_CHUNK,
+    EMBEDDING_TEXT_MODES,
+    build_embedding_input,
 )
 from bank_assistant.knowledge.retrieval import fetch_retrievable_versions
 
@@ -177,10 +188,41 @@ def chunk_id_for(
 
 
 def _generate_index_version(moment: datetime, seed: str) -> str:
-    """``idx-<UTC时间戳>-<随机短哈希>``；每次构建唯一，便于保留旧版本。"""
+    """``idx-<UTC时间戳>-<随机短哈希>``；每次构建唯一，便于保留旧版本。
+
+    ``index_version`` 按 ADR-0005 每次构建唯一（旧集合保留，可回滚）；
+    「同内容重建是否一致」由清单里的 ``index_content_sha256`` 回答。
+    """
     stamp = moment.astimezone(UTC).strftime("%Y%m%dT%H%M%SZ")
     suffix = hashlib.sha256(f"{stamp}:{seed}:{uuid4().hex}".encode()).hexdigest()[:8]
     return f"idx-{stamp}-{suffix}"
+
+
+def _index_content_sha256(
+    entries: Sequence[tuple[UUID, int, int, str]],
+    *,
+    embedding_model_version: str,
+    embedding_text: str,
+    max_chars: int,
+    overlap: int,
+) -> str:
+    """索引内容身份：对 (version_id, 区间, embedding 输入) 的确定性哈希。
+
+    同语料 + 同 provider + 同参数重建两次得到同一 ``index_content_sha256``，
+    因此可以在不依赖 ``index_version``（每次唯一）的情况下验证重建一致。
+    """
+    digest = hashlib.sha256()
+    digest.update(
+        (
+            f"index-content-v1|{embedding_model_version}|{embedding_text}|"
+            f"{max_chars}|{overlap}\n"
+        ).encode("utf-8")
+    )
+    ordered = sorted(entries, key=lambda entry: (str(entry[0]), entry[1], entry[2]))
+    for version_id, start, end, embedding_input in ordered:
+        input_sha = hashlib.sha256(embedding_input.encode("utf-8")).hexdigest()
+        digest.update(f"{version_id}|{start}|{end}|{input_sha}\n".encode("utf-8"))
+    return digest.hexdigest()
 
 
 def _fsync_directory(directory: Path) -> None:
@@ -286,12 +328,21 @@ def build_index(
     business_type: str | None = None,
     max_chars: int = DEFAULT_MAX_CHARS,
     overlap: int = DEFAULT_OVERLAP_CHARS,
+    embedding_text: str = EMBEDDING_TEXT_CHUNK,
 ) -> IndexBuildResult:
     """从可检索知识版本构建新索引，校验后切换活动指针。
+
+    ``embedding_text`` 只影响 **embedding 输入**：``chunk`` 只用正文，
+    ``title_chunk``/``title_source_chunk`` 拼入标题（和来源类型）。分块正文、
+    码点区间与 ``chunk_id`` 不变，引用语义不受影响（ADR-0005、T37）。
 
     失败时：删除临时集合、回滚分块行、保留旧清单与旧指针，抛
     ``IndexBuildError``。成功时返回的 ``index_version`` 已写入活动指针。
     """
+    if embedding_text not in EMBEDDING_TEXT_MODES:
+        raise IndexBuildError(
+            f"embedding_text 只能是 {sorted(EMBEDDING_TEXT_MODES)}，收到 {embedding_text!r}"
+        )
     moment = at or datetime.now(UTC)
     directory = ensure_index_dir(index_dir)
     versions = fetch_retrievable_versions(
@@ -321,6 +372,7 @@ def build_index(
         calibration_hash = calibration_vector_sha256(provider)
 
         pieces: list[tuple[KnowledgeVersion, Any]] = []
+        embedding_inputs: list[str] = []
         for version in versions:
             document = documents.get(version.document_id)
             if document is None:  # pragma: no cover - 外键保证不会发生
@@ -332,8 +384,16 @@ def build_index(
                 raise IndexBuildError(f"知识版本 {version.version_id} 正文为空")
             for piece in versions_chunks:
                 pieces.append((version, piece))
+                embedding_inputs.append(
+                    build_embedding_input(
+                        piece.text,
+                        title=document.title,
+                        source_type=document.source_type,
+                        mode=embedding_text,
+                    )
+                )
 
-        vectors = _batch_embed(provider, [piece.text for _, piece in pieces])
+        vectors = _batch_embed(provider, embedding_inputs)
 
         records: list[ChunkRecord] = []
         chunk_rows: list[KnowledgeChunk] = []
@@ -371,6 +431,18 @@ def build_index(
                 per_version_chunks.get(version.version_id, 0) + 1
             )
 
+        content_sha256 = _index_content_sha256(
+            [
+                (version.version_id, piece.start, piece.end, embedding_input)
+                for (version, piece), embedding_input in zip(
+                    pieces, embedding_inputs, strict=True
+                )
+            ],
+            embedding_model_version=provider.model_version,
+            embedding_text=embedding_text,
+            max_chars=max_chars,
+            overlap=overlap,
+        )
         snapshot = [
             {
                 "version_id": str(version.version_id),
@@ -387,6 +459,8 @@ def build_index(
             "collection": collection,
             "embedding_model_version": provider.model_version,
             "embedding_dimension": provider.dimension,
+            "embedding_text": embedding_text,
+            "index_content_sha256": content_sha256,
             "calibration_text_sha256": hashlib.sha256(
                 CALIBRATION_TEXT.encode("utf-8")
             ).hexdigest(),
@@ -476,6 +550,29 @@ def verify_index(
         raise IndexBuildError(
             f"集合 {collection} 条数 {stored} 与清单 {manifest.get('chunk_count')} 不一致"
         )
+
+
+def activate_index_version(
+    index_dir: Path | str,
+    *,
+    index_version: str,
+    provider: EmbeddingProvider,
+    store: ChunkVectorStore,
+    switched_at: datetime | None = None,
+) -> dict[str, Any]:
+    """把活动指针切回某个**已存在且校验通过**的旧索引（回滚用）。
+
+    切换前用当前 provider 重算校准哈希并核对集合条数：校准不一致或集合缺失
+    时显式失败，不能把一个不可用的旧索引指成活动的。
+    """
+    manifest = read_manifest(manifest_path(index_dir, index_version))
+    verify_index(provider=provider, store=store, manifest=manifest)
+    return switch_active_pointer(
+        index_dir,
+        index_version=index_version,
+        manifest=manifest,
+        switched_at=switched_at,
+    )
 
 
 def load_active_index(
@@ -616,6 +713,7 @@ __all__ = [
     "IndexNotBuilt",
     "KnowledgeIndexError",
     "VectorHit",
+    "activate_index_version",
     "active_pointer_path",
     "build_index",
     "chunk_id_for",

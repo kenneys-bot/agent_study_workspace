@@ -11,10 +11,12 @@
    注入时同时保留原问题（``query``）与改写结果（``rewritten_query``），
    并在 ``retrieval_snapshot.rewrite`` 里记录是否应用、提示词版本与错误。
    改写失败会显式回退到原问题，不假装成功。
-4. **检索 + 数据库复核**：向量召回后逐个回查 ``knowledge_chunks`` /
-   ``knowledge_versions`` / ``knowledge_documents``，草稿、退役、过期、
-   跨范围、业务不符的分块全部丢弃（CT-01）。同一文档存在多个当前有效版本
-   时显式判为冲突并转 ``needs_clarification``。
+4. **检索 + 重排 + 数据库复核**：向量召回（候选池）后按 T36 采用的确定性
+   本地重排（查询字符二元组覆盖率，α=0.2）排序，再逐个回查
+   ``knowledge_chunks`` / ``knowledge_versions`` / ``knowledge_documents``，
+   草稿、退役、过期、跨范围、业务不符的分块全部丢弃（CT-01）。重排的应用
+   状态与参数写入 ``retrieval_snapshot.rerank``，可审计也可关掉回退。
+   同一文档存在多个当前有效版本时显式判为冲突并转 ``needs_clarification``。
 5. **模型生成**：通过 ``ModelGateway``，系统提示词 + 本次召回片段；模型只能
    从给定 ``chunk_id`` / ``version_id`` 引用。模型失败只产生 ``failed``。
 6. **引用校验**：每条引用必须来自本次召回、版本仍 published 且在有效期、
@@ -77,6 +79,7 @@ from bank_assistant.knowledge.indexing import (
     load_active_index,
     search_index,
 )
+from bank_assistant.knowledge.ranking import RerankCandidate, rerank_candidates
 from bank_assistant.knowledge.retrieval import fetch_retrievable_versions
 from bank_assistant.security.identity import Identity
 
@@ -269,6 +272,8 @@ class SuggestionService:
         clock: Callable[[], datetime] | None = None,
         top_k: int = DEFAULT_TOP_K,
         max_distance: float = DEFAULT_MAX_DISTANCE,
+        rerank_alpha: float | None = None,
+        rerank_pool: int | None = None,
         code_sha: str | None = None,
     ) -> None:
         self.gateway = gateway
@@ -279,6 +284,18 @@ class SuggestionService:
         self._clock = clock or (lambda: datetime.now(UTC))
         self.top_k = top_k
         self.max_distance = max_distance
+        # 默认值来自配置（与 T36 评测采用值一致：α=0.2、候选池 20）；
+        # 显式传 0 即可关掉重排回退到纯向量排序。
+        self.rerank_alpha = (
+            settings.RETRIEVAL_RERANK_ALPHA if rerank_alpha is None else rerank_alpha
+        )
+        self.rerank_pool = (
+            settings.RETRIEVAL_RERANK_POOL if rerank_pool is None else rerank_pool
+        )
+        if not 0.0 <= self.rerank_alpha <= 1.0:
+            raise ValueError("rerank_alpha 必须在 [0, 1] 内")
+        if self.rerank_pool <= 0:
+            raise ValueError("rerank_pool 必须为正整数")
         self.code_sha = code_sha or current_code_sha()
 
     # ------------------------------------------------------------------ 入口
@@ -355,8 +372,11 @@ class SuggestionService:
             "max_distance": self.max_distance,
             "query": source_query,
             "query_strategy": "baseline",
+            "index_embedding_text": manifest.get("embedding_text") or "chunk",
+            "index_content_sha256": manifest.get("index_content_sha256"),
             "chunks": [],
             "dropped_chunks": [],
+            "rerank_status": "not_run",
         }
 
         if manifest.get("scope_id") != identity.scope_id:
@@ -402,19 +422,10 @@ class SuggestionService:
         else:
             base_snapshot["retrieval_query"] = source_query
 
-        # 4. 召回 + 数据库复核（草稿/退役/过期/跨范围/业务不符全部丢弃）。
-        hits = search_index(
-            self.vector_store,
-            self.embedding_provider,
-            index_version=index_version,
-            query=retrieval_query,
-            top_k=self.top_k,
-            business_type=business_type,
-        )
-        useful_hits = [hit for hit in hits if hit.distance <= self.max_distance]
-        recalled, dropped = self._revalidate_hits(
+        # 4. 召回 + 重排 + 数据库复核（草稿/退役/过期/跨范围/业务不符全部丢弃）。
+        recalled, dropped, rerank_info, hit_count, useful_count = self._recall(
             session,
-            hits=useful_hits,
+            query=retrieval_query,
             identity=identity,
             business_type=business_type,
             index_version=index_version,
@@ -422,13 +433,15 @@ class SuggestionService:
         )
         base_snapshot["chunks"] = [chunk.snapshot() for chunk in recalled]
         base_snapshot["dropped_chunks"] = dropped
-        base_snapshot["candidate_hit_count"] = len(hits)
+        base_snapshot["candidate_hit_count"] = hit_count
+        base_snapshot["rerank_status"] = rerank_info["status"]
+        base_snapshot["rerank"] = rerank_info
 
         # 模型调用不持有数据库事务：先结束只读事务，再调用外部模型。
         session.commit()
 
         if not recalled:
-            reason = "no_evidence" if not useful_hits else "recall_invalidated"
+            reason = "no_evidence" if not useful_count else "recall_invalidated"
             base_snapshot["error"] = reason
             return self._persist(
                 session,
@@ -558,21 +571,9 @@ class SuggestionService:
         if retired:
             if candidate.status is CandidateAnswerStatus.ANSWERED:
                 # 重新检索同一活动索引，再按数据库最新状态复核；剩余证据才可重生成。
-                retry_hits = [
-                    hit
-                    for hit in search_index(
-                        self.vector_store,
-                        self.embedding_provider,
-                        index_version=index_version,
-                        query=retrieval_query,
-                        top_k=self.top_k,
-                        business_type=business_type,
-                    )
-                    if hit.distance <= self.max_distance
-                ]
-                current, retry_dropped = self._revalidate_hits(
+                current, retry_dropped, retry_rerank, _, _ = self._recall(
                     session,
-                    hits=retry_hits,
+                    query=retrieval_query,
                     identity=identity,
                     business_type=business_type,
                     index_version=index_version,
@@ -580,6 +581,7 @@ class SuggestionService:
                 )
                 ct02["re_retrieved"] = True
                 ct02["retry_dropped_chunks"] = retry_dropped
+                ct02["retry_rerank_status"] = retry_rerank["status"]
                 base_snapshot["chunks"] = [chunk.snapshot() for chunk in current]
                 if not current:
                     base_snapshot["ct02"] = ct02
@@ -779,6 +781,99 @@ class SuggestionService:
         if conversation is None and not query.strip():
             raise SuggestionInputError("query 不能为空")
         return conversation, query
+
+    # ------------------------------------------------------------------ 召回与重排
+    def _recall(
+        self,
+        session: Session,
+        *,
+        query: str,
+        identity: Identity,
+        business_type: str | None,
+        index_version: str,
+        now: datetime,
+    ) -> tuple[
+        list[RecalledChunk], list[dict[str, Any]], dict[str, Any], int, int
+    ]:
+        """召回 → 数据库复核 → 确定性重排。
+
+        返回 ``(交付候选, 丢弃, 重排记录, 命中数, 距离内命中数)``。
+
+        重排只在「已通过授权/有效期复核」的候选内进行，因此引用白名单不变：
+        重排只改顺序与截断，不引入任何新 chunk。``top_k`` 仍是最终交付条数，
+        重排候选池默认 20（可由配置覆盖）。
+        """
+        search_top_k = self.top_k
+        if self.rerank_alpha > 0.0:
+            search_top_k = max(self.top_k, self.rerank_pool)
+        hits = search_index(
+            self.vector_store,
+            self.embedding_provider,
+            index_version=index_version,
+            query=query,
+            top_k=search_top_k,
+            business_type=business_type,
+        )
+        useful_hits = [hit for hit in hits if hit.distance <= self.max_distance]
+        recalled, dropped = self._revalidate_hits(
+            session,
+            hits=useful_hits,
+            identity=identity,
+            business_type=business_type,
+            index_version=index_version,
+            now=now,
+        )
+        ordered, info = self._rerank(query, recalled)
+        return ordered, dropped, info, len(hits), len(useful_hits)
+
+    def _rerank(
+        self, query: str, recalled: Sequence[RecalledChunk]
+    ) -> tuple[list[RecalledChunk], dict[str, Any]]:
+        """对已复核候选做确定性词面重排（与评测同一公式），返回交付顺序。
+
+        - ``disabled``：α=0，纯向量排序（可单独回退）；
+        - ``insufficient_candidates``：候选不足 2 条，重排没有意义；
+        - ``applied``：候选池内按 ``score + α * 覆盖率`` 排序后截断 top_k。
+        """
+        by_chunk_id = {chunk.chunk_id: chunk for chunk in recalled}
+        before = [str(chunk.chunk_id) for chunk in recalled]
+        info: dict[str, Any] = {
+            "mode": "lexical_char_ngram",
+            "query": query,
+            "alpha": self.rerank_alpha,
+            "pool": self.rerank_pool,
+            "candidate_count": len(recalled),
+            "top_k": self.top_k,
+            "before": before,
+        }
+        if self.rerank_alpha <= 0.0:
+            ordered = list(recalled)
+            info["status"] = "disabled"
+        elif len(recalled) < 2:
+            ordered = list(recalled)
+            info["status"] = "insufficient_candidates"
+        else:
+            candidates = [
+                RerankCandidate(
+                    key=str(chunk.chunk_id),
+                    title=chunk.title,
+                    text=chunk.text,
+                    score=chunk.score,
+                )
+                for chunk in recalled
+            ]
+            reranked = rerank_candidates(
+                query,
+                candidates,
+                alpha=self.rerank_alpha,
+                pool=max(self.rerank_pool, len(candidates)),
+            )
+            ordered = [by_chunk_id[UUID(candidate.key)] for candidate in reranked]
+            info["status"] = "applied"
+        delivered = ordered[: self.top_k]
+        info["delivered"] = [str(chunk.chunk_id) for chunk in delivered]
+        info["moved"] = before[: len(delivered)] != info["delivered"]
+        return delivered, info
 
     # ------------------------------------------------------------------ 召回复核
     def _revalidate_hits(
