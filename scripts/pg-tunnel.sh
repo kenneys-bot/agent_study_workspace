@@ -58,6 +58,17 @@ start() {
     rm -f "$PIDFILE"
   fi
   if port_listening; then
+    # 端口已有监听：如果是等价的本项目 SSH 隧道（例如并行会话/实现者留下的），接管它并修复 pidfile，
+    # 而不是要求手工处理；只有确认不是我们的转发时才失败，绝不杀未知进程。
+    local existing cmd
+    existing=$(lsof -nP -iTCP:"$PORT" -sTCP:LISTEN -t 2>/dev/null | head -1 || true)
+    cmd=""
+    [ -n "$existing" ] && cmd=$(ps -p "$existing" -o command= 2>/dev/null || true)
+    if [ -n "$existing" ] && printf '%s' "$cmd" | grep -q "ssh" && printf '%s' "$cmd" | grep -q -- "-L 127.0.0.1:${PORT}:127.0.0.1:5432"; then
+      printf '%s\n' "$existing" > "$PIDFILE"
+      echo "pg-tunnel: 接管已存在的等价隧道 pid=${existing}（pidfile 已修复）"
+      return 0
+    fi
     echo "FAIL: 127.0.0.1:$PORT 已被其它进程占用；未做任何处理。" >&2
     echo "      用 lsof -nP -iTCP:$PORT -sTCP:LISTEN 查看后手工处理。" >&2
     return 1
