@@ -110,6 +110,10 @@ manifest/metrics 的 `run.retrieval_options` 记录实际生效的开关组合�
   断言（`run_inspection` / `runner._assert_citations`）。
 - **引用支持度**：本数据集没有人工语义支持标签，报告显式写
   `citation.support.status = "NOT_MEASURED"`，不用合法性冒充支持度。
+  T42 已准备人工标注包 [`citation-support-pack.md`](citation-support-pack.md)
+  （67 条引用 + 9 条无证据对照，CSV 标签为空）与计分脚本
+  `scripts/score_citation_support.py`；负责人完成标注前仍为 `NOT_MEASURED`，
+  脚本在零标注时只输出 `WAITING_FOR_HUMAN`。
 - **token/成本为估算**：CJK 每字 1 token、其他非空白字符每 4 字符 1 token；
   成本 = token/1e6 × 配置单价。价目表必须带 `source` 与 `as_of`；`live-subset.yaml`
   使用 DeepSeek 官方 **历史价目快照**（2025-02-09），2026 年可能已调整，报告中的

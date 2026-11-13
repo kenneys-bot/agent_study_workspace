@@ -1,0 +1,11 @@
+id,scenario,query,answer_excerpt,citation_quote,knowledge_title,label,note
+syn-001,lost_card,挂失后多久补卡？,七个工作日内补卡。,挂失受理后，客户需在七个工作日内携带身份证件补卡。,挂失补卡时限（v1）,SUPPORTED,
+syn-002,credit_card_fee,首年免年费吗？,首年免收年费。,信用卡年费在首年免收。,年费规则（v1）,SUPPORTED,
+syn-003,complaint,投诉多久响应？,两小时内首次响应。,一般投诉在受理后两小时内首次响应。,投诉响应时限（v1）,SUPPORTED,
+syn-004,lost_card,临时挂失多久？,临时挂失有效期为五天。,临时挂失有效期为五天，逾期自动解除。,临时挂失规则（v1）,SUPPORTED,
+syn-005,credit_card_fee,分期手续费怎么展示？,在办理页面明示费率。,分期手续费应在办理页面明示。,分期手续费展示（v1）,SUPPORTED,
+syn-006,complaint,重复投诉怎么处理？,合并至原工单。,同一客户就同一事项重复投诉的，合并至原工单。,重复投诉处理（v1）,SUPPORTED,
+syn-007,lost_card,境外挂失怎么办？,可通过客服热线办理。,境外挂失可通过客服热线办理。,境外挂失路径（v1）,SUPPORTED,
+syn-008,credit_card_fee,账单异议多久复核？,三个工作日内答复。,复核岗在三个工作日内答复。,账单异议复核（v1）,SUPPORTED,
+syn-009,complaint,投诉登记要素有哪些？,登记客户诉求与发生时间。,投诉登记至少包含客户诉求与发生时间。,投诉登记要素（v1）,SUPPORTED,
+syn-010,lost_card,挂失生效时间？,挂失立即生效。,挂失自系统受理成功时生效。,挂失生效时点（v1）,NOT_SUPPORTED,引用说“受理成功时生效”，答复写成“立即生效”
