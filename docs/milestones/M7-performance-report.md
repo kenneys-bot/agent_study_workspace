@@ -1,10 +1,10 @@
-# M7 性能与稳定性实测报告（T38 / #38）
+# M7 性能与稳定性实测报告（T38 / #38；T39 / #39 补测）
 
 日期：2026-11-13（Asia/Shanghai）｜状态：**READY_FOR_ACCEPTANCE**
-（10 并发压测与受控故障演练已实测达标；24 小时探测已启动并观察 25 分钟，
-未满 24 小时，如实标注）
+（10 并发压测、受控故障演练、质检 P95 与供应商故障映射已实测；
+24 小时探测仍未满 24 小时，如实标注）
 代码/镜像：`3a04952`／`bank-assistant:api-3a04952`（发布 `v0.1.1`）
-相关需求：FR-10；计划书 §7、M7-04；风险登记册 R-04/R-05/R-13
+相关需求：FR-10；计划书 §7、M7-04；风险登记册 R-04/R-05/R-13/R-19
 
 > 本报告把 M7 报告中 **NOT_RUN** 的容量、长跑与真实故障项换成可复算的数字。
 > 测量对象是**个人展示项目的单机部署演练**，不是任何机构的容量承诺或 SLA；
@@ -213,23 +213,26 @@
 |---|---|---|---|
 | 普通 API | P95 ≤500ms、错误率 <1%（10 并发 10 分钟） | P95 最大 43.224ms、错误率 0.00% | **PASS（条件见 §3）** |
 | 候选答复 | P95 ≤15s（5 并发） | replay P95 464.291ms | **PASS（仅 replay 工程延迟）** |
-| 质检任务接收/完成 | ≤1s / ≤60s（5 并发） | 未压测 | **NOT_RUN** |
+| 质检任务接收/完成 | ≤1s / ≤60s（5 并发） | POST P95 **245.244ms**（n=30）；完成 P95 **41.879s**（n=60，其中成功 10 条 P95 32.146s）；成功率仅 10/60（见 §12） | **PASS（延迟）；成功率另列 R-19** |
 | 可恢复性 | RPO≤24h、RTO≤2h | API 重启 2.166s、DB 重启 2.127s 恢复到 ready；RPO/独立故障域未测 | **RTO 部分 PASS；RPO NOT_RUN** |
-| 长时间运行 | 24h 定时探测，无未解释崩溃 | 已运行 25 分钟，无失败 | **IN_PROGRESS（未满 24h）** |
-| 真实供应商限流/超时 | 有真实故障演练 | 未做（不人为打断付费供应商） | **NOT_RUN（R-04 剩余部分）** |
+| 长时间运行 | 24h 定时探测，无未解释崩溃 | T38 报告时已运行 25 分钟、0 失败；T39 补测时仍在运行 | **IN_PROGRESS（未满 24h）** |
+| 真实供应商限流/超时 | 有真实故障演练 | 受控假供应商 4 类故障映射全部正确：429/504/503/502（见 §13） | **PASS（映射）；未人为制造真实 DeepSeek 429** |
 
 ## 9. 未测量与边界
 
-1. **24h 未满**：本报告只覆盖 25 分钟；探测继续运行，满 24h 后应
-   用同一 `summary.json` 更新结论。
+1. **24h 未满**：T38 部分覆盖截至 2026-11-13T03:53Z 的 25 分钟；T39 补测时
+   探测仍在运行，仍未满 24 小时；满窗后应用同一 `summary.json` 更新结论。
 2. **RPO 未计时**：只测了容器重启的 RTO；备份恢复的 RPO、独立故障域（R-13）未变。
-3. **供应商故障未演练**：真实 429/超时/断网仍未在服务器人为制造（R-04 剩余部分）。
+3. **供应商故障为受控演练**：§13 用本地假供应商验证 429/504/503/502 映射；
+   未在真实 DeepSeek 上人为制造 429/超时，也未在服务器断网。
 4. **单实例**：限流是进程内令牌桶（R-10），本压测只有一个 uvicorn worker；
    多实例/网关限流未验证。
 5. **同机回环**：客户端与 API 同机，没有跨机网络 RTT；不能外推为 LAN/WAN 容量。
 6. **回放非质量证据**：replay 只证明链路时延与稳定性，不代表 live 模型质量或成本。
 7. **压测写入了演示库**：非模型阶段只读（登录审计与 health/metrics 计数除外）；
    回放阶段写入克隆库并在测后删除，未污染 `bank_assistant_demo`。
+8. **T39 质检样本是混合会话**：60 次中风险会话占一半；成功率 16.7% 是当前 live
+   模型的实测结果，不是只挑成功样本；P95 延迟只说明“完成/失败都在 60s 内”。
 
 ## 10. 证据文件与复跑命令
 
@@ -262,7 +265,125 @@ ssh my-ubuntu-server 'cd ~/workspace/bank-assistant/artifacts/loadtest/T38 && \
 
 ## 11. 与风险清单的联动
 
-- R-04：真实数据库停机部分已关闭（本报告 §7.2）；真实供应商 429/超时仍未演练。
-- R-05：10 并发/10 分钟压测部分已关闭并达标（§3）；24h 长跑仍在进行（§6）。
+- R-04：DB 停机（§7.2）与供应商 4 类故障映射（§13）均已实测 → **CLOSED（受控演练）**；
+  未在真实 DeepSeek 上人为制造 429/超时，边界保留。
+- R-05：10 并发/10 分钟压测部分已关闭并达标（§3）；24h 长跑仍未满（§6）。
 - R-13：容器重启 RTO 已实测（API 2.166s、DB 2.127s）；RPO/独立故障域仍未测。
+- **R-19（新）**：live 质检 60 次中 50 次 `EVIDENCE_INVALID`（成功率 16.7%）；
+  §7 延迟 PASS 不等于质检功能健康。
 - 详细的关闭证据与剩余项见 [风险登记册](../ops/risk-register.md)。
+
+## 12. 质检任务接收 / 完成 P95（T39 / #39，真实模型）
+
+### 12.1 测量条件
+
+| 项 | 值 |
+|---|---|
+| 时间（UTC） | batch1 2026-11-13T04:01:38Z–04:02:26Z；batch2 04:02:40Z–04:03:27Z |
+| 被测对象 | 本机临时 API `127.0.0.1:18080`（单 uvicorn 进程），**未触碰**线上 `bank-assistant-api` |
+| 数据库 | `bank_assistant_test`（经 `127.0.0.1:15432` 隧道）；空库 `alembic upgrade head` → `0011_report_exports`，导入 32 条演示知识、6 条规则、6 段会话 |
+| 索引 | `.local-data/index-t39`，`idx-20261113T035753Z-4e8139e2`（`title_chunk`，30 版本/30 分块，校准 sha256 `cffa0671…`） |
+| 模型 | `MODEL_MODE=live`，`deepseek-chat`（DeepSeek 官方），`LLM_TIMEOUT_SECONDS=60`、`LLM_MAX_RETRIES=2` |
+| worker | 5 个独立进程，同一测试库，租约 60s；每条质检 2 条适用规则 → 最多 2 次模型调用/尝试 |
+| 负载 | 5 并发提交；2 批各 30 次，共 **60 次**真实质检；batch1 与 batch2 环境相同 |
+| 输入 | 6 段合成演示会话轮转（S1/S2/S3 × normal/risk），每条质检 2 条规则 |
+| 接收延迟口径 | 客户端 `perf_counter` 测得 `POST /api/v1/inspections` 的 202 响应时间（只算 HTTP 202） |
+| 完成时间口径 | 服务端 `finished_at - created_at`（秒）；终态含 `succeeded` / `failed`，未终态不计入 |
+| 分位口径 | 线性插值（与 numpy 默认 `linear` 一致）；空样本记 `n/a`，不填 0 |
+| token / 成本 | worker 日志 `model_call` 的 `prompt_tokens`/`completion_tokens`；成本按仓库 `configs/eval/live-subset.yaml` 的 **2025-02-09 官方价目快照**（¥2/百万输入、¥8/百万输出）估算，**不是账单** |
+
+> batch1 的客户端 POST 计时因脚本轮询缺陷丢失（不影响服务端时间戳、终态与 token），
+> 因此 **POST 分位只用 batch2（n=30）**；完成时间、失败率与 token 用两批合并 **n=60**。
+
+### 12.2 延迟与结果
+
+| 指标 | n | P50 | P95 | P99 | 最大 |
+|---|---:|---:|---:|---:|---:|
+| `POST /inspections` 接收（ms） | 30 | 179.125 | **245.244** | 253.667 | 256.993 |
+| 完成时间，全部终态（s） | 60 | 23.9996 | **41.8787** | 46.3018 | 46.3618 |
+| 完成时间，仅 `succeeded`（s） | 10 | 18.3547 | **32.1456** | 33.0140 | 33.2311 |
+| 完成时间，仅 `failed`（s） | 50 | 25.5991 | 42.1171 | 46.3119 | 46.3618 |
+
+| 项 | 值 |
+|---|---|
+| 成功 / 失败 / 未终态 | **10 / 50 / 0** |
+| 失败率 | **83.3%**，全部为 `EVIDENCE_INVALID` |
+| 失败任务的 findings | **0**（失败绝不写“零分报告”） |
+| 成功任务的 findings | 每条 2 条，共 20 条 |
+| 模型调用 | 235 次，**全部** `status=succeeded`（不是限流/超时/空内容） |
+| token | 输入 **256,621** / 输出 **37,309** |
+| 估算成本 | **¥0.8117**（两批合计；预算 ¥5） |
+
+失败原因不是供应商故障，而是真实模型的结构化输出精度：证据区间 `end` 少算 1 个码点、
+`end` 超出原文（如 `end=39` vs 32）、或 `quote` 补了原文没有的句号。典型诊断：
+
+- `DEMO-FEE-01`：原文 `…肯定没问题`，声明 `…肯定没问题。` → 区间不匹配；
+- `DEMO-CLAIM-01`：`end=39`，原文共 32 个码点；
+- `DEMO-ATT-01`：`quote` 多一个句号；
+- `DEMO-FEE-02`：`quote` 是整句，声明的区间只覆盖前半句。
+
+这是**证据校验按契约拒绝无效证据**的正确行为（`EVIDENCE_INVALID`），不是把失败静默成
+`clear`/零分；但也说明当前 live 质检的可用成功率只有 **16.7%**，必须作为独立风险跟踪。
+
+### 12.3 计划 §7 判定
+
+| 门槛 | 要求 | 实测 | 结论 |
+|---|---|---|---|
+| 接收响应 | ≤1s | P95 **245.244ms**（n=30） | **PASS** |
+| 完成时间 | P95 ≤60s（5 并发） | 全部终态 P95 **41.879s**；成功任务 P95 **32.146s** | **PASS（延迟）** |
+| 失败率 / 假成功 | 不能伪造结果 | 50 条 `EVIDENCE_INVALID`，findings=0；无 2xx 假成功 | **行为正确，但成功率 16.7% → R-19** |
+
+**边界**：本结果只说明“任务在 5 并发、2 条规则/任务的条件下能在 60s 内完成”，
+**不能**外推为质检质量或高成功率；83.3% 的失败率意味着当前 live 质检不足以支撑
+“默认可用的质检演示”，对外只能展示已成功的 10 条或明确标注失败率。
+
+### 12.4 测试库状态（可审计）
+
+- `bank_assistant_test` 保持 `0011_report_exports`，含本轮 60 条实测运行 + 演练行；
+  **所有 failed 运行的 findings 均为 0**。
+- `bank_assistant_dev` / `bank_assistant_demo` 在同时段内 **T39 任务数 0**，未被污染。
+- 需要清空时（测试库可丢弃）：
+  `DATABASE_URL=…/bank_assistant_test uv run python scripts/db_tool.py reset-test`。
+- 测试：`uv run pytest tests -q` → **699 passed, 138 deselected**（新增 18 个离线
+  纯逻辑测试，覆盖分位/成本/token 解析/契约映射/“不得假成功”断言）。
+
+## 13. 真实供应商故障演练（T39 / #39，受控）
+
+### 13.1 条件
+
+- 假供应商：`scripts/fake_supplier.py`，`127.0.0.1:19999`，OpenAI 兼容
+  `POST /v1/chat/completions`，模式由 `GET /__mode?mode=…` 切换；
+- 临时 API：`127.0.0.1:18081`，`DEEPSEEK_BASE_URL` 指向假供应商，
+  `LLM_TIMEOUT_SECONDS=2`、`LLM_MAX_RETRIES=0`；与线上容器完全隔离；
+- worker：`python -m bank_assistant.worker --once`，同样指向假供应商；
+- 数据库：`bank_assistant_test`；连接被拒通过**停止假供应商**制造，不伪造异常；
+- 演练脚本：`scripts/supplier_failure_drill.py`；正式结果为 `run_tag=drill2`。
+
+### 13.2 四类映射（请求 → 响应 → DB）
+
+| 上游故障 | API 状态 / 稳定码 / retryable | trace_id | DB 建议 | DB 质检 | findings |
+|---|---|---|---|---|---|
+| HTTP 429（RateLimitError） | **429 / `MODEL_RATE_LIMITED` / true** | `t39-drill-drill2-rate_limit` | `failed`，answer `""`，citations 0，`model_status=rate_limited` | `failed / MODEL_RATE_LIMITED` | **0** |
+| 读超时（APITimeoutError，2s） | **504 / `MODEL_TIMEOUT` / true** | `t39-drill-drill2-timeout` | `failed`，answer `""`，citations 0，`model_status=timeout` | `failed / MODEL_TIMEOUT` | **0** |
+| 连接被拒（APIConnectionError） | **503 / `MODEL_UNAVAILABLE` / true** | `t39-drill-drill2-connection_refused` | `failed`，answer `""`，citations 0，`model_status=provider_unavailable` | `failed / MODEL_UNAVAILABLE` | **0** |
+| HTTP 200 + 非法 JSON | **502 / `MODEL_INVALID_STRUCTURE` / true** | `t39-drill-drill2-invalid_json` | `failed`，answer `""`，citations 0，`model_status=invalid_structure` | `failed / INVALID_MODEL_OUTPUT` | **0** |
+
+细节：
+
+- 假供应商统计：`rate_limit` / `timeout` / `invalid_json` 各 5 次请求
+  （每类 = 2 次候选答复模型调用 + 3 次质检 worker 尝试），状态分别为 429/200/200；
+- `connection_refused` 停止假供应商后请求在传输层失败，未经过假供应商计数；
+- 4 条建议均 `status=failed`、`answer=''`、`citations=[]`；4 条质检均 `failed`、
+  `findings=0`；**没有任何 2xx 假成功、没有零分报告**；
+- 脚本退出码 0，`all_passed=true`；演练后临时 API（18081）、假供应商（19999）已停止，
+  端口均已释放；线上 `bank-assistant-api` 与 demo/dev 库未被触碰。
+- 说明：首次演练脚本的 worker 未指向假供应商（打到真实 DeepSeek），该次结果作废；
+  测试库中保留其 failed 行，正式证据以上表 `drill2` 的 trace_id 为准。
+
+### 13.3 复跑
+
+```bash
+. .local-data/t39-artifacts/run/env.sh   # 仅本地临时环境；DATABASE_URL 必须指向 *_test
+.venv/bin/python scripts/supplier_failure_drill.py --port 18081 --fake-port 19999 \
+  --output .local-data/t39-artifacts/supplier-failure-drill.json
+```

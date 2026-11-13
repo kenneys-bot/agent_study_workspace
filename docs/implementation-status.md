@@ -1,8 +1,8 @@
 # 执行进度
 
 当前里程碑：M0–M7 全部 **ACCEPTED**（负责人 2026-11-13 明确签收）；继续推进 M7 后续风险项与真实微调实验。M6 已交付（T28 harness、T35 真实 QLoRA 已执行；T36 已把 test 核心诉求 Recall@5 提到 0.944）
-当前任务：T35 真实微调已完成（2026-11-13）；T36、T37 已完成（T37 已发布 v0.1.1，检索改进落到生产链路）
-当前状态：M1–M5 已交付（等待负责人验收）；M6 已交付（T26/T27 完成、T28 harness 交付、**T35 真实训练已执行：tuned 0.76 vs baseline 0.64 / macro-F1 0.7441 vs 0.6138，n=50**；T36 检索改进 test R@5 0.944；引用支持度 NOT_MEASURED）；**M7-01～M7-06 已交付**（不可变镜像部署、备份恢复/回滚/索引重建、指标与脱敏日志、限流/输入上限/安全测试、发布清单与 `make release-verify`；2026-11-12）。T37 已把 title_chunk + 确定性重排落到生产并重建线上索引（v0.1.1）。计划 §7 的 10 并发压测已由 T38 实测达标（P95 最大 43.224ms、0 错误），DB 停机/RTO 已实测；Recall@5/引用支持度/24h 满窗仍未全部达成，见 [M7 报告](milestones/M7-report.md)、[M7 性能报告](milestones/M7-performance-report.md) 与 [风险清单](ops/risk-register.md)
+当前任务：T35 真实微调已完成（2026-11-13）；T36、T37 已完成（T37 已发布 v0.1.1，检索改进落到生产链路）；T39 已完成质检 P95 实测与供应商故障演练
+当前状态：M1–M5 已交付（等待负责人验收）；M6 已交付（T26/T27 完成、T28 harness 交付、**T35 真实训练已执行：tuned 0.76 vs baseline 0.64 / macro-F1 0.7441 vs 0.6138，n=50**；T36 检索改进 test R@5 0.944；引用支持度 NOT_MEASURED）；**M7-01～M7-06 已交付**（不可变镜像部署、备份恢复/回滚/索引重建、指标与脱敏日志、限流/输入上限/安全测试、发布清单与 `make release-verify`；2026-11-12）。T37 已把 title_chunk + 确定性重排落到生产并重建线上索引（v0.1.1）。计划 §7 的 10 并发压测已由 T38 实测达标（P95 最大 43.224ms、0 错误），DB 停机/RTO 已实测；T39 实测质检接收 P95 **245.244ms**、完成 P95 **41.879s**（n=60），但成功率仅 **10/60**（50 次 `EVIDENCE_INVALID`），并完成 429/504/503/502 四类供应商故障映射演练。Recall@5/引用支持度/24h 满窗/质检成功率仍未全部达成，见 [M7 报告](milestones/M7-report.md)、[M7 性能报告](milestones/M7-performance-report.md) 与 [风险清单](ops/risk-register.md)
 本机代码分支：`feat/bank-assistant`（集成分支；T31 在 `ticket/T31` 打包，T35 在 `ticket/T35` 执行真实微调，T37 在 `ticket/T37` 落地检索改进）
 发布代码SHA：`3a04952`（`v0.1.1` 镜像身份；后续文档提交不改变镜像）
 Ubuntu代码SHA：`3a04952`（服务镜像与服务器 checkout 一致；镜像 `bank-assistant:api-3a04952`；T35 微调执行 SHA `1746d16` 仅用于训练产物，不是服务镜像）
@@ -10,7 +10,7 @@ Ubuntu代码SHA：`3a04952`（服务镜像与服务器 checkout 一致；镜像 
 
 ## 2026-11-13 性能与稳定性
 
-`docs/milestones/M7-performance-report.md`：10 并发 × 10 分钟压测（344,734 请求、574.54 rps、0 错误，非模型 API P95 ≤43.2ms，§7 达标）；replay 建议接口 P95 464ms；受控故障演练 API 重启 1.863s / DB 重启 503→200 1.820s 恢复，演练后无重复任务/报告；24h 探测已启动（2026-11-13T03:28Z，PID 114078），计划 2026-11-14 汇总。
+`docs/milestones/M7-performance-report.md`：10 并发 × 10 分钟压测（344,734 请求、574.54 rps、0 错误，非模型 API P95 ≤43.2ms，§7 达标）；replay 建议接口 P95 464ms；受控故障演练 API 重启 1.863s / DB 重启 503→200 1.820s 恢复，演练后无重复任务/报告；T39 质检 P95 接收 245.244ms / 完成 41.879s、成功率 10/60，供应商 429/504/503/502 映射全部通过；24h 探测已启动（2026-11-13T03:28Z，PID 114078），计划 2026-11-14 汇总。
 
 ## 2026-11-13 继续推进（签收后）
 
@@ -161,6 +161,7 @@ M5 报告：`docs/milestones/M5-report.md`（T25 交付）。web 48 tests、`mak
 | #31 T30 监控/日志/安全测试 | READY_FOR_ACCEPTANCE | 650 unit + 138 integration；真实 `/metrics`/trace_id 日志/密文扫描 0；`docs/milestones/M7-observability-report.md` |
 | #32 T31 发布包与运维手册 | READY_FOR_ACCEPTANCE | `docs/releases/v0.1.0.md` + `release.json`（SHA/镜像/传输校验/Alembic/索引/模型）；`make release-verify` PASS；`docs/ops/{dependency-audit,risk-register,runbook}.md`；[M7 验收报告](milestones/M7-report.md) |
 | #38 T38 容量压测 / 24h 探测 / 受控故障演练 | DONE（24h 探测 IN_PROGRESS） | 10 并发×600s：344,734 请求、0 错误、P95 最大 43.224ms；探测已启动（observed 25 分钟）；API/DB 重启恢复 1.863s/1.820s、任务不变量 0 running/0 重复；见 [M7 性能报告](milestones/M7-performance-report.md) |
+| #39 T39 质检 P95 与真实供应商故障演练 | DONE（成功率风险 R-19 开放） | 真实 DeepSeek、5 worker/5 并发、60 次质检：POST P95 245.244ms、完成 P95 41.879s、成功 P95 32.146s；成功 10/60、失败 50/60 均 `EVIDENCE_INVALID` 且 findings=0；token 256,621/37,309、估算 ¥0.8117；429/504/503/502 四类映射全部正确、无假成功；见 [M7 性能报告 §12/§13](milestones/M7-performance-report.md) |
 
 ## T38 容量压测、稳定性探测与受控故障演练（#38，2026-11-13）
 
@@ -175,6 +176,23 @@ M5 报告：`docs/milestones/M5-report.md`（T25 交付）。web 48 tests、`mak
 | 边界 | 未重启服务器、未触碰 redis/dingtalk、未降 schema；同机回环/单实例，不外推 LAN/多实例 |
 | 测试 | `uv run pytest tests`：**681 passed, 138 deselected**（新增压测/探测纯逻辑 17 例） |
 | 报告/脚本 | [M7 性能报告](milestones/M7-performance-report.md)；`scripts/load_test.py`、`scripts/probe_uptime.py`；运维手册 §13 |
+
+## T39 质检任务 P95 实测与真实供应商故障演练（#39，2026-11-13）
+
+| 项 | 实测/结果 |
+|---|---|
+| 环境 | Mac 临时 API `127.0.0.1:18080`（未触碰线上）、`bank_assistant_test`（隧道 15432，迁移 `0011`）、独立索引 `idx-20261113T035753Z-4e8139e2`、5 个真实 worker、`MODEL_MODE=live` / `deepseek-chat` |
+| 样本 | 5 并发提交，2 批各 30 次，共 **60 次**；6 段合成会话轮转，每条 2 条规则 |
+| 接收延迟 | POST P95 **245.244ms**（n=30，线性插值），≤1s **PASS** |
+| 完成时间 | 全部终态 P95 **41.879s**（n=60）；成功任务 P95 **32.146s**（n=10）；均 ≤60s **PASS（延迟）** |
+| 成功率 | **10/60 succeeded**；50 次 `EVIDENCE_INVALID`（83.3%），失败 findings 全为 0；无 2xx 假成功 |
+| 失败原因 | 真实模型证据区间偏移/引文多句号（`end` 少 1、`end=39` vs 32 等），被契约证据校验拒绝；不是限流/超时 |
+| token/成本 | 235 次 live 模型调用全部 `succeeded`；输入 256,621 / 输出 37,309；按 2025-02-09 官方价目快照估算 **¥0.8117**（预算 ¥5） |
+| 供应商故障演练 | 本地假供应商 + 临时 API `18081`：429→`MODEL_RATE_LIMITED`、2s 超时→504 `MODEL_TIMEOUT`、连接被拒→503 `MODEL_UNAVAILABLE`、非法 JSON→502 `MODEL_INVALID_STRUCTURE`；4 条建议 `failed`/answer 空、4 条质检 `failed`/findings 0；trace `t39-drill-drill2-*` |
+| 清理/边界 | 临时 API、假供应商、5 个 worker 已停止；`bank_assistant_dev`/`bank_assistant_demo` 本轮 T39 任务 0；测试库保留实测行（可 reset）；未重启服务器、未触碰线上容器 |
+| 风险 | 新增 **R-19**（live 质检成功率 16.7%）；§7 延迟 PASS 不能代表功能健康 |
+| 测试 | `uv run pytest tests -q`：**699 passed, 138 deselected**（新增 18 个离线纯逻辑测试：分位/成本/token 解析/契约映射/假成功断言） |
+| 报告/脚本 | [M7 性能报告](milestones/M7-performance-report.md) §12/§13；`scripts/inspection_latency_measure.py`、`scripts/fake_supplier.py`、`scripts/supplier_failure_drill.py` |
 
 ## T31 发布包（#32，2026-11-12）
 
