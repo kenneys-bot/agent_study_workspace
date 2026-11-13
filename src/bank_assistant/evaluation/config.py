@@ -17,7 +17,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Mapping
@@ -26,17 +26,29 @@ from bank_assistant.datasets.corpus import CORPUS_AS_OF
 from bank_assistant.datasets.split_guard import require_frozen_test_split
 
 __all__ = [
+    "BUSINESS_FILTER_MODES",
+    "EMBEDDING_TEXT_MODES",
     "EvalConfig",
     "EvalConfigError",
     "MODES",
     "PriceEntry",
+    "RetrievalOptions",
+    "ScenarioRetrievalOverride",
     "TASKS",
     "load_eval_config",
+    "load_eval_payload",
+    "load_retrieval_options",
+    "parse_retrieval_options",
 ]
 
 MODES: frozenset[str] = frozenset({"replay", "live"})
 TASKS: tuple[str, ...] = ("retrieval", "inspection")
 EMBEDDING_PROVIDERS: frozenset[str] = frozenset({"replay_lexical", "fastembed"})
+# T36：检索改进必须可单独回退，因此全部走 EVAL_CONFIG 的 retrieval 段。
+EMBEDDING_TEXT_MODES: frozenset[str] = frozenset(
+    {"chunk", "title_chunk", "title_source_chunk"}
+)
+BUSINESS_FILTER_MODES: frozenset[str] = frozenset({"hard", "soft", "off"})
 
 _TOP_LEVEL_KEYS: frozenset[str] = frozenset(
     {
@@ -59,6 +71,7 @@ _TOP_LEVEL_KEYS: frozenset[str] = frozenset(
         "tasks",
         "run_id",
         "notes",
+        "retrieval",
     }
 )
 _MODEL_KEYS: frozenset[str] = frozenset({"provider", "model"})
@@ -104,6 +117,65 @@ class PriceEntry:
 
 
 @dataclass(frozen=True, slots=True)
+class ScenarioRetrievalOverride:
+    """单个场景的检索参数覆盖；``None`` 表示沿用全局值。
+
+    T36 允许按场景调参（例如 complaint 放宽业务过滤），但每个覆盖都显式
+    写在配置里，能单独删掉回退，不做隐式特判。
+    """
+
+    business_filter: str | None = None
+    min_similarity: float | None = None
+    top_k: int | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "business_filter": self.business_filter,
+            "min_similarity": self.min_similarity,
+            "top_k": self.top_k,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class RetrievalOptions:
+    """检索改进开关；默认值等价于 T27 的旧行为（硬过滤 + 仅分块正文）。
+
+    - ``embedding_text``：``chunk`` 只用分块正文；``title_chunk`` 额外拼标题；
+      ``title_source_chunk`` 再拼来源类型。改变它就会改变索引向量，
+      ``index_version`` 随之变化（ADR-0005）。
+    - ``business_filter``：``hard`` 只保留业务内候选；``soft`` 给业务内候选
+      加 ``business_bonus`` 相似度奖励但不硬排除跨业务候选；``off`` 不过滤。
+    """
+
+    embedding_text: str = "chunk"
+    business_filter: str = "hard"
+    business_bonus: float = 0.02
+    rerank_alpha: float = 0.0
+    rerank_pool: int = 20
+    scenario_overrides: Mapping[str, ScenarioRetrievalOverride] = field(
+        default_factory=dict
+    )
+
+    def for_scenario(self, scenario: str | None) -> ScenarioRetrievalOverride:
+        if scenario is None:
+            return ScenarioRetrievalOverride()
+        return self.scenario_overrides.get(scenario, ScenarioRetrievalOverride())
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "embedding_text": self.embedding_text,
+            "business_filter": self.business_filter,
+            "business_bonus": self.business_bonus,
+            "rerank_alpha": self.rerank_alpha,
+            "rerank_pool": self.rerank_pool,
+            "scenario_overrides": {
+                scenario: override.to_dict()
+                for scenario, override in self.scenario_overrides.items()
+            },
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class EvalConfig:
     """一次评测运行的完整配置；构造后不再变化。"""
 
@@ -127,6 +199,7 @@ class EvalConfig:
     tasks: tuple[str, ...]
     run_id: str | None = None
     notes: Mapping[str, Any] | None = None
+    retrieval: RetrievalOptions = field(default_factory=RetrievalOptions)
 
     @property
     def model_mode(self) -> str:
@@ -165,7 +238,13 @@ class EvalConfig:
             "knowledge_as_of": self.knowledge_as_of.isoformat(),
             "tasks": list(self.tasks),
             "run_id": self.run_id,
+            "retrieval": self.retrieval.to_dict(),
         }
+
+
+def load_eval_payload(path: Path | str) -> dict[str, Any]:
+    """读取原始 EVAL_CONFIG（YAML/JSON）但不做 split 守卫，供 dev 调参复用。"""
+    return _read_payload(Path(path))
 
 
 def _read_payload(path: Path) -> dict[str, Any]:
@@ -220,6 +299,120 @@ def _number(value: Any, label: str, *, minimum: float | None = None) -> float:
     if minimum is not None and number < minimum:
         raise EvalConfigError(f"{label} 不能小于 {minimum}")
     return number
+
+
+def parse_retrieval_options(payload: Any) -> RetrievalOptions:
+    """解析 ``retrieval`` 段；缺省返回旧行为，显式写错就失败。
+
+    单独暴露入口，是为了让只跑 dev 的调参脚本复用同一份配置而不必通过
+    ``load_eval_config`` 的冻结 test 守卫（正式评测仍然只允许 test）。
+    """
+    if payload is None:
+        return RetrievalOptions()
+    if not isinstance(payload, Mapping):
+        raise EvalConfigError("retrieval 段必须是对象")
+    _check_unknown(
+        payload,
+        frozenset(
+            {
+                "embedding_text",
+                "business_filter",
+                "business_bonus",
+                "rerank_alpha",
+                "rerank_pool",
+                "scenario_overrides",
+            }
+        ),
+        "retrieval",
+    )
+    embedding_text = str(payload.get("embedding_text", "chunk"))
+    if embedding_text not in EMBEDDING_TEXT_MODES:
+        raise EvalConfigError(
+            f"retrieval.embedding_text 只能是 {sorted(EMBEDDING_TEXT_MODES)}"
+        )
+    business_filter = str(payload.get("business_filter", "hard"))
+    if business_filter not in BUSINESS_FILTER_MODES:
+        raise EvalConfigError(
+            f"retrieval.business_filter 只能是 {sorted(BUSINESS_FILTER_MODES)}"
+        )
+    business_bonus = _number(
+        payload.get("business_bonus", 0.02), "retrieval.business_bonus", minimum=0.0
+    )
+    if business_bonus > 1.0:
+        raise EvalConfigError("retrieval.business_bonus 不能大于 1")
+    rerank_alpha = _number(
+        payload.get("rerank_alpha", 0.0), "retrieval.rerank_alpha", minimum=0.0
+    )
+    if rerank_alpha > 1.0:
+        raise EvalConfigError("retrieval.rerank_alpha 不能大于 1")
+    rerank_pool = _positive_int(
+        payload.get("rerank_pool", 20), "retrieval.rerank_pool"
+    )
+
+    overrides_raw = payload.get("scenario_overrides", {})
+    if not isinstance(overrides_raw, Mapping):
+        raise EvalConfigError("retrieval.scenario_overrides 必须是对象")
+    overrides: dict[str, ScenarioRetrievalOverride] = {}
+    for scenario, entry in overrides_raw.items():
+        if not isinstance(entry, Mapping):
+            raise EvalConfigError(
+                f"retrieval.scenario_overrides.{scenario} 必须是对象"
+            )
+        _check_unknown(
+            entry,
+            frozenset({"business_filter", "min_similarity", "top_k"}),
+            f"retrieval.scenario_overrides.{scenario}",
+        )
+        override_filter = (
+            str(entry["business_filter"])
+            if entry.get("business_filter") is not None
+            else None
+        )
+        if (
+            override_filter is not None
+            and override_filter not in BUSINESS_FILTER_MODES
+        ):
+            raise EvalConfigError(
+                f"retrieval.scenario_overrides.{scenario}.business_filter 只能是 "
+                f"{sorted(BUSINESS_FILTER_MODES)}"
+            )
+        override_similarity = (
+            _number(
+                entry["min_similarity"],
+                f"retrieval.scenario_overrides.{scenario}.min_similarity",
+            )
+            if entry.get("min_similarity") is not None
+            else None
+        )
+        if override_similarity is not None and not 0.0 <= override_similarity <= 1.0:
+            raise EvalConfigError(
+                f"retrieval.scenario_overrides.{scenario}.min_similarity 必须在 [0,1]"
+            )
+        overrides[str(scenario)] = ScenarioRetrievalOverride(
+            business_filter=override_filter,
+            min_similarity=override_similarity,
+            top_k=(
+                _positive_int(
+                    entry["top_k"],
+                    f"retrieval.scenario_overrides.{scenario}.top_k",
+                )
+                if entry.get("top_k") is not None
+                else None
+            ),
+        )
+    return RetrievalOptions(
+        embedding_text=embedding_text,
+        business_filter=business_filter,
+        business_bonus=business_bonus,
+        rerank_alpha=rerank_alpha,
+        rerank_pool=rerank_pool,
+        scenario_overrides=overrides,
+    )
+
+
+def load_retrieval_options(path: Path | str) -> RetrievalOptions:
+    """从 EVAL_CONFIG 只读 ``retrieval`` 段；不做 split 守卫（供 dev 调参）。"""
+    return parse_retrieval_options(_read_payload(Path(path)).get("retrieval"))
 
 
 def load_eval_config(path: Path | str) -> EvalConfig:
@@ -353,6 +546,7 @@ def load_eval_config(path: Path | str) -> EvalConfig:
         tasks=tasks,
         run_id=str(payload["run_id"]) if payload.get("run_id") else None,
         notes=dict(notes) if notes else None,
+        retrieval=parse_retrieval_options(payload.get("retrieval")),
     )
 
     if config.is_live:

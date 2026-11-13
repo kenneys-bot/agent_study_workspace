@@ -26,7 +26,7 @@ from __future__ import annotations
 import hashlib
 import re
 import time
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
@@ -60,6 +60,34 @@ STRATEGIES: tuple[str, ...] = (
     "core_intent_filter",
 )
 
+# T36：可配置的检索增强。全部是 harness 构造参数，默认值就是 T27 旧行为，
+# 因此任何一项都可以在 EVAL_CONFIG 里单独关掉回退。
+EMBEDDING_TEXT_CHUNK = "chunk"
+EMBEDDING_TEXT_TITLE_CHUNK = "title_chunk"
+EMBEDDING_TEXT_TITLE_SOURCE_CHUNK = "title_source_chunk"
+EMBEDDING_TEXT_MODES: frozenset[str] = frozenset(
+    {
+        EMBEDDING_TEXT_CHUNK,
+        EMBEDDING_TEXT_TITLE_CHUNK,
+        EMBEDDING_TEXT_TITLE_SOURCE_CHUNK,
+    }
+)
+BUSINESS_FILTER_HARD = "hard"
+BUSINESS_FILTER_SOFT = "soft"
+BUSINESS_FILTER_OFF = "off"
+BUSINESS_FILTER_MODES: frozenset[str] = frozenset(
+    {BUSINESS_FILTER_HARD, BUSINESS_FILTER_SOFT, BUSINESS_FILTER_OFF}
+)
+_CJK_OR_LATIN = re.compile(r"[0-9a-z\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]+")
+
+
+def _char_grams(text: str) -> frozenset[str]:
+    """字符二元组集合；用于确定性的本地词面重排，不引入外部模型/网络。"""
+    cleaned = "".join(_CJK_OR_LATIN.findall(text.lower()))
+    if len(cleaned) <= 1:
+        return frozenset({cleaned}) if cleaned else frozenset()
+    return frozenset(cleaned[index : index + 2] for index in range(len(cleaned) - 1))
+
 
 class QueryStrategy:
     """三个变体的稳定字符串标识（用常量而非枚举，便于写进 JSON）。"""
@@ -71,12 +99,17 @@ class QueryStrategy:
 
 @dataclass(frozen=True, slots=True)
 class SnapshotChunk:
-    """知识快照中的一个分块；``key`` 与数据集 ``chunk_id`` 同构。"""
+    """知识快照中的一个分块；``key`` 与数据集 ``chunk_id`` 同构。
+
+    ``text`` 始终是原文区间（引用必须可逐字回验）；``title``/``source_type``
+    只用于构造 embedding 输入，不改变分块边界与 ``chunk_id``。
+    """
 
     key: str
     doc_id: str
     text: str
     business_type: str
+    title: str
     source_type: str
     start: int
     end: int
@@ -141,6 +174,12 @@ class RetrievalHarness:
         top_k: int = 5,
         min_similarity: float = 0.55,
         as_of: datetime = CORPUS_AS_OF,
+        embedding_text: str = EMBEDDING_TEXT_CHUNK,
+        business_filter: str = BUSINESS_FILTER_HARD,
+        business_bonus: float = 0.02,
+        rerank_alpha: float = 0.0,
+        rerank_pool: int = 20,
+        scenario_overrides: Mapping[str, Mapping[str, Any]] | None = None,
     ) -> None:
         if top_k <= 0:
             raise ValueError("top_k 必须为正整数")
@@ -148,17 +187,41 @@ class RetrievalHarness:
             raise ValueError("min_similarity 必须在 [0, 1] 内")
         if as_of.tzinfo is None:
             raise ValueError("as_of 必须带时区")
+        if embedding_text not in EMBEDDING_TEXT_MODES:
+            raise ValueError(
+                f"embedding_text 只能是 {sorted(EMBEDDING_TEXT_MODES)}"
+            )
+        if business_filter not in BUSINESS_FILTER_MODES:
+            raise ValueError(
+                f"business_filter 只能是 {sorted(BUSINESS_FILTER_MODES)}"
+            )
+        if not 0.0 <= business_bonus <= 1.0:
+            raise ValueError("business_bonus 必须在 [0, 1] 内")
+        if not 0.0 <= rerank_alpha <= 1.0:
+            raise ValueError("rerank_alpha 必须在 [0, 1] 内")
+        if rerank_pool <= 0:
+            raise ValueError("rerank_pool 必须为正整数")
         self.corpus = corpus
         self.provider = provider
         self.top_k = top_k
         self.min_similarity = min_similarity
         self.as_of = as_of
+        self.embedding_text = embedding_text
+        self.business_filter = business_filter
+        self.business_bonus = business_bonus
+        self.rerank_alpha = rerank_alpha
+        self.rerank_pool = rerank_pool
+        self.scenario_overrides: dict[str, dict[str, Any]] = {
+            scenario: dict(values)
+            for scenario, values in (scenario_overrides or {}).items()
+        }
         self._chunks: tuple[SnapshotChunk, ...] = tuple(
             SnapshotChunk(
                 key=f"{entry.doc_id}#c{index}",
                 doc_id=entry.doc_id,
                 text=chunk.span.text,
                 business_type=entry.business_type,
+                title=entry.title,
                 source_type=entry.source_type,
                 start=chunk.span.start,
                 end=chunk.span.end,
@@ -168,23 +231,57 @@ class RetrievalHarness:
             for index, chunk in enumerate(entry.chunks())
         )
         self._vectors: tuple[tuple[float, ...], ...] = tuple(
-            tuple(vector) for vector in provider.embed([chunk.text for chunk in self._chunks])
+            tuple(vector)
+            for vector in provider.embed(
+                [self._embedding_input(chunk) for chunk in self._chunks]
+            )
         )
         if len(self._vectors) != len(self._chunks):
             raise ValueError("embedding 返回数量与知识分块数量不一致")
+        self._chunk_by_key = {chunk.key: chunk for chunk in self._chunks}
         self.knowledge_snapshot_id = corpus.knowledge_snapshot()
         self.rule_snapshot_id = corpus.rule_snapshot()
         self.embedding_version = provider.model_version
+        # 索引身份必须包含 embedding 输入形态：标题/来源拼入会改变向量，
+        # 于是 index_version 变化，符合 ADR-0005「改索引必须新建版本」。
         digest = hashlib.sha256(
-            f"{provider.model_version}|{self.knowledge_snapshot_id}|{as_of.isoformat()}".encode(
-                "utf-8"
-            )
+            (
+                f"{provider.model_version}|{self.knowledge_snapshot_id}|"
+                f"{as_of.isoformat()}|{embedding_text}"
+            ).encode("utf-8")
         ).hexdigest()[:12]
         self.index_version = f"eval-{_slug(provider.model_version)}-{digest}"
 
     @property
     def chunks(self) -> tuple[SnapshotChunk, ...]:
         return self._chunks
+
+    def _embedding_input(self, chunk: SnapshotChunk) -> str:
+        if self.embedding_text == EMBEDDING_TEXT_CHUNK:
+            return chunk.text
+        if self.embedding_text == EMBEDDING_TEXT_TITLE_CHUNK:
+            return f"{chunk.title}\n{chunk.text}"
+        return f"{chunk.title}\n来源类型：{chunk.source_type}\n{chunk.text}"
+
+    def _override(self, scenario: str | None) -> Mapping[str, Any]:
+        if scenario is None:
+            return {}
+        return self.scenario_overrides.get(scenario, {})
+
+    def business_filter_mode(self, scenario: str | None = None) -> str:
+        """该场景实际生效的业务过滤模式（场景覆盖优先）。"""
+        return str(
+            self._override(scenario).get("business_filter") or self.business_filter
+        )
+
+    def similarity_threshold(self, scenario: str | None = None) -> float:
+        """该场景实际生效的无答案相似度阈值（场景覆盖优先）。"""
+        value = self._override(scenario).get("min_similarity")
+        return self.min_similarity if value is None else float(value)
+
+    def top_k_for(self, scenario: str | None = None) -> int:
+        value = self._override(scenario).get("top_k")
+        return self.top_k if value is None else int(value)
 
     def query(
         self,
@@ -193,16 +290,22 @@ class RetrievalHarness:
         business_type: str | None = None,
         require_active: bool = False,
         top_k: int | None = None,
+        scenario: str | None = None,
     ) -> tuple[ScoredHit, ...]:
         if not text.strip():
             return ()
+        mode = self.business_filter_mode(scenario)
+        limit = top_k or self.top_k_for(scenario)
         vector = tuple(float(value) for value in self.provider.embed([text])[0])
         query_norm = _norm(vector)
-        scored: list[ScoredHit] = []
+        scored: list[tuple[float, ScoredHit]] = []
         for chunk, chunk_vector in zip(self._chunks, self._vectors, strict=True):
-            if business_type is not None and chunk.business_type != business_type:
-                continue
             if require_active and not chunk.active:
+                continue
+            in_business = (
+                business_type is not None and chunk.business_type == business_type
+            )
+            if business_type is not None and mode == BUSINESS_FILTER_HARD and not in_business:
                 continue
             chunk_norm = _norm(chunk_vector)
             similarity = (
@@ -211,23 +314,57 @@ class RetrievalHarness:
                 if query_norm and chunk_norm
                 else 0.0
             )
+            effective = (
+                similarity + self.business_bonus
+                if mode == BUSINESS_FILTER_SOFT and in_business
+                else similarity
+            )
             scored.append(
-                ScoredHit(
-                    chunk_key=chunk.key,
-                    doc_id=chunk.doc_id,
-                    business_type=chunk.business_type,
-                    active=chunk.active,
-                    start=chunk.start,
-                    end=chunk.end,
-                    similarity=similarity,
+                (
+                    effective,
+                    ScoredHit(
+                        chunk_key=chunk.key,
+                        doc_id=chunk.doc_id,
+                        business_type=chunk.business_type,
+                        active=chunk.active,
+                        start=chunk.start,
+                        end=chunk.end,
+                        similarity=similarity,
+                    ),
                 )
             )
-        scored.sort(key=lambda hit: (-hit.similarity, hit.chunk_key))
-        return tuple(scored[: (top_k or self.top_k)])
+        scored.sort(key=lambda pair: (-pair[0], pair[1].chunk_key))
+        limit = max(1, limit)
+        if self.rerank_alpha > 0.0 and len(scored) > limit:
+            # 确定性本地重排：只在候选池内用「查询词面覆盖率」修正排序，
+            # 不调用模型、不联网；alpha=0 时完全跳过，可单独回退。
+            pool = scored[: max(self.rerank_pool, limit)]
+            query_grams = _char_grams(text)
+            reranked: list[tuple[float, ScoredHit]] = []
+            for effective, hit in pool:
+                chunk = self._chunk_by_key[hit.chunk_key]
+                chunk_grams = _char_grams(f"{chunk.title}\n{chunk.text}")
+                coverage = (
+                    len(query_grams & chunk_grams) / len(query_grams)
+                    if query_grams
+                    else 0.0
+                )
+                reranked.append((effective + self.rerank_alpha * coverage, hit))
+            reranked.sort(key=lambda pair: (-pair[0], pair[1].chunk_key))
+            return tuple(hit for _, hit in reranked[:limit])
+        return tuple(hit for _, hit in scored[:limit])
 
-    def is_no_answer(self, hits: Sequence[ScoredHit]) -> bool:
-        """无候选或最高相似度低于门槛时判为「无答案」。"""
-        return not hits or hits[0].similarity < self.min_similarity
+    def is_no_answer(
+        self, hits: Sequence[ScoredHit], *, scenario: str | None = None
+    ) -> bool:
+        """无候选或最高相似度低于门槛时判为「无答案」。
+
+        软过滤下排序带业务奖励，但「有没有答案」仍应看原始余弦相似度，
+        否则跨业务候选会被奖励分掩盖；因此取候选中的最大原始相似度。
+        """
+        if not hits:
+            return True
+        return max(hit.similarity for hit in hits) < self.similarity_threshold(scenario)
 
 
 def _norm(vector: Sequence[float]) -> float:
@@ -323,6 +460,7 @@ def run_retrieval(
                 plan.retrieval_query,
                 business_type=item.business_type if plan.business_filter else None,
                 require_active=plan.validity_filter,
+                scenario=item.scenario,
             )
             latency_ms = (time.perf_counter() - started) * 1000
             usage = _rewrite_usage(rewriter) if strategy == QueryStrategy.CORE_INTENT else Usage()
@@ -333,7 +471,7 @@ def run_retrieval(
             )
             input_tokens = estimate_tokens(plan.retrieval_query) + usage.input_tokens
             output_tokens = usage.output_tokens
-            no_answer = harness.is_no_answer(hits)
+            no_answer = harness.is_no_answer(hits, scenario=item.scenario)
             records.append(
                 RetrievalRecord(
                     variant=strategy,
@@ -365,6 +503,11 @@ def run_retrieval(
                     "retrieval_query": plan.retrieval_query,
                     "rewrite": plan.rewrite,
                     "business_filter": plan.business_filter,
+                    "business_filter_mode": (
+                        harness.business_filter_mode(item.scenario)
+                        if plan.business_filter
+                        else BUSINESS_FILTER_OFF
+                    ),
                     "validity_filter": plan.validity_filter,
                     "answerable": item.answerable,
                     "unanswerable_reason": item.unanswerable_reason,

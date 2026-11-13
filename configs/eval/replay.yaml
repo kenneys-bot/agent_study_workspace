@@ -26,6 +26,19 @@ embedding:
 
 pricing: []
 
+# T36 检索改进（每项都能单独关掉回退到 T27 旧行为）：
+# - embedding_text: title_chunk 把标题拼入 embedding 输入（索引向量变化，
+#   index_version 随之变化；分块边界与 chunk_id 不变）。
+# - rerank_alpha: 在候选池内用查询词面覆盖率做确定性本地重排，alpha=0 关闭。
+# - business_filter: 默认 hard（只保留业务内候选）；soft/off 留给按场景实验。
+retrieval:
+  embedding_text: title_chunk
+  business_filter: hard
+  business_bonus: 0.02
+  rerank_alpha: 0.2
+  rerank_pool: 20
+  scenario_overrides: {}
+
 scope_id: demo-bank
 tasks:
   - retrieval
@@ -34,3 +47,4 @@ tasks:
 notes:
   purpose: "replay：只验证流水线与产物，不产生质量门槛结论"
   embedding: "replay-lexical-char2gram-v1，不是生产 BGE"
+  retrieval: "T36：title_chunk + 确定性本地重排；dev 调参，test 只报告一次"

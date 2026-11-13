@@ -76,7 +76,10 @@ from bank_assistant.evaluation.retrieval import (
     parse_retrieval_items,
     run_retrieval,
 )
-from bank_assistant.knowledge.embedding import FastEmbedProvider
+from bank_assistant.knowledge.embedding import (
+    FastEmbedProvider,
+    calibration_vector_sha256,
+)
 
 __all__ = ["EvalRun", "run_eval"]
 
@@ -495,8 +498,20 @@ def run_eval(
         top_k=config.top_k,
         min_similarity=config.min_similarity,
         as_of=config.knowledge_as_of,
+        embedding_text=config.retrieval.embedding_text,
+        business_filter=config.retrieval.business_filter,
+        business_bonus=config.retrieval.business_bonus,
+        rerank_alpha=config.retrieval.rerank_alpha,
+        rerank_pool=config.retrieval.rerank_pool,
+        scenario_overrides={
+            scenario: override.to_dict()
+            for scenario, override in config.retrieval.scenario_overrides.items()
+        },
     )
     rules = build_rule_entries(corpus)
+    # ADR-0005：索引身份不只写版本号，也要写 provider 校准向量哈希。评估索引
+    # 重建时重算同一哈希即可证明 embedding 未漂移。
+    calibration_hash = calibration_vector_sha256(provider)
 
     retrieval_records: list[RetrievalRecord] = []
     retrieval_predictions: list[dict[str, Any]] = []
@@ -610,6 +625,8 @@ def run_eval(
             "rule_snapshot": corpus.rule_snapshot(),
             "embedding_version": harness.embedding_version,
             "index_version": harness.index_version,
+            "calibration_vector_sha256": calibration_hash,
+            "retrieval_options": config.retrieval.to_dict(),
             "model_provider": model_provider,
             "model_version": model_version,
             "prompt_version": "eval-v1:"
@@ -783,6 +800,8 @@ def run_eval(
         notes={
             "sample_cap": config.max_items,
             "embedding_provider": config.embedding_provider,
+            "calibration_vector_sha256": calibration_hash,
+            "retrieval_options": config.retrieval.to_dict(),
             "budget_cny": config.budget_cny if config.mode == "live" else None,
             "stop_reason": stopped_reason,
             "replay_notice": (
