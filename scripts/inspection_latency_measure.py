@@ -1,9 +1,17 @@
 #!/usr/bin/env python
-"""质检任务端到端延迟实测客户端（T39 / #39，计划 §7）。
+"""质检任务端到端延迟实测客户端（T39 / #39，T40 / #40；计划 §7）。
 
 对**本地临时 API + 真实 worker + 真实 DeepSeek** 发起 N 次真实质检任务，
 记录每次 ``POST /inspections`` 的接收延迟、从 ``created_at`` 到 ``finished_at``
 的完成时间、终态与失败原因，并汇总 P50/P95/P99、token 与估算成本。
+
+T40 追加（R-19 复测）：
+
+- 从 ``findings`` 汇总逐规则 verdict 分布；
+- 在持久化数据上重新回验 ``quote == content[start:end]``（码点），给出证据
+  核验率，尤其只统计 ``hit`` 证据（必须 100%）；
+- 从 ``inspection_runs.diagnostics`` 汇总 ``evidence_downgrades`` 原因码与
+  ``prompt_version``。
 
 约束（与 T38 压测同一口径）：
 
@@ -15,13 +23,13 @@
 
 用法（本机临时实例，凭据来自仓库外 ``.env``；不打印任何秘密）::
 
-    .local-data/t39-artifacts/run/env.sh
+    .local-data/t40-artifacts/run/env.sh
     .venv/bin/python scripts/inspection_latency_measure.py \
         --base-url http://127.0.0.1:18080 \
-        --state .local-data/t39-artifacts/data/demo-seed-state.json \
+        --state .local-data/t40-artifacts/data/demo-seed-state.json \
         --count 30 --concurrency 5 \
-        --output .local-data/t39-artifacts/inspection-latency.json \
-        --worker-log .local-data/t39-artifacts/run/worker-1.log ...
+        --output .local-data/t40-artifacts/inspection-latency.json \
+        --worker-log .local-data/t40-artifacts/run/worker-1.log ...
 """
 
 from __future__ import annotations
@@ -205,6 +213,174 @@ def summarize(
 # --------------------------------------------------------------------- 运行时
 
 
+def _span_is_valid(span: Any, turn_contents: dict[str, str]) -> bool:
+    """按契约 §4 回验一条证据：码点区间 + quote 与原文逐字相等。"""
+    if not isinstance(span, dict):
+        return False
+    try:
+        turn_id = str(span["turn_id"])
+        start = span["start"]
+        end = span["end"]
+        quote = span["quote"]
+    except KeyError:
+        return False
+    if (
+        isinstance(start, bool)
+        or isinstance(end, bool)
+        or not isinstance(start, int)
+        or not isinstance(end, int)
+        or not isinstance(quote, str)
+    ):
+        return False
+    content = turn_contents.get(turn_id)
+    if content is None or start < 0 or end <= start or end > len(content):
+        return False
+    return content[start:end] == quote
+
+
+def _rule_code_lookup(snapshot: Any) -> dict[str, str]:
+    if not isinstance(snapshot, dict):
+        return {}
+    rules = snapshot.get("rules")
+    if not isinstance(rules, list):
+        return {}
+    lookup: dict[str, str] = {}
+    for rule in rules:
+        if isinstance(rule, dict) and rule.get("rule_version_id"):
+            lookup[str(rule["rule_version_id"])] = str(
+                rule.get("rule_code") or "UNKNOWN"
+            )
+    return lookup
+
+
+def summarize_findings(
+    rows: Sequence[dict[str, Any]],
+    turn_contents: dict[str, str],
+) -> dict[str, Any]:
+    """汇总逐规则 verdict、证据核验率与降级原因（纯逻辑，便于离线测试）。"""
+    verdicts: dict[str, int] = {}
+    per_rule: dict[str, dict[str, int]] = {}
+    spans_total = 0
+    spans_valid = 0
+    hit_findings = 0
+    hit_findings_without_span = 0
+    hit_spans_total = 0
+    hit_spans_valid = 0
+    invalid_hit_examples: list[dict[str, Any]] = []
+    downgrades: dict[str, int] = {}
+    prompt_versions: set[str] = set()
+
+    for row in rows:
+        verdict = str(row.get("machine_verdict") or "UNKNOWN")
+        verdicts[verdict] = verdicts.get(verdict, 0) + 1
+        lookup = _rule_code_lookup(row.get("rule_snapshot"))
+        rule_code = lookup.get(str(row.get("rule_version_id")), "UNKNOWN")
+        bucket = per_rule.setdefault(rule_code, {})
+        bucket[verdict] = bucket.get(verdict, 0) + 1
+
+        diagnostics = row.get("diagnostics")
+        if isinstance(diagnostics, dict):
+            version = diagnostics.get("prompt_version")
+            if version:
+                prompt_versions.add(str(version))
+            for item in diagnostics.get("evidence_downgrades") or []:
+                if isinstance(item, dict):
+                    reason = str(item.get("reason") or "UNKNOWN")
+                    downgrades[reason] = downgrades.get(reason, 0) + 1
+
+        evidence = row.get("evidence") or []
+        if not isinstance(evidence, list):
+            evidence = []
+        checks = [_span_is_valid(span, turn_contents) for span in evidence]
+        spans_total += len(checks)
+        spans_valid += sum(1 for ok in checks if ok)
+        if verdict == "hit":
+            hit_findings += 1
+            hit_spans_total += len(checks)
+            hit_spans_valid += sum(1 for ok in checks if ok)
+            if not checks:
+                hit_findings_without_span += 1
+                if len(invalid_hit_examples) < 5:
+                    invalid_hit_examples.append(
+                        {"rule_code": rule_code, "reason": "no_evidence"}
+                    )
+            elif not all(checks):
+                if len(invalid_hit_examples) < 5:
+                    invalid_hit_examples.append(
+                        {
+                            "rule_code": rule_code,
+                            "reason": "span_mismatch",
+                            "spans": len(checks),
+                            "valid_spans": sum(1 for ok in checks if ok),
+                        }
+                    )
+
+    def rate(numerator: int, denominator: int) -> float | None:
+        return numerator / denominator if denominator else None
+
+    return {
+        "findings_total": len(rows),
+        "verdicts": verdicts,
+        "per_rule": per_rule,
+        "spans_total": spans_total,
+        "spans_valid": spans_valid,
+        "span_validation_rate": rate(spans_valid, spans_total),
+        "hit_findings": hit_findings,
+        "hit_findings_without_span": hit_findings_without_span,
+        "hit_spans_total": hit_spans_total,
+        "hit_spans_valid": hit_spans_valid,
+        "hit_span_validation_rate": rate(hit_spans_valid, hit_spans_total),
+        "all_hit_findings_span_valid": (
+            hit_findings > 0
+            and hit_findings_without_span == 0
+            and hit_spans_valid == hit_spans_total
+            and hit_spans_total > 0
+        ),
+        "invalid_hit_examples": invalid_hit_examples,
+        "downgrades": downgrades,
+        "prompt_versions": sorted(prompt_versions),
+    }
+
+
+def collect_findings(
+    database_url: str, inspection_ids: Sequence[str]
+) -> dict[str, Any]:
+    """从数据库读取本轮 findings/turns 并回验证据（只读，不改数据）。"""
+    ids = sorted({str(item) for item in inspection_ids if item})
+    if not ids:
+        return summarize_findings([], {})
+    engine = create_engine(database_url)
+    try:
+        with engine.connect() as connection:
+            turn_rows = connection.execute(
+                text(
+                    "SELECT DISTINCT t.turn_id::text AS turn_id, t.content "
+                    "FROM turns t JOIN inspection_runs r "
+                    "ON r.conversation_id = t.conversation_id "
+                    "WHERE r.inspection_id::text = ANY(:ids)"
+                ),
+                {"ids": ids},
+            ).mappings().all()
+            finding_rows = connection.execute(
+                text(
+                    "SELECT f.rule_version_id::text AS rule_version_id, "
+                    "f.machine_verdict, f.evidence, "
+                    "r.rule_snapshot, r.diagnostics "
+                    "FROM findings f JOIN inspection_runs r "
+                    "ON r.inspection_id = f.inspection_id "
+                    "WHERE f.inspection_id::text = ANY(:ids)"
+                ),
+                {"ids": ids},
+            ).mappings().all()
+    finally:
+        engine.dispose()
+    turn_contents = {
+        str(row["turn_id"]): str(row["content"]) for row in turn_rows
+    }
+    return summarize_findings([dict(row) for row in finding_rows], turn_contents)
+
+
+
 def _login(client: httpx.Client) -> str:
     response = client.post(
         "/api/v1/auth/login",
@@ -237,6 +413,7 @@ def _submit_all(
     count: int,
     concurrency: int,
     run_tag: str,
+    submit_retries: int = 8,
 ) -> list[dict[str, Any]]:
     headers = {"Authorization": f"Bearer {token}"}
     jobs = [
@@ -251,30 +428,50 @@ def _submit_all(
 
     def submit(job: dict[str, Any]) -> dict[str, Any]:
         record = dict(job)
-        started = time.perf_counter()
-        try:
-            response = client.post(
-                "/api/v1/inspections",
-                json={
-                    "conversation_id": job["conversation_id"],
-                    "business_type": job["business_type"],
-                },
-                headers={
-                    **headers,
-                    "Idempotency-Key": f"t39-{run_tag}-{job['index']:03d}",
-                },
-            )
+        record["submit_attempts"] = 0
+        record["rate_limited_attempts"] = 0
+        for attempt in range(1, max(1, submit_retries) + 1):
+            record["submit_attempts"] = attempt
+            started = time.perf_counter()
+            try:
+                response = client.post(
+                    "/api/v1/inspections",
+                    json={
+                        "conversation_id": job["conversation_id"],
+                        "business_type": job["business_type"],
+                    },
+                    headers={
+                        **headers,
+                        "Idempotency-Key": f"t40-{run_tag}-{job['index']:03d}",
+                    },
+                )
+            except Exception as exc:  # 传输错误显式记录，不混入延迟分位
+                record["post_ms"] = round((time.perf_counter() - started) * 1000, 3)
+                record["http_status"] = None
+                record["submit_error"] = f"{type(exc).__name__}: {exc}"
+                return record
             record["post_ms"] = round((time.perf_counter() - started) * 1000, 3)
             record["http_status"] = response.status_code
             body = response.json()
+            if response.status_code == 202:
+                record["inspection_id"] = body.get("inspection_id")
+                record["rule_count"] = body.get("rule_count")
+                record.pop("submit_error", None)
+                return record
+            # T40：5 并发提交会触发 expensive 限流（429）。按 Retry-After 有界重试，
+            # 只统计最终 202 的接收延迟；被限流的尝试次数如实记录。
+            if response.status_code == 429 and attempt < submit_retries:
+                record["rate_limited_attempts"] += 1
+                retry_after = 1.0
+                details = body.get("details") if isinstance(body, dict) else None
+                if isinstance(details, dict):
+                    retry_after = float(details.get("retry_after_seconds") or 1.0)
+                time.sleep(max(0.2, min(retry_after, 5.0)))
+                continue
             record["inspection_id"] = body.get("inspection_id")
             record["rule_count"] = body.get("rule_count")
-            if response.status_code != 202:
-                record["submit_error"] = body
-        except Exception as exc:  # 传输错误显式记录，不混入延迟分位
-            record["post_ms"] = round((time.perf_counter() - started) * 1000, 3)
-            record["http_status"] = None
-            record["submit_error"] = f"{type(exc).__name__}: {exc}"
+            record["submit_error"] = body
+            return record
         return record
 
     with ThreadPoolExecutor(max_workers=max(1, concurrency)) as executor:
@@ -343,6 +540,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             count=args.count,
             concurrency=args.concurrency,
             run_tag=args.run_tag,
+            submit_retries=args.submit_retries,
         )
         _poll_until_terminal(
             args.database_url,
@@ -361,9 +559,13 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         input_cny_per_mtok=args.input_cny_per_mtok,
         output_cny_per_mtok=args.output_cny_per_mtok,
     )
+    summary["findings"] = collect_findings(
+        args.database_url,
+        [r["inspection_id"] for r in records if r.get("inspection_id")],
+    )
     summary.update(
         {
-            "schema": "t39-inspection-latency-v1",
+            "schema": "t40-inspection-latency-v1",
             "started_at": started_at,
             "base_url": args.base_url,
             "concurrency": args.concurrency,
@@ -403,6 +605,16 @@ def _print_summary(summary: dict[str, Any]) -> None:
         f"prompt={summary['tokens']['prompt']} completion={summary['tokens']['completion']} "
         f"cost≈¥{summary['cost_cny_estimate']:.4f}"
     )
+    findings = summary.get("findings") or {}
+    print(f"verdicts: {findings.get('verdicts')}")
+    print(
+        "evidence: "
+        f"spans_valid={findings.get('spans_valid')}/{findings.get('spans_total')} "
+        f"hit_spans_valid={findings.get('hit_spans_valid')}/"
+        f"{findings.get('hit_spans_total')} "
+        f"all_hit_valid={findings.get('all_hit_findings_span_valid')}"
+    )
+    print(f"downgrades: {findings.get('downgrades')}")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -417,6 +629,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--count", type=int, default=30)
     parser.add_argument("--concurrency", type=int, default=5)
+    parser.add_argument(
+        "--submit-retries",
+        type=int,
+        default=8,
+        help="遇到 429 时的最大提交尝试次数（按 Retry-After 有界重试）",
+    )
     parser.add_argument("--completion-timeout", type=float, default=300.0)
     parser.add_argument("--http-timeout", type=float, default=30.0)
     parser.add_argument("--run-tag", default="measure")

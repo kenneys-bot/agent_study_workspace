@@ -1,4 +1,4 @@
-# M7 性能与稳定性实测报告（T38 / #38；T39 / #39 补测）
+# M7 性能与稳定性实测报告（T38 / #38；T39 / #39、T40 / #40 补测）
 
 日期：2026-11-13（Asia/Shanghai）｜状态：**READY_FOR_ACCEPTANCE**
 （10 并发压测、受控故障演练、质检 P95 与供应商故障映射已实测；
@@ -269,8 +269,9 @@ ssh my-ubuntu-server 'cd ~/workspace/bank-assistant/artifacts/loadtest/T38 && \
   未在真实 DeepSeek 上人为制造 429/超时，边界保留。
 - R-05：10 并发/10 分钟压测部分已关闭并达标（§3）；24h 长跑仍未满（§6）。
 - R-13：容器重启 RTO 已实测（API 2.166s、DB 2.127s）；RPO/独立故障域仍未测。
-- **R-19（新）**：live 质检 60 次中 50 次 `EVIDENCE_INVALID`（成功率 16.7%）；
-  §7 延迟 PASS 不等于质检功能健康。
+- **R-19（T39 新发现，T40 关闭）**：live 质检 60 次中 50 次 `EVIDENCE_INVALID`
+  （成功率 16.7%）；T40 改为 quote-first + 后端确定性定位后，60 次真实质检
+  60/60 succeeded、`hit` 证据 100/100 精确回验（§14）。
 - 详细的关闭证据与剩余项见 [风险登记册](../ops/risk-register.md)。
 
 ## 12. 质检任务接收 / 完成 P95（T39 / #39，真实模型）
@@ -337,6 +338,9 @@ ssh my-ubuntu-server 'cd ~/workspace/bank-assistant/artifacts/loadtest/T38 && \
 **不能**外推为质检质量或高成功率；83.3% 的失败率意味着当前 live 质检不足以支撑
 “默认可用的质检演示”，对外只能展示已成功的 10 条或明确标注失败率。
 
+> T40（#40）已把证据定位改为 quote-first + 后端确定性定位并重测：
+> 60/60 succeeded、`hit` 证据 100% 回验，见 §14。§12 保留为 T39 原始基线。
+
 ### 12.4 测试库状态（可审计）
 
 - `bank_assistant_test` 保持 `0011_report_exports`，含本轮 60 条实测运行 + 演练行；
@@ -386,4 +390,124 @@ ssh my-ubuntu-server 'cd ~/workspace/bank-assistant/artifacts/loadtest/T38 && \
 . .local-data/t39-artifacts/run/env.sh   # 仅本地临时环境；DATABASE_URL 必须指向 *_test
 .venv/bin/python scripts/supplier_failure_drill.py --port 18081 --fake-port 19999 \
   --output .local-data/t39-artifacts/supplier-failure-drill.json
+```
+
+## 14. 质检 quote-first 证据定位复测（T40 / #40，R-19 收口）
+
+### 14.1 改动
+
+- **提示词/schema**：`inspection-v2`（sha256 前缀
+  `inspection-v2:f9740dfe9eb83145`）。逐规则输出 `verdict`、`rationale`、
+  `evidence_quotes[{quote, turn_ordinal?}]`；数字 `start/end` 不再要求，出现也只
+  当定位提示。`prompt_version` 写入 `model_runs.prompt_version` 与成功 run 的
+  `diagnostics.prompt_version`。
+- **后端定位器** `inspections/locator.py`：精确子串优先；失败再做
+  NFKC + 空白/标点归一化，并把归一化命中区间映射回**原码点**；映射后复核
+  `normalize(content[start:end]) == normalize(quote)`。跨轮次不拼接。
+- **单条不拖垮 run**：`hit` 的 quote 全部找不到时，该 finding 降级为
+  `insufficient_evidence`，run diagnostics 记
+  `{"evidence_downgrades":[{"rule_code":…,"reason":"EVIDENCE_NOT_LOCATABLE"}]}`，
+  run 仍可 `succeeded`。
+- **不变式保持**：持久化 `hit` 的 `quote == content[start:end]`（码点）；
+  knowledge_refs 仍必须来自授权召回；429/504/非法 JSON 等系统/模型失败仍按原
+  逻辑让整次 run `failed`，没有把故障伪装成证据不足（离线/集成测试覆盖）。
+
+### 14.2 测量条件
+
+| 项 | 值 |
+|---|---|
+| 时间（UTC） | batch A 2026-11-13T04:18:58Z 起；batch B 04:20:24Z 起 |
+| 被测对象 | 本机临时 API `127.0.0.1:18080`（单 uvicorn 进程）；**未触碰**线上实例 |
+| 数据库 | `bank_assistant_test`（经 `127.0.0.1:15432` 隧道）；**空库** `alembic upgrade head` → `0011_report_exports`，再导入 32 条演示知识、6 条规则、6 段会话；测量前 tasks/inspection_runs 均为 0 |
+| 模型 | `MODEL_MODE=live`，`deepseek-chat`（DeepSeek 官方），`LLM_TIMEOUT_SECONDS=60`、`LLM_MAX_RETRIES=2` |
+| worker | 5 个独立进程，同一测试库，租约 60s；每条质检 2 条适用规则 → 恰好 2 次模型调用/次 |
+| 负载 | 5 并发提交；两批各 30 次，共 **60 次**真实质检；每条质检 2 条 findings |
+| 输入 | 6 段合成演示会话轮转（S1/S2/S3 × normal/risk） |
+| 提交重试 | 5 并发会触发 API `expensive` 限流（429）。客户端按 `Retry-After` 有界重试（最多 8 次）；62 次 429 重试后全部 202。POST 分位只算最终 202 的那次请求 |
+| 分位/成本口径 | 与 §12 相同：客户端 `perf_counter`、服务端 `finished_at - created_at`、线性插值；token 取 worker `model_call` 日志，成本按 2025-02-09 官方价目快照估算（不是账单） |
+
+> 在加入 429 重试前，曾用同一脚本跑过 21 次有效提交（另 9 次提交被 429 拒绝，
+> 未创建 run）：21/21 succeeded、`hit` 证据全过，tokens 42 calls / ¥0.1473。
+> 该批不计入下表 n=60，只用于确认修复方向；连同 2 次 smoke 调用，T40 全部模型
+> 试跑成本约 **¥0.5737**，仍远低于 ¥5 预算。
+
+### 14.3 T39 基线 vs T40 复测
+
+| 指标 | T39 基线（§12） | T40（§14） |
+|---|---|---|
+| 有效质检 n | 60（POST n=30） | **60**（POST n=60） |
+| succeeded / failed / pending | 10 / 50 / 0 | **60 / 0 / 0** |
+| 任务成功率 | **16.7%**（10/60） | **100%**（60/60） |
+| 失败原因 | 50 × `EVIDENCE_INVALID`（offset/quote 不精确） | **无 failure**；0 条 `EVIDENCE_NOT_LOCATABLE` |
+| POST 接收 P50 / P95 / P99（ms） | 179.125 / **245.244** / 253.667 | 267.001 / **454.871** / 557.768 |
+| 完成时间 P50 / P95 / P99（s） | 23.9996 / **41.8787** / 46.3018 | 11.526 / **15.042** / 16.127 |
+| 成功任务完成 P95（s） | 32.146（n=10） | 15.042（n=60） |
+| findings 总数 | 20（仅成功 run） | **120**（60 × 2 规则） |
+| verdict 分布 | 未记录 | **hit 41 / clear 49 / insufficient_evidence 30 / not_applicable 0** |
+| `hit` 证据回验 | 不可用（失败 run 无 findings） | **100/100 spans（100%）**，41/41 hit findings 至少 1 条精确 span |
+| 全部 spans 回验 | — | **221/221（100%）** |
+| live 模型调用 | 235 次，全部 succeeded | **120 次，全部 succeeded** |
+| token（in / out） | 256,621 / 37,309 | **134,280 / 18,956** |
+| 估算成本 | ¥0.8117 | **¥0.4202** |
+| prompt_version | `inspection-v1` | `inspection-v2:f9740dfe9eb83145` |
+
+逐规则 verdict（两批合计，每条规则 20 个 findings）：
+
+| 规则 | hit | clear | insufficient_evidence | not_applicable |
+|---|---:|---:|---:|---:|
+| DEMO-CLAIM-01 | 10 | 0 | 10 | 0 |
+| DEMO-ATT-01 | 0 | 10 | 10 | 0 |
+| DEMO-FEE-01 | 10 | 10 | 0 | 0 |
+| DEMO-FEE-02 | 0 | 10 | 10 | 0 |
+| DEMO-PWD-01 | 10 | 10 | 0 | 0 |
+| DEMO-CMP-01 | 11 | 9 | 0 | 0 |
+| **合计** | **41** | **49** | **30** | **0** |
+
+### 14.4 计划 §7 / #40 判定
+
+| 门槛 | 要求 | 实测 | 结论 |
+|---|---|---|---|
+| 任务成功率 | ≥80% | **100%（60/60）** | **PASS** |
+| `hit` 证据 span | 100% 精确回验 | **100/100（100%）**；无无证据 hit | **PASS** |
+| 接收响应 | ≤1s | P95 **454.871ms**（n=60） | **PASS** |
+| 完成时间 | P95 ≤60s（5 并发） | **15.042s**（n=60） | **PASS** |
+| 成本 | ≤¥5 | **¥0.4202**（正式两批） | **PASS** |
+| 系统失败不掩盖 | 429/504/非法 JSON 仍 failed | 离线/集成测试覆盖；本轮无系统失败 | **PASS** |
+
+### 14.5 边界（不粉饰）
+
+- 60 次都是**合成演示会话**（S1/S2/S3 × normal/risk），每条固定 2 条规则；不能
+  外推真实银行数据、长会话、更多规则或更高并发。
+- “成功率 100%”指任务能产出 findings、且每个 `hit` 有可精确回验的 span，**不**
+  表示 41 条 hit 的业务判断全部正确；误报/漏报仍需人工抽检（引用支持度 R-02 仍
+  NOT_MEASURED）。
+- 30% findings 为 `insufficient_evidence` 是模型语义判断（本轮没有一条因定位失败
+  降级）；不同供应商/模型版本可能改变该分布。
+- POST P95 比 T39 高（454.871ms vs 245.244ms），仍在 ≤1s 内；增加主要来自
+  findings/诊断写入与 5 并发下的排队，不作为容量结论。
+- 临时 API 与 5 个 worker 已停止；`bank_assistant_test` 随后重置（可丢弃库）；未重启
+  服务器、未触碰线上容器。
+- 离线/集成验证：`uv run pytest tests -q` **713 passed, 138 deselected**；
+  `make test-integration` **138 passed**（含定位器 exact/normalized/emoji/newline/
+  cross-turn/not-found、单条证据失败不拖垮 run、`hit` 无 span 拒绝）。
+
+### 14.6 证据文件与复跑
+
+本机原始文件（gitignore）：`.local-data/t40-artifacts/`
+
+| 路径 | 内容 |
+|---|---|
+| `inspection-latency-batch30-a.json` | 第一批 30 次明细/汇总 |
+| `inspection-latency-batch30-b.json` | 第二批 30 次明细/汇总 |
+| `inspection-latency-pooled.json` | 两批合并 n=60 汇总（本文数字来源） |
+| `run/worker-*.log`、`run/api.log` | live `model_call` token 日志 / API 日志 |
+
+```bash
+# 仅本地临时环境；DATABASE_URL 必须指向 *_test
+. .local-data/t40-artifacts/run/env.sh
+.venv/bin/python scripts/inspection_latency_measure.py \
+  --base-url http://127.0.0.1:18080 \
+  --state "$DEMO_SEED_STATE" --count 30 --concurrency 5 --run-tag t40-batch \
+  --output .local-data/t40-artifacts/inspection-latency.json \
+  --worker-log .local-data/t40-artifacts/run/worker-1.log
 ```

@@ -28,11 +28,11 @@ from enum import StrEnum
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from bank_assistant.core.model_gateway import ModelCallStatus
 from bank_assistant.inspections.deterministic import assess_context
-from bank_assistant.inspections.evidence import EvidenceError, validate_evidence
+from bank_assistant.inspections.locator import locate_quote
 from bank_assistant.rules.schema import Severity
 from bank_assistant.rules.schema import (
     EvidenceSpan,
@@ -44,6 +44,7 @@ from bank_assistant.rules.schema import (
 
 __all__ = [
     "ApplicabilityCheck",
+    "EvidenceQuote",
     "INSPECTION_PROMPT_VERSION",
     "INSPECTION_SYSTEM_PROMPT",
     "InspectionErrorCode",
@@ -82,6 +83,9 @@ class InspectionErrorCode:
 
     INVALID_MODEL_OUTPUT = "INVALID_MODEL_OUTPUT"
     EVIDENCE_INVALID = "EVIDENCE_INVALID"
+    # 理由码：quote 在不可变原文里找不到，该 finding 降级为 insufficient_evidence，
+    # 但整次 run 仍然 succeeded（T40/R-19）。
+    EVIDENCE_NOT_LOCATABLE = "EVIDENCE_NOT_LOCATABLE"
     NOT_APPLICABLE_UNJUSTIFIED = "NOT_APPLICABLE_UNJUSTIFIED"
     MODEL_TIMEOUT = "MODEL_TIMEOUT"
     MODEL_RATE_LIMITED = "MODEL_RATE_LIMITED"
@@ -151,19 +155,53 @@ class ApplicabilityCheck(BaseModel):
     item: str | None = Field(default=None, max_length=200)
 
 
+class EvidenceQuote(BaseModel):
+    """模型给出的**原句**证据；数字 offset 只是可选提示，不是权威坐标。
+
+    quote-first（T40/R-19）：模型只负责引用原文，后端在不可变轮次上做确定性
+    定位。``turn_id`` / ``turn_ordinal`` / ``start`` / ``end`` 都只用于在多个
+    出现位置之间消歧；最终坐标由 :func:`locate_quote` 按原文回填。
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    quote: str = Field(..., min_length=1, max_length=4000)
+    turn_id: UUID | None = None
+    turn_ordinal: int | None = Field(default=None, ge=1)
+    start: int | None = Field(default=None, ge=0)
+    end: int | None = Field(default=None, ge=0)
+
+
 class RuleJudgmentPayload(BaseModel):
     """单条规则的结构化模型输出（契约 §4 证据 JSON 的判断部分）。
 
     ``severity`` 不在模型输出里：风险级别来自规则版本，不能由模型改写。
+    ``evidence_quotes`` 是 T40 起的 quote-first 字段；``evidence`` 保留为旧版
+    兼容入口，两者的数字 offset 都只当提示。
     """
 
     model_config = ConfigDict(extra="forbid")
 
     verdict: Literal["hit", "clear", "insufficient_evidence", "not_applicable"]
     rationale: str = Field(..., min_length=1, max_length=2000)
-    evidence: list[EvidenceSpan] = Field(default_factory=list)
+    evidence_quotes: list[EvidenceQuote] = Field(default_factory=list)
+    evidence: list[EvidenceQuote] = Field(default_factory=list)
     knowledge_refs: list[KnowledgeRef] = Field(default_factory=list)
     applicability: ApplicabilityCheck | None = None
+
+    @field_validator("evidence_quotes", "evidence", mode="before")
+    @classmethod
+    def _allow_bare_quote_strings(cls, value: Any) -> Any:
+        """允许 ``["原句"]`` 这种简写；模型偶尔会直接给字符串数组。"""
+        if value is None:
+            return []
+        if isinstance(value, str):
+            return [{"quote": value}]
+        if isinstance(value, list):
+            return [
+                {"quote": item} if isinstance(item, str) else item for item in value
+            ]
+        return value
 
 
 class RuleJudgment(BaseModel):
@@ -175,6 +213,8 @@ class RuleJudgment(BaseModel):
     rationale: str
     evidence: list[EvidenceSpan] = Field(default_factory=list)
     knowledge_refs: list[KnowledgeRef] = Field(default_factory=list)
+    # 仅当 finding 因证据无法定位而被迫降级时填写；runner 写入 run diagnostics。
+    evidence_issue: str | None = None
 
 
 def parse_judgment(
@@ -184,16 +224,20 @@ def parse_judgment(
     rule_code: str,
     applicability: RuleApplicability | None = None,
     business_type: str | None = None,
+    turn_ordinals: Mapping[UUID, int] | None = None,
 ) -> RuleJudgment:
     """二次校验模型输出；结构错误抛 pydantic，业务错误抛显式领域异常。
 
     - 结构/枚举错误：``pydantic.ValidationError``（同时也会被 ModelGateway
-      在 schema 校验阶段拦截）；若错误落在 ``evidence`` 字段上，按
+      在 schema 校验阶段拦截）；若错误落在证据字段上，按
       :attr:`InspectionErrorCode.EVIDENCE_INVALID` 报告；
-    - 证据坐标：``turn_id`` 必须属于被检会话，``start/end`` 是原文码点，
-      ``content[start:end]`` 必须与 ``quote`` 逐字相等（契约 §4、CT-08/CT-09）；
-    - 判定语义：``hit`` 至少一条有效证据，且证据不能处于否定/引用他人话语
-      语境；``not_applicable`` 必须由规则 ``applicability`` 证明；四态互不替代。
+    - **quote-first 定位**（T40/R-19）：模型给的 quote 由
+      :func:`bank_assistant.inspections.locator.locate_quote` 在不可变原文上
+      确定性定位；数字 offset 只当提示，最终 span 一律由原文回填；
+    - **单条证据不拖垮 run**：``hit`` 的 quote 全部无法定位时，该 finding 降级为
+      ``insufficient_evidence`` 并记 ``EVIDENCE_NOT_LOCATABLE``，不抛异常；
+    - 判定语义：``hit`` 至少一条原句，且证据不能处于否定/引用他人话语语境；
+      ``not_applicable`` 必须由规则 ``applicability`` 证明；四态互不替代。
     """
     try:
         payload = (
@@ -221,31 +265,63 @@ def parse_judgment(
         rule_code=rule_code,
     )
 
-    if payload.verdict == "hit" and not payload.evidence:
+    quote_specs = [*payload.evidence_quotes, *payload.evidence]
+    if payload.verdict == "hit" and not quote_specs:
         # 命中必须能定位原文；空证据的 hit 会让“问题列表”无声消失。
         raise JudgmentValidationError(
             InspectionErrorCode.EVIDENCE_INVALID,
-            f"规则 {rule_code} 判定命中但没有任何证据区间",
+            f"规则 {rule_code} 判定命中但没有任何证据原句",
         )
 
     contents = {UUID(str(turn_id)): text for turn_id, text in turns.items()}
-    try:
-        validate_evidence(payload.evidence, turn_contents=contents)
-    except EvidenceError as exc:
-        raise JudgmentValidationError(
-            InspectionErrorCode.EVIDENCE_INVALID,
-            f"规则 {rule_code} 证据未通过校验：{exc}",
-        ) from exc
+    ordinals = (
+        {UUID(str(turn_id)): int(value) for turn_id, value in turn_ordinals.items()}
+        if turn_ordinals
+        else {}
+    )
+    located: list[EvidenceSpan] = []
+    seen: set[tuple[UUID, int, int]] = set()
+    for spec in quote_specs:
+        found = locate_quote(
+            spec.quote,
+            turns=contents,
+            turn_ordinals=ordinals,
+            turn_id=spec.turn_id,
+            turn_ordinal=spec.turn_ordinal,
+            start=spec.start,
+            end=spec.end,
+        )
+        if found is None:
+            continue
+        key = (found.turn_id, found.start, found.end)
+        if key in seen:
+            continue
+        seen.add(key)
+        located.append(
+            EvidenceSpan(
+                turn_id=found.turn_id,
+                start=found.start,
+                end=found.end,
+                quote=found.quote,
+            )
+        )
 
-    evidence = list(payload.evidence)
     if payload.verdict == "hit":
+        if not located:
+            # R-19：定位失败是**该规则**的证据问题，不是系统故障。降级为
+            # insufficient_evidence 并附原因码；整次 run 仍可 succeeded。
+            return RuleJudgment(
+                verdict="insufficient_evidence",
+                rationale=rationale,
+                evidence=[],
+                knowledge_refs=list(payload.knowledge_refs),
+                evidence_issue=InspectionErrorCode.EVIDENCE_NOT_LOCATABLE,
+            )
         # M4-02：否定与引用他人话语不能按关键词直接判定为坐席自身行为。
         supported = [
             span
-            for span in payload.evidence
-            if assess_context(
-                contents[span.turn_id], span.start, span.end
-            ).supported
+            for span in located
+            if assess_context(contents[span.turn_id], span.start, span.end).supported
         ]
         if not supported:
             raise JudgmentValidationError(
@@ -253,6 +329,9 @@ def parse_judgment(
                 f"规则 {rule_code} 的命中证据落在否定或引用他人话语的语境",
             )
         evidence = supported
+    else:
+        # 非命中判定不依赖证据；能定位的保留，定位不到的丢弃，不影响 verdict。
+        evidence = located
 
     return RuleJudgment(
         verdict=payload.verdict,
@@ -266,7 +345,7 @@ def _validation_error_code(error: ValidationError) -> str:
     """结构错误里若落在证据字段，归为稳定的 ``EVIDENCE_INVALID``。"""
     for item in error.errors():
         location = item.get("loc") or ()
-        if location and location[0] == "evidence":
+        if location and location[0] in {"evidence", "evidence_quotes"}:
             return InspectionErrorCode.EVIDENCE_INVALID
     return InspectionErrorCode.INVALID_MODEL_OUTPUT
 
@@ -348,17 +427,18 @@ INSPECTION_SYSTEM_PROMPT = """你是银行内部质检系统，按给定规则�
    - insufficient_evidence：会话或业务依据不足，不能可靠判断；
    - not_applicable：规则在业务范围/前提条件上不成立，必须由规则的 applicability 证明。
 3. 否定表述（如“没有收取年费”）、转述他人说法（如“客户说有人告诉他……”）、引述制度不能按关键词直接判 hit。
-4. hit 必须给出至少一条证据区间：turn_id 必须来自本次会话，start/end 按原文 Unicode 码点计数（start 含、end 不含），quote 逐字截取，不能改写、trim 或补全；证据不足或不适用可以给空数组。
+4. hit 必须给出至少一条 evidence_quotes：每条只写 quote（从会话原文逐字复制，不 trim、不改写、不补标点、不拼接不同轮次），可选用 turn_ordinal 或 turn_id 作为定位提示。
+   不要输出数字 start/end；即使输出也只当提示，后端会按 Unicode 码点重新定位并回验 quote == content[start:end]。
 5. 若 verdict 为 not_applicable，必须同时给出 applicability 对象：
    {"applicable":false,"dimension":"business_type|channel|condition","item":"规则 applicability 中逐字存在的条目"}。
    不得用“没有出现关键词”“客户没有提到”作为不适用理由；这类情况用 insufficient_evidence。
 6. rationale 必须说明判断理由；不得编造会话中没有的内容。
 7. 只输出一个 JSON 对象，不要 Markdown：
-{"verdict":"hit|clear|insufficient_evidence|not_applicable","rationale":"...","evidence":[{"turn_id":"...","start":0,"end":4,"quote":"..."}],"knowledge_refs":[],"applicability":null}
+{"verdict":"hit|clear|insufficient_evidence|not_applicable","rationale":"...","evidence_quotes":[{"quote":"...","turn_ordinal":2}],"knowledge_refs":[],"applicability":null}
 """
 
 INSPECTION_PROMPT_VERSION = (
-    "inspection-v1:"
+    "inspection-v2:"
     + hashlib.sha256(INSPECTION_SYSTEM_PROMPT.encode("utf-8")).hexdigest()[:16]
 )
 

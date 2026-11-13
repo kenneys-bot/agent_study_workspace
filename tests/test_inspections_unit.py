@@ -133,43 +133,105 @@ def test_hit_without_evidence_is_rejected_never_silently_empty():
 
 
 @pytest.mark.parametrize(
-    "span",
+    ("span", "expected_start", "expected_end"),
     [
-        # end 越过原文码点长度
-        {"turn_id": str(TURN_ID), "start": 0, "end": 999, "quote": "这笔年费"},
-        # quote 与原文不一致
-        {"turn_id": str(TURN_ID), "start": 4, "end": 9, "quote": "我给您免"},
-        # 没有做 trim / 空白折叠
-        {"turn_id": str(TURN_ID), "start": 4, "end": 9, "quote": " 我给您免了"},
-        # start == end
-        {"turn_id": str(TURN_ID), "start": 4, "end": 4, "quote": ""},
-        # 反序区间
-        {"turn_id": str(TURN_ID), "start": 9, "end": 4, "quote": "我给您免了"},
+        # end 越过原文码点长度：offset 只是提示，quote 重新定位。
+        ({"start": 0, "end": 999, "quote": "这笔年费"}, 0, 4),
+        # 声明的区间比 quote 短：以 quote 为准。
+        ({"start": 4, "end": 9, "quote": "我给您免"}, 4, 8),
+        # 反序区间：不当成失败，按 quote 定位。
+        ({"start": 9, "end": 4, "quote": "我给您免了"}, 4, 9),
     ],
 )
-def test_invalid_intervals_are_rejected_with_a_stable_error_code(span) -> None:
-    with pytest.raises(JudgmentValidationError) as excinfo:
-        _parse(_judgment(evidence=[span]))
+def test_offsets_are_hints_only_and_quotes_are_relocated(
+    span, expected_start, expected_end
+) -> None:
+    judgment = _parse(_judgment(evidence=[{"turn_id": str(TURN_ID), **span}]))
 
-    assert excinfo.value.code == "EVIDENCE_INVALID"
+    assert judgment.verdict == "hit"
+    assert (judgment.evidence[0].start, judgment.evidence[0].end) == (
+        expected_start,
+        expected_end,
+    )
+    assert judgment.evidence[0].quote == TURN_CONTENT[expected_start:expected_end]
 
 
-def test_evidence_turn_must_belong_to_the_inspected_conversation():
+def test_unlocatable_quote_downgrades_finding_instead_of_failing_run() -> None:
+    """R-19：单条证据无法定位 → finding 降级，run 不因它失败。"""
+    judgment = _parse(
+        _judgment(
+            evidence=[
+                {
+                    "turn_id": str(TURN_ID),
+                    "start": 0,
+                    "end": 4,
+                    "quote": "原文里根本没有这句话",
+                }
+            ]
+        )
+    )
+
+    assert judgment.verdict == "insufficient_evidence"
+    assert judgment.evidence == []
+    assert judgment.evidence_issue == "EVIDENCE_NOT_LOCATABLE"
+
+
+def test_empty_quote_is_still_a_structural_failure() -> None:
     with pytest.raises(JudgmentValidationError) as excinfo:
         _parse(
             _judgment(
                 evidence=[
-                    {
-                        "turn_id": str(uuid4()),
-                        "start": 0,
-                        "end": 4,
-                        "quote": "肯定免息",
-                    }
+                    {"turn_id": str(TURN_ID), "start": 4, "end": 4, "quote": ""}
                 ]
             )
         )
 
     assert excinfo.value.code == "EVIDENCE_INVALID"
+
+
+def test_whitespace_differences_are_located_via_normalized_match() -> None:
+    judgment = _parse(
+        _judgment(
+            evidence=[
+                {
+                    "turn_id": str(TURN_ID),
+                    "start": 0,
+                    "end": 1,
+                    "quote": " 我给您免了 ",
+                }
+            ]
+        )
+    )
+
+    assert judgment.verdict == "hit"
+    assert judgment.evidence[0].start == 4
+    assert judgment.evidence[0].end == 9
+    assert judgment.evidence[0].quote == "我给您免了"
+
+
+def test_bare_string_quotes_are_accepted() -> None:
+    judgment = _parse(_judgment(evidence=["我给您免了"]))
+
+    assert judgment.verdict == "hit"
+    assert judgment.evidence[0].quote == "我给您免了"
+
+
+def test_foreign_turn_hint_is_ignored_quote_found_in_actual_turn() -> None:
+    judgment = _parse(
+        _judgment(
+            evidence=[
+                {
+                    "turn_id": str(uuid4()),
+                    "start": 0,
+                    "end": 4,
+                    "quote": "这笔年费",
+                }
+            ]
+        )
+    )
+
+    assert judgment.verdict == "hit"
+    assert judgment.evidence[0].turn_id == TURN_ID
 
 
 def test_blank_rationale_is_rejected():
@@ -200,25 +262,26 @@ def test_emoji_and_newline_evidence_is_located_by_code_points() -> None:
     assert judgment.evidence[0].quote == "免了😀\n不用"
 
 
-def test_utf16_offset_pretending_to_be_a_code_point_is_rejected() -> None:
+def test_utf16_offset_is_only_a_hint_and_code_point_span_is_recomputed() -> None:
     content = "这笔年费我给您免了😀\n不用还"
     turn_id = uuid4()
-    with pytest.raises(JudgmentValidationError) as excinfo:
-        _parse(
-            _judgment(
-                evidence=[
-                    {
-                        "turn_id": str(turn_id),
-                        "start": 7,
-                        "end": 14,  # 前端若直接传 UTF-16 下标就会是这个值
-                        "quote": "免了😀\n不用",
-                    }
-                ]
-            ),
-            turns={turn_id: content},
-        )
+    judgment = _parse(
+        _judgment(
+            evidence=[
+                {
+                    "turn_id": str(turn_id),
+                    "start": 7,
+                    "end": 14,  # 前端若直接传 UTF-16 下标就会是这个值
+                    "quote": "免了😀\n不用",
+                }
+            ]
+        ),
+        turns={turn_id: content},
+    )
 
-    assert excinfo.value.code == "EVIDENCE_INVALID"
+    # 后端按码点回填：7 到 13（不含），不是 UTF-16 的 14。
+    assert (judgment.evidence[0].start, judgment.evidence[0].end) == (7, 13)
+    assert judgment.evidence[0].quote == content[7:13]
 
 
 def test_structurally_invalid_model_output_is_an_explicit_failure():
@@ -241,9 +304,9 @@ def test_negated_quote_cannot_be_a_hit() -> None:
                 evidence=[
                     {
                         "turn_id": str(turn_id),
-                        "start": 0,
-                        "end": 6,
-                        "quote": "没有收取年费",
+                        "start": 2,
+                        "end": 8,
+                        "quote": "不会收取年费",
                     }
                 ]
             ),

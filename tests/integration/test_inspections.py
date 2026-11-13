@@ -1193,49 +1193,80 @@ def _single_rule_inspection(
     return conversation, code, created.json()["inspection_id"]
 
 
-@pytest.mark.parametrize(
-    "start,end,quote",
-    [
-        (7, 999, "免了"),  # end 越过原文码点长度
-        (7, 9, "我给您"),  # quote 与原文不一致
-    ],
-)
-def test_worker_rejects_invalid_evidence_interval_with_stable_code(
-    client: TestClient,
-    users: dict[str, dict[str, object]],
-    start: int,
-    end: int,
-    quote: str,
+def test_worker_relocates_quote_and_ignores_invalid_offsets(
+    client: TestClient, users: dict[str, dict[str, object]]
 ) -> None:
-    """CT-09：错误证据区间必须被拒绝，且不能留下任何 hit 结论。"""
+    """T40/R-19：模型数字 offset 只是提示，后端按 quote 重新定位。"""
     _cancel_pending_inspections()
     conversation, code, inspection_id = _single_rule_inspection(
         client, users["agent_a"]
     )
     turn_id = UUID(conversation["turns"][0]["turn_id"])
     gateway = FakeGateway(
-        {code: _judgment(turn_id, start=start, end=end, quote=quote)}
+        {code: _judgment(turn_id, start=7, end=999, quote="免了")}
     )
 
     outcome = Worker(
         gateway=gateway,
         queue=TaskQueue(max_attempts=1),
-        worker_id="worker-invalid-evidence",
+        worker_id="worker-relocated-evidence",
     ).run_once()
 
     assert outcome is not None
-    assert outcome.status == "failed"
-    assert outcome.error_code == "EVIDENCE_INVALID"
-    assert _finding_count(inspection_id) == 0
-    run = _stored_run(inspection_id)
-    assert run.status == "failed"
-    assert run.error_code == "EVIDENCE_INVALID"
+    assert outcome.status == "succeeded"
+    assert _finding_count(inspection_id) == 1
     detail = client.get(
         f"{INSPECTIONS_ENDPOINT}/{inspection_id}",
         headers=_headers(users["agent_a"]),
     )
-    assert detail.json()["status"] == "failed"
-    assert detail.json()["findings"] == []
+    finding = detail.json()["findings"][0]
+    assert finding["machine_verdict"] == "hit"
+    assert finding["evidence_valid"] is True
+    span = finding["evidence"][0]
+    assert span["quote"] == "免了"
+    assert span["validated"] is True
+
+
+def test_worker_downgrades_unlocatable_quote_without_failing_run(
+    client: TestClient, users: dict[str, dict[str, object]]
+) -> None:
+    """T40/R-19：单条证据找不到 → finding 降级，run 仍 succeeded。"""
+    _cancel_pending_inspections()
+    conversation, code, inspection_id = _single_rule_inspection(
+        client, users["agent_a"]
+    )
+    turn_id = UUID(conversation["turns"][0]["turn_id"])
+    gateway = FakeGateway(
+        {
+            code: _judgment(
+                turn_id, start=0, end=4, quote="原文里根本没有这句话"
+            )
+        }
+    )
+
+    outcome = Worker(
+        gateway=gateway,
+        queue=TaskQueue(max_attempts=1),
+        worker_id="worker-unlocatable-evidence",
+    ).run_once()
+
+    assert outcome is not None
+    assert outcome.status == "succeeded"
+    assert _finding_count(inspection_id) == 1
+    run = _stored_run(inspection_id)
+    assert run.status == "succeeded"
+    assert run.error_code is None
+    assert run.diagnostics["evidence_downgrades"] == [
+        {"rule_code": code, "reason": "EVIDENCE_NOT_LOCATABLE"}
+    ]
+    detail = client.get(
+        f"{INSPECTIONS_ENDPOINT}/{inspection_id}",
+        headers=_headers(users["agent_a"]),
+    )
+    finding = detail.json()["findings"][0]
+    assert finding["machine_verdict"] == "insufficient_evidence"
+    assert finding["evidence"] == []
+    assert finding["evidence_valid"] is True
 
 
 def test_worker_rejects_knowledge_refs_that_do_not_exist(

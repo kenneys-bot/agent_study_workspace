@@ -10,6 +10,7 @@ from scripts.inspection_latency_measure import (
     parse_model_call_lines,
     percentile,
     summarize,
+    summarize_findings,
 )
 
 
@@ -112,3 +113,83 @@ def test_summarize_without_completed_tasks_has_null_distributions() -> None:
     assert summary["failure_rate"] is None
     assert summary["completion_seconds_all"]["p95"] is None
     assert summary["cost_cny_estimate"] == 0.0
+
+
+def _finding(
+    rule_version_id: str,
+    verdict: str,
+    evidence: list[dict[str, object]],
+    *,
+    prompt_version: str | None = None,
+    downgrades: list[dict[str, object]] | None = None,
+) -> dict[str, object]:
+    return {
+        "rule_version_id": rule_version_id,
+        "machine_verdict": verdict,
+        "evidence": evidence,
+        "rule_snapshot": {
+            "rules": [{"rule_version_id": rule_version_id, "rule_code": "R-1"}]
+        },
+        "diagnostics": {
+            "prompt_version": prompt_version,
+            "evidence_downgrades": downgrades or [],
+        },
+    }
+
+
+def test_summarize_findings_recomputes_span_validity_and_verdicts() -> None:
+    turn_id = "00000000-0000-0000-0000-00000000a001"
+    contents = {turn_id: "这笔年费我给您免了"}
+    rows = [
+        _finding(
+            "v1",
+            "hit",
+            [{"turn_id": turn_id, "start": 4, "end": 9, "quote": "我给您免了"}],
+            prompt_version="inspection-v2:abc",
+        ),
+        _finding("v2", "insufficient_evidence", [], downgrades=[{"reason": "EVIDENCE_NOT_LOCATABLE"}]),
+        _finding(
+            "v3",
+            "hit",
+            [{"turn_id": turn_id, "start": 0, "end": 2, "quote": "我给您"}],
+        ),
+    ]
+
+    summary = summarize_findings(rows, contents)
+
+    assert summary["findings_total"] == 3
+    assert summary["verdicts"] == {"hit": 2, "insufficient_evidence": 1}
+    assert summary["spans_total"] == 2
+    assert summary["spans_valid"] == 1
+    assert summary["hit_spans_valid"] == 1
+    assert summary["hit_spans_total"] == 2
+    assert summary["all_hit_findings_span_valid"] is False
+    assert summary["invalid_hit_examples"][0]["reason"] == "span_mismatch"
+    assert summary["downgrades"] == {"EVIDENCE_NOT_LOCATABLE": 1}
+    assert summary["prompt_versions"] == ["inspection-v2:abc"]
+
+
+def test_summarize_findings_all_valid_hit_spans_is_true() -> None:
+    turn_id = "00000000-0000-0000-0000-00000000a001"
+    rows = [
+        _finding(
+            "v1",
+            "hit",
+            [{"turn_id": turn_id, "start": 4, "end": 9, "quote": "我给您免了"}],
+        )
+    ]
+
+    summary = summarize_findings(rows, {turn_id: "这笔年费我给您免了"})
+
+    assert summary["all_hit_findings_span_valid"] is True
+    assert summary["span_validation_rate"] == 1.0
+
+
+def test_summarize_findings_flags_hit_without_evidence() -> None:
+    summary = summarize_findings(
+        [_finding("v1", "hit", [])], {}
+    )
+
+    assert summary["hit_findings_without_span"] == 1
+    assert summary["all_hit_findings_span_valid"] is False
+    assert summary["invalid_hit_examples"][0]["reason"] == "no_evidence"
