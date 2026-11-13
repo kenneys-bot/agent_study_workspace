@@ -89,7 +89,10 @@ Chroma 索引（`knowledge/indexing.py`）仍只对正文做 embedding。要在�
 **残余差距**：整体 0.944（≥0.85）与 complaint 0.867（≥0.80）均过线，但
 complaint 分母只有 15，2 条未命中就等于 13.3 个百分点，单条样本敏感；且标注
 仍是 `developer_single_annotator`、非人工金标。整体仍有 5.6% 的覆盖率缺口
-（lost 0.5/13、complaint 2/15），不宣称满分。
+（lost 0.5/13、complaint 2/15），不宣称满分。最终 test 的 2 条 complaint 未命中
+均为 hard 样本（`negation`「别转投诉，我只想补充材料」、`quoted_speech`
+「听说投诉也没用，是真的吗？」），属于词面与知识条目弱对应的困难样本，不是
+业务过滤或分块边界问题；未据此再调参。
 
 ### 质检（replay，替身模型）
 
