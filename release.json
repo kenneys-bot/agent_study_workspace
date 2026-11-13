@@ -1,34 +1,39 @@
 {
   "release": {
-    "version": "v0.1.1",
+    "version": "v0.1.2",
     "date": "2026-11-13",
     "kind": "personal_showcase_release",
     "production_authorization": false,
     "statement": "个人展示项目的可追溯发布记录，不是任何机构的生产部署授权；全部业务数据为合成数据。",
-    "previous_version": "v0.1.0",
-    "note": "T37（#37）：检索改进落地生产（title_chunk 索引文本 + 确定性重排 α=0.2）并重建线上索引。"
+    "previous_version": "v0.1.1",
+    "note": "T41（#41）：线上部署补常驻 worker（api+worker 同一不可变镜像），并把 T40 的 quote-first 证据定位修复（R-19）发到生产；索引与数据库 schema 不变。"
   },
   "code": {
-    "git_sha": "3a04952ceb228fe2838ea2203508f4f25db63f78",
-    "short_sha": "3a04952",
-    "branch": "ticket/T37",
+    "git_sha": "7542309cbc9090d46a6af8278f2b42a1f43c1aa6",
+    "short_sha": "7542309",
+    "branch": "ticket/T41",
     "repository": "github.com/kenneys-bot/agent_study_workspace"
   },
   "image": {
-    "tag": "bank-assistant:api-3a04952",
-    "id": "sha256:77090b26a8280d6c2eee5b4fc8024db1af460ee4b8ba98e2e031279e295a8b6d",
-    "repo_digest": "bank-assistant@sha256:77090b26a8280d6c2eee5b4fc8024db1af460ee4b8ba98e2e031279e295a8b6d",
+    "tag": "bank-assistant:api-7542309",
+    "id": "sha256:3fff5246920f23f4243a2e5e06cc0625444612b926ad61a31ac5749ef8a5e609",
+    "repo_digest": "bank-assistant@sha256:3fff5246920f23f4243a2e5e06cc0625444612b926ad61a31ac5749ef8a5e609",
     "platform": "linux/amd64",
-    "size_bytes": 210256160,
+    "size_bytes": 210249726,
     "transfer": {
       "method": "docker save | ssh docker load",
-      "tar_sha256": "13b99beff9b238bd3ad7575a3dae69fa3c39f53695db5457412417f6cc168b9f",
+      "tar_sha256": "08be87c73194a56aae0bff0d10c7d342427d339b8c174a187bd3bc6f250dd168",
       "note": "make deploy 传输时由服务器侧 tee 后 sha256sum 计算；两端 image id 一致。"
     }
   },
   "deployment": {
     "host_alias": "my-ubuntu-server",
     "container": "bank-assistant-api",
+    "worker_container": "bank-assistant-worker",
+    "compose_services": [
+      "api",
+      "worker"
+    ],
     "compose_project": "bank-assistant-app",
     "compose_file": "deploy/compose.app.yml",
     "restart_policy": "unless-stopped",
@@ -38,9 +43,9 @@
     "env_file": "~/workspace/bank-assistant/.env.app (chmod 600, 仓库外)",
     "data_root": "~/workspace/bank-assistant/data",
     "artifact_root": "~/workspace/bank-assistant/artifacts",
-    "deployed_at": "2026-11-13T02:56:08Z",
-    "previous_image": "bank-assistant:api-59a5869",
-    "previous_sha": "59a586976093b2e9359fec97baec6d2f1ee4d6ad"
+    "deployed_at": "2026-11-13T04:33:43Z",
+    "previous_image": "bank-assistant:api-3a04952",
+    "previous_sha": "3a04952ceb228fe2838ea2203508f4f25db63f78"
   },
   "database": {
     "engine": "postgresql-18",
@@ -103,7 +108,7 @@
     "knowledge_versions": 32,
     "rule_versions": 6,
     "conversations": 6,
-    "inspection_runs": 3,
+    "inspection_runs": 9,
     "review_cases": 3,
     "conversation_ids": {
       "s1-lost-card-normal": "9a907fec-0037-4a26-9b55-812f4f42ca98",
@@ -113,6 +118,73 @@
       "s3-complaint-normal": "9160e4f2-e92c-4c42-8524-e18a0301734c",
       "s3-complaint-risk": "188285e6-9891-4c89-a5e8-cd51fcf82c15"
     },
-    "note": "全部为合成演示数据；UUID 来自当前 bank_assistant_demo，可由 make seed-demo 幂等重建（逻辑 id 见 data/demo/conversations/）。"
+    "note": "全部为合成演示数据；UUID 来自当前 bank_assistant_demo，可由 make seed-demo 幂等重建（逻辑 id 见 data/demo/conversations/）。v0.1.2 验收追加 6 次真实质检（6 run / 24 findings）。",
+    "findings": 42
+  },
+  "worker": {
+    "container": "bank-assistant-worker",
+    "image": "与 api 同一不可变镜像（不单独打 tag）",
+    "command": [
+      "python",
+      "-m",
+      "bank_assistant.worker"
+    ],
+    "restart_policy": "unless-stopped",
+    "network_mode": "host",
+    "published_ports": 0,
+    "healthcheck": "python -m bank_assistant.worker --healthcheck（扫描 /proc/<pid>/cmdline 的 argv，排除探针自身；不依赖 slim 镜像没有的 pgrep/procps）",
+    "env_file": "与 api 相同的仓库外 .env.app（600）",
+    "mounts": "与 api 相同的 data/artifacts（索引、模型缓存、产物一致）",
+    "note": "worker 是单副本；被强杀的在途任务由租约（CT-11）在到期后重新领取，不手工改 tasks.status。"
+  },
+  "live_verification": {
+    "date": "2026-11-13",
+    "environment": "服务器回环 127.0.0.1:8000（host 网络），demo-author 演示账号，真实 deepseek-chat worker（MODEL_MODE=live）",
+    "acceptance_batch": "2/2 succeeded（#41 验收）",
+    "total_inspections": 6,
+    "succeeded": 6,
+    "failed": 0,
+    "post_seconds": [
+      0.056,
+      0.015,
+      0.024,
+      0.019,
+      0.013,
+      0.016
+    ],
+    "accepted_to_succeeded_seconds": [
+      7.102,
+      8.607,
+      7.602,
+      7.092,
+      9.12,
+      8.102
+    ],
+    "server_completion_seconds": [
+      6.973,
+      8.327,
+      7.532,
+      6.87,
+      8.816,
+      7.848
+    ],
+    "findings": 36,
+    "verdicts": {
+      "hit": 4,
+      "clear": 9,
+      "insufficient_evidence": 3,
+      "not_applicable": 20
+    },
+    "hit_evidence_spans_exact": "9/9",
+    "all_evidence_spans_exact": "22/22",
+    "knowledge_refs_in_inspections": 0,
+    "model_calls": {
+      "total": 36,
+      "succeeded": 36,
+      "prompt_tokens": 40158,
+      "completion_tokens": 4463
+    },
+    "estimated_cost_cny": 0.116,
+    "note": "hit 证据 span 属于会话原文（不变量 quote == turn.content[start:end]，码点）；经 GET /api/v1/inspections/{id} 读取并在数据库原文上独立回验。质检 findings 的 knowledge_refs 本批为 0（历史 42 条 findings 亦为 0），因此未对质检做知识版本打开断言；知识版本端点由建议引用补充验证 2/2（quote 在版本原文中、分块区间一致）。"
   }
 }

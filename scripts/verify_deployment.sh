@@ -72,6 +72,7 @@ done <<< "$LISTEN"
 echo "-- 3) worker 容器（常驻质检进程，T41/#41）"
 API_IMAGE_TAG="$(remote "docker inspect -f '{{.Config.Image}}' bank-assistant-api")" \
   || fail "无法读取 API 容器镜像标签"
+WORKER_RESULT="api+worker 容器"
 if [ "$EXPECT_WORKER" = "1" ]; then
   WORKER_INFO="$(remote "docker inspect -f '{{.State.Status}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}|{{.Config.Image}}|{{.HostConfig.RestartPolicy.Name}}|{{if .HostConfig.PortBindings}}{{json .HostConfig.PortBindings}}{{else}}null{{end}}|{{json .Config.Cmd}}' bank-assistant-worker")" \
     || fail "无法读取 worker 容器 bank-assistant-worker（compose 未编排或未启动）"
@@ -96,6 +97,7 @@ else
   [ "$W_STATUS" != "running" ] \
     || fail "EXPECT_WORKER=0 但 worker 容器仍在运行（回滚到旧编排前应先停 worker）"
   echo "   跳过 worker 常驻校验（EXPECT_WORKER=0；worker=${W_STATUS:-absent}）"
+  WORKER_RESULT="api 容器（worker 按预期停止）"
 fi
 
 echo "-- 4) 登录演示账号并读取版本页（令牌不打印）"
@@ -142,4 +144,4 @@ if os.environ.get("REQUIRE_INDEX") == "1":
 print("   版本页断言：PASS")
 PY
 
-echo "RESULT: PASS（live/ready 200、端口回环、api+worker 容器、版本页真实且与部署 SHA 一致）"
+echo "RESULT: PASS（live/ready 200、端口回环、${WORKER_RESULT}、版本页真实且与部署 SHA 一致）"
