@@ -1,9 +1,9 @@
 # 执行进度
 
 当前里程碑：M0–M7 全部 **ACCEPTED**（负责人 2026-11-13 明确签收）；继续推进 M7 后续风险项与真实微调实验。M6 已交付（T28 harness、T35 真实 QLoRA 已执行；T36 已把 test 核心诉求 Recall@5 提到 0.944）
-当前任务：T35 真实微调已完成（2026-11-13）；T36、T37 已完成（T37 已发布 v0.1.1，检索改进落到生产链路）；T39 已完成质检 P95 实测与供应商故障演练；T40 已完成质检 quote-first 证据定位修复（R-19 关闭）；T41 已发布 v0.1.2（线上补常驻 worker 并部署 R-19 修复，R-07 关闭）
-当前状态：M1–M5 已交付（等待负责人验收）；M6 已交付（T26/T27 完成、T28 harness 交付、**T35 真实训练已执行：tuned 0.76 vs baseline 0.64 / macro-F1 0.7441 vs 0.6138，n=50**；T36 检索改进 test R@5 0.944；引用支持度 NOT_MEASURED）；**M7-01～M7-06 已交付**（不可变镜像部署、备份恢复/回滚/索引重建、指标与脱敏日志、限流/输入上限/安全测试、发布清单与 `make release-verify`；2026-11-12）。T37 已把 title_chunk + 确定性重排落到生产并重建线上索引（v0.1.1）。计划 §7 的 10 并发压测已由 T38 实测达标（P95 最大 43.224ms、0 错误），DB 停机/RTO 已实测；T39 实测质检接收 P95 **245.244ms**、完成 P95 **41.879s**（n=60），但成功率仅 **10/60**（50 次 `EVIDENCE_INVALID`）；T40 改为 quote-first + 后端确定性定位后 **60/60 succeeded、hit 证据 100/100 回验**（详见下方 T40 小节）。Recall@5/引用支持度/24h 满窗仍未全部达成，见 [M7 报告](milestones/M7-report.md)、[M7 性能报告](milestones/M7-performance-report.md) 与 [风险清单](ops/risk-register.md)
-本机代码分支：`feat/bank-assistant`（集成分支；T31 在 `ticket/T31` 打包，T35 在 `ticket/T35` 执行真实微调，T37 在 `ticket/T37` 落地检索改进，T41 在 `ticket/T41` 发布 v0.1.2）
+当前任务：T35 真实微调已完成（2026-11-13）；T36、T37 已完成（T37 已发布 v0.1.1，检索改进落到生产链路）；T39 已完成质检 P95 实测与供应商故障演练；T40 已完成质检 quote-first 证据定位修复（R-19 关闭）；T41 已发布 v0.1.2（线上补常驻 worker 并部署 R-19 修复，R-07 关闭）；**T42 已交付引用支持度人工标注包与计分工具，等待负责人标注**
+当前状态：M1–M5 已交付（等待负责人验收）；M6 已交付（T26/T27 完成、T28 harness 交付、**T35 真实训练已执行：tuned 0.76 vs baseline 0.64 / macro-F1 0.7441 vs 0.6138，n=50**；T36 检索改进 test R@5 0.944；引用支持度 NOT_MEASURED，**T42 标注包已就绪：67 条引用 + 9 条无证据对照，标签为空，等待负责人标注**）；**M7-01～M7-06 已交付**（不可变镜像部署、备份恢复/回滚/索引重建、指标与脱敏日志、限流/输入上限/安全测试、发布清单与 `make release-verify`；2026-11-12）。T37 已把 title_chunk + 确定性重排落到生产并重建线上索引（v0.1.1）。计划 §7 的 10 并发压测已由 T38 实测达标（P95 最大 43.224ms、0 错误），DB 停机/RTO 已实测；T39 实测质检接收 P95 **245.244ms**、完成 P95 **41.879s**（n=60），但成功率仅 **10/60**（50 次 `EVIDENCE_INVALID`）；T40 改为 quote-first + 后端确定性定位后 **60/60 succeeded、hit 证据 100/100 回验**（详见下方 T40 小节）。Recall@5/引用支持度/24h 满窗仍未全部达成，见 [M7 报告](milestones/M7-report.md)、[M7 性能报告](milestones/M7-performance-report.md) 与 [风险清单](ops/risk-register.md)
+本机代码分支：`feat/bank-assistant`（集成分支；T31 在 `ticket/T31` 打包，T35 在 `ticket/T35` 执行真实微调，T37 在 `ticket/T37` 落地检索改进，T41 在 `ticket/T41` 发布 v0.1.2，T42 在 `ticket/T42` 准备引用支持度标注包）
 发布代码SHA：`7542309`（`v0.1.2` 镜像身份；后续文档提交不改变镜像）
 Ubuntu代码SHA：`7542309`（服务镜像与服务器 checkout 一致；镜像 `bank-assistant:api-7542309`，api+worker 同镜像；T35 微调执行 SHA `1746d16` 仅用于训练产物，不是服务镜像）
 最近更新：2026-11-13（Asia/Shanghai）
@@ -24,6 +24,19 @@ Ubuntu代码SHA：`7542309`（服务镜像与服务器 checkout 一致；镜像 
 | 测试 | `uv run pytest tests -q`：**716 passed, 138 deselected**；`make test-integration`：**138 passed** |
 | 风险 | **R-07 CLOSED（单副本）**；R-19 修复已在线上生效；新增残留：worker 单副本、进程探针不判断业务成功、在途任务靠租约回收 |
 | 报告 | [v0.1.2 发布记录](releases/v0.1.2.md)、[运维手册](ops/runbook.md)、[风险清单](ops/risk-register.md) §4 |
+
+## T42 引用支持度人工标注包（#42，2026-11-13）
+
+| 项 | 结果 |
+|---|---|
+| 交付 | [标注包](eval/citation-support-pack.md)、`labels/citation-support.csv`（8 列，`label`/`note` 为空）、`scripts/score_citation_support.py`、离线重生成脚本 `scripts/build_citation_support_pack.py`、计分核心 `src/bank_assistant/evaluation/citation_support.py` |
+| 覆盖 | **67 条引用**（lost_card 23 / credit_card_fee 20 / complaint 24）+ **9 条无证据/证据不足对照**（不进入支持率分母） |
+| 来源 | 5 条 live（T37 生产端到端真实 DeepSeek+BGE，均 lost_card）+ 62 条 replay（冻结 test/dev，`DemoReplayResponder` 抽取式答复；**不是模型质量证据**）；逐条来源见包的 `来源` 列 |
+| 标注规则 | `SUPPORTED` / `NOT_SUPPORTED` / `UNKNOWN`；禁止预填、禁止模型判断冒充人工、禁止用引用合法性冒充支持度 |
+| 计分 | `uv run python scripts/score_citation_support.py --labels labels/citation-support.csv`；当前输出 **WAITING_FOR_HUMAN**（labeled=0），不产生分数；标注后报告实际分母、支持率、`UNKNOWN` 比例、分场景与 Wilson 95% CI，并给 `PASS`/`FAIL`/`INSUFFICIENT_SAMPLE` |
+| 测试 | 新增 16 项离线测试（计分边界 14 + 包结构/引用原文完整性 2）；`uv run pytest tests -q` **732 passed, 138 deselected**（含新增） |
+| 状态 | **READY_FOR_ACCEPTANCE（包/工具/文档）**；引用支持度仍 **NOT_MEASURED**，等待负责人标注 ≥50 条 |
+| 风险 | R-02 从「无材料」变为 **OPEN，可操作**，owner=负责人（user）；标签填完前不写支持率、不宣称 §7 达标 |
 
 ## T40 质检 quote-first 证据定位（#40，2026-11-13）
 
@@ -68,6 +81,7 @@ quote-first 证据定位（prompt `inspection-v2:f9740dfe…`）：模型只回�
 | #37 T37 检索改进落地生产 | DONE | `title_chunk` + α=0.2 重排已上生产；镜像 `api-3a04952`，索引 `idx-20261113T025706Z-f7974a6a`（内容身份 `08542afd…`，两次重建一致）；`make release-verify` PASS；会话与固定查询端到端引用打开原文 6/6；镜像/索引回滚演练 PASS。见 [v0.1.1 发布记录](releases/v0.1.1.md) |
 | #40 T40 质检证据定位修复 | DONE | quote-first + 归一化定位；离线/集成测试全绿；R-19 关闭（60/60） |
 | #41 T41 发布 v0.1.2（worker + R-19 上线） | DONE | compose api+worker、`make deploy`/`release-verify`/回滚演练 PASS；线上 6/6 真实质检、`hit` 证据 9/9；`make release-verify` PASS；R-07 关闭。见 [v0.1.2 发布记录](releases/v0.1.2.md) |
+| #42 T42 引用支持度人工标注包 | READY_FOR_ACCEPTANCE | 67 条引用 + 9 条无证据对照；CSV `label`/`note` 为空；计分脚本当前 `WAITING_FOR_HUMAN`；新增 16 项离线测试。见 [标注包](eval/citation-support-pack.md)；负责人填写 ≥50 条 `label` 后运行计分，在此之前引用支持度仍 NOT_MEASURED |
 
 ## 负责人验收（2026-11-13）
 
@@ -259,7 +273,7 @@ M5 报告：`docs/milestones/M5-report.md`（T25 交付）。web 48 tests、`mak
 
 ## M6 验收
 
-M6 报告：`docs/milestones/M6-report.md`（READY_FOR_ACCEPTANCE，含未达门槛与 NOT_RUN 明示）。数据集 330/186 冻结；replay 全量 + live 20 条；Recall@5 replay 0.833 **未达 0.85**；引用支持度/人工相关性 NOT_MEASURED；微调：T28 `NOT_RUN`（2026-11-12，GPU 未获授权）→ **T35 真实执行（2026-11-13）**：Qwen3-1.7B 4-bit QLoRA，冻结 test accuracy 0.64 → 0.76、macro-F1 0.6138 → 0.7441（n=50，不宣称显著），见 [M6 微调报告](milestones/M6-tuning-report.md)。
+M6 报告：`docs/milestones/M6-report.md`（READY_FOR_ACCEPTANCE，含未达门槛与 NOT_RUN 明示）。数据集 330/186 冻结；replay 全量 + live 20 条；Recall@5 replay 0.833 **未达 0.85**；引用支持度/人工相关性 **NOT_MEASURED**（T42 标注包已就绪：67 条引用 + 9 条无证据对照，标签为空，等待负责人标注）；微调：T28 `NOT_RUN`（2026-11-12，GPU 未获授权）→ **T35 真实执行（2026-11-13）**：Qwen3-1.7B 4-bit QLoRA，冻结 test accuracy 0.64 → 0.76、macro-F1 0.6138 → 0.7441（n=50，不宣称显著），见 [M6 微调报告](milestones/M6-tuning-report.md)。
 
 ## M6 工单状态
 

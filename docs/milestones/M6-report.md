@@ -130,12 +130,21 @@ complaint 分母只有 15，2 条未命中就等于 13.3 个百分点，单条�
 | 检索 Recall@5 | ≥ 0.85（固定 test，按场景） | replay 全量核心诉求原 0.833；T36 改进后 **0.944**（complaint 0.867 / fee 1.000 / lost 0.962）；live 20 条 1.0（样本过小） | **达标**（T36 后 0.944 ≥ 0.85，complaint ≥ 0.80；原 0.833 未达标已保留） |
 | 无答案处理 | ≥ 0.90 | 5 条子集，core 5/5、original 2/5 | 分母过小，**不足以判定** |
 | 引用合法性 | 100% | 100%（构造性保证 + 断言） | 达标 |
-| 引用支持度 | ≥ 0.95（人工抽检 ≥50） | 未标注支持度标签 | **NOT_MEASURED**，不宣称 |
+| 引用支持度 | ≥ 0.95（人工抽检 ≥50） | 标注包已就绪：**67 条引用 + 9 条无证据对照**，`label`/`note` 为空；计分命令见下方 T42 小节 | **NOT_MEASURED（等待负责人标注）**；未标注前不产生分数、不宣称 |
 | 质检 macro-F1 | ≥ 0.80 | 仅有 20 条 live 小样本，规则/组合 1.0、LLM 0.333 | 小样本，**不作为达标准据** |
 | 高风险规则 Recall | ≥ 0.95 | 同上，LLM 基线 0.286 | 小样本，**不足以判定** |
 | 证据定位 | 精确原文 100% + 人工相关性 ≥0.95 | 精确 100%；人工相关性未标注 | 部分达标，人工部分 **NOT_MEASURED** |
 | 候选答复 P95 | ≤ 15 s | live p95 1.66 s（120 次调用） | 达标（小样本） |
 | 评测可复跑 | `make eval EVAL_CONFIG=` | replay 全量 + live 小样本均可复跑 | 达标（Ubuntu 复跑待补） |
+
+### 引用支持度人工标注包（T42 / #42，2026-11-13）
+
+- **包与 CSV**：`docs/eval/citation-support-pack.md`；`labels/citation-support.csv`（`label`/`note` 全部为空，等待负责人填写）。
+- **覆盖**：`lost_card` 23 / `credit_card_fee` 20 / `complaint` 24 = **67 条引用**；另有 **9 条无证据/证据不足对照**（`cs-noev-*`，不进入支持率分母）。
+- **来源**：5 条 live（T37 生产端到端，真实 DeepSeek + BGE，均 `lost_card`）+ 62 条 replay（冻结 test/dev，`DemoReplayResponder` 抽取式答复；**不是模型质量证据**）。逐条来源写在包的 `来源` 列。
+- **计分**：`uv run python scripts/score_citation_support.py --labels labels/citation-support.csv`。当前输出 `WAITING_FOR_HUMAN`，**不产生分数**；负责人标注后脚本才报告已标注分母、支持率、`UNKNOWN` 比例、分场景与 Wilson 95% 区间，并按 ≥0.95 判定 `PASS`/`FAIL`/`INSUFFICIENT_SAMPLE`。
+- **标注规则**：`SUPPORTED`（引用包含/蕴含答复节选的关键事实/数字/条件）、`NOT_SUPPORTED`（答复陈述引用不支持的事实）、`UNKNOWN`（无关/信息不足/无法判断）。**禁止预填，禁止用模型判断冒充人工标注，禁止用引用合法性冒充支持度。**
+- **边界**：live 只有 5 条且集中在 `lost_card`；replay 是抽取式答复，引用支持度天然偏高。因此**本包完成不等于 §7 引用支持度达标**；要用于门槛判定，应在生产上用 ≥50 条 live 候选答复重新抽样并人工标注。
 
 ## 条件性微调：T28 `NOT_RUN` → T35 真实执行（2026-11-13）
 
@@ -154,7 +163,7 @@ complaint 分母只有 15，2 条未命中就等于 13.3 个百分点，单条�
 ## 遗留与下一步
 
 1. **Ubuntu 复跑未执行**：`make eval` 目前在 Mac 上跑（DB 经隧道），需在 Ubuntu 上复跑一次才算完全满足计划书 M6 门槛。
-2. **引用支持度/人工相关性未标注**：需要人工抽检 ≥50 条，属负责人/业务侧工作，模型不能自称完成。
+2. **引用支持度/人工相关性仍待负责人标注**：T42 标注包已就绪（`docs/eval/citation-support-pack.md`，67 条引用 + 9 条无证据对照，CSV 标签为空），计分命令 `uv run python scripts/score_citation_support.py --labels labels/citation-support.csv`。当前仍为 **NOT_MEASURED**；负责人完成 ≥50 条标注后再报告实际分母、支持率与 Wilson 区间，不得用模型自评或引用合法性冒充。
 3. ~~**Recall@5 未达 0.85**：complaint 场景 0.600 是主要短板~~ → T36 已把 test 核心诉求 Recall@5 提到 0.944（complaint 0.867），见上方「检索（T36 改进后）」。~~生产索引尚未落地标题拼入~~ → T37（#37）已在生产落地 `title_chunk` + α=0.2 重排并重建线上索引（`idx-20261113T025706Z-f7974a6a`，镜像 `api-3a04952`）。残余风险：complaint 分母 15、单条敏感；生产侧只做了端到端与索引身份验证，未重测生产语义质量。
 4. 微调已由 T35 真实执行（2026-11-13）：有提升但 n=50 不宣称显著；后续若继续，应预注册更大训练预算并另做新 test，不得在本次 test 上调参/挑 checkpoint。
 5. relay 无公开价目表，成本为估算值，已在报告中标注。
