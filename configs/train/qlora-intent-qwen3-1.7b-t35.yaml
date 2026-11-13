@@ -1,0 +1,75 @@
+# M6 条件任务真实执行（T35，#35）：Qwen3-1.7B 4-bit QLoRA 意图分类
+#
+# 与 `qlora-intent-qwen3-1.7b.yaml`（T28，#29 的 NOT_RUN 记录）唯一不同的是
+# `hardware.allow_time_sharing: true`：
+#
+# - 负责人于 2026-11-13 停止另一项目并**明确授权使用服务器 GPU** 跑这次真实实验；
+# - RTX 3060 Ti 上仍有 `dingtalk-embed` 残留 1280 MiB（**不得 kill**），实测空闲
+#   6047 MiB，因此允许与该残留进程共享，而不是抢占/杀进程；
+# - `min_free_vram_gib: 2.0` 闸门保留：空闲显存低于 2 GiB 仍然拒绝启动。
+#
+# 其余超参与 T28 候选配置完全一致（202 条 train、2 epochs、grad accum=16、
+# seq=512、lr=1e-4、seed=42），避免"看着结果改口径"。
+#
+# 用法：
+#   uv run python -m scripts.train_intent_lora --config configs/train/qlora-intent-qwen3-1.7b-t35.yaml --dry-run --allow-download
+#   uv run python -m scripts.train_intent_lora --config configs/train/qlora-intent-qwen3-1.7b-t35.yaml --execute --allow-download
+
+run:
+  artifact_root: artifacts/training
+  seed: 42
+  run_id: null
+
+dataset:
+  dataset_id: bank-cs-m6-synthetic
+  dataset_version: v1
+  dataset_dir: artifacts/data/bank-cs-m6-synthetic/v1
+  split: train
+  task: retrieval
+  text_field: query
+  label_field: business_type
+
+model:
+  name: Qwen/Qwen3-1.7B
+  revision: main
+  license: Apache-2.0
+  parameter_count_b: 1.7
+  provider: local_model
+  trust_remote_code: false
+
+quantization:
+  load_in_4bit: true
+  quant_type: nf4
+  double_quant: true
+  compute_dtype: bfloat16
+
+lora:
+  r: 16
+  alpha: 32
+  dropout: 0.05
+  target_modules: [q_proj, k_proj, v_proj, o_proj]
+
+training:
+  max_seq_length: 512
+  per_device_train_batch_size: 1
+  gradient_accumulation_steps: 16
+  num_train_epochs: 2
+  learning_rate: 1.0e-4
+  lr_scheduler_type: cosine
+  warmup_ratio: 0.03
+  gradient_checkpointing: true
+  logging_steps: 5
+  max_steps: -1
+  bf16: true
+
+evaluation:
+  split: test
+  batch_size: 1
+  max_new_tokens: 8
+  prompt_version: intent-routing-v1
+
+hardware:
+  require_cuda: true
+  min_total_vram_gib: 8.0
+  min_free_vram_gib: 2.0
+  allow_time_sharing: true    # 负责人 2026-11-13 授权；不 kill dingtalk-embed
