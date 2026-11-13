@@ -19,9 +19,12 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
+import sys
 import time
 from collections.abc import Callable
 from datetime import datetime
+from pathlib import Path
 from uuid import uuid4
 
 from sqlalchemy.orm import Session, sessionmaker
@@ -37,9 +40,41 @@ from bank_assistant.inspections.service import TASK_TYPE
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["Worker", "main"]
+__all__ = ["Worker", "live_worker_pids", "main"]
 
 DEFAULT_POLL_SECONDS = 1.0
+WORKER_MARKER = b"bank_assistant.worker"
+
+
+def live_worker_pids(proc_root: Path = Path("/proc")) -> list[int]:
+    """进程存活检查（T41）：扫描 ``/proc/<pid>/cmdline`` 找常驻 worker。
+
+    worker 没有 HTTP 端点，compose 的 healthcheck 需要一条不依赖 ``pgrep``/
+    ``procps`` 的命令（运行时镜像是 slim，未装 procps）。判据是 argv 中恰好有
+    ``bank_assistant.worker`` 这一项；**排除探针自身**（探针命令行同样包含该串），
+    否则 worker 已死时也会误报存活。读不到 ``cmdline``（进程刚退出、权限不足）
+    的条目直接跳过，不让探针因竞态崩溃。
+    """
+
+    own_pid = os.getpid()
+    found: list[int] = []
+    try:
+        entries = list(proc_root.iterdir())
+    except OSError:
+        return found
+    for entry in entries:
+        if not entry.name.isdigit():
+            continue
+        pid = int(entry.name)
+        if pid == own_pid:
+            continue
+        try:
+            argv = (entry / "cmdline").read_bytes().split(b"\0")
+        except OSError:
+            continue
+        if WORKER_MARKER in argv:
+            found.append(pid)
+    return sorted(found)
 
 
 class Worker:
@@ -167,7 +202,21 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--worker-id", default=None, help="租约持有者标识")
     parser.add_argument("--lease-seconds", type=int, default=None, help="任务租约秒数")
+    parser.add_argument(
+        "--healthcheck",
+        action="store_true",
+        help="只做进程存活检查（compose healthcheck 用），0=存活 1=没有 worker",
+    )
     args = parser.parse_args(argv)
+
+    if args.healthcheck:
+        # 不构建模型网关、不连数据库：探针只回答「进程还在不在」。
+        pids = live_worker_pids()
+        if not pids:
+            print("worker process not found", file=sys.stderr)
+            return 1
+        print(f"worker alive pids={','.join(str(pid) for pid in pids)}")
+        return 0
 
     logging.basicConfig(
         level=settings.LOG_LEVEL.upper(),

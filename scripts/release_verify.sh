@@ -5,8 +5,8 @@
 # 任一不一致非零退出，避免“文档写 A、线上跑 B”的静默漂移。
 #
 # 核对项（与 issue #32 对应）：
-#   - 运行容器 image id 与标签；
-#   - 容器运行/健康状态；
+#   - 运行容器 image id 与标签（api + worker，同一不可变镜像）；
+#   - 容器运行/健康状态、worker 无发布端口；
 #   - Alembic head；
 #   - /health/live、/health/ready；
 #   - /api/v1/system/version 的 code_sha、活动索引版本、校准 sha256、
@@ -56,6 +56,7 @@ fields = {
     "IMAGE_TAG": "image.tag",
     "IMAGE_ID": "image.id",
     "CONTAINER": "deployment.container",
+    "WORKER_CONTAINER": "deployment.worker_container",
     "DEPLOY_PORT": "deployment.port",
     "DB_CONTAINER": "database.container",
     "DB_NAME": "database.name",
@@ -101,6 +102,24 @@ check_eq "image tag" "$IMAGE_TAG" "$RUN_TAG"
 TAG_IMAGE_ID="$(remote "docker image inspect -f '{{.Id}}' '$IMAGE_TAG'")" \
   || fail "服务器上没有镜像 $IMAGE_TAG"
 check_eq "image tag id" "$IMAGE_ID" "$TAG_IMAGE_ID"
+
+echo "-- 1b) worker 容器（常驻质检进程，同一镜像）"
+WORKER_INFO="$(remote "docker inspect -f '{{.State.Status}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}|{{.Image}}|{{.Config.Image}}|{{.HostConfig.RestartPolicy.Name}}|{{if .HostConfig.PortBindings}}{{json .HostConfig.PortBindings}}{{else}}null{{end}}|{{json .Config.Cmd}}' '$WORKER_CONTAINER'")" \
+  || fail "无法读取 worker 容器 $WORKER_CONTAINER"
+IFS='|' read -r W_STATUS W_HEALTH W_IMAGE W_TAG W_RESTART W_PORTS W_CMD <<< "$WORKER_INFO"
+[ "$W_STATUS" = "running" ] || fail "worker 状态是 $W_STATUS，不是 running"
+[ "$W_HEALTH" = "healthy" ] || fail "worker 健康状态是 $W_HEALTH，不是 healthy"
+check_eq "worker image id" "$IMAGE_ID" "$W_IMAGE"
+check_eq "worker image tag" "$IMAGE_TAG" "$W_TAG"
+check_eq "worker restart" "unless-stopped" "$W_RESTART"
+case "$W_PORTS" in
+  null|"{}") echo "   OK worker 无发布端口（${W_PORTS}）" ;;
+  *) fail "worker 不应发布端口：$W_PORTS" ;;
+esac
+case "$W_CMD" in
+  *bank_assistant.worker*) echo "   OK worker command=$W_CMD" ;;
+  *) fail "worker command 不是 python -m bank_assistant.worker：$W_CMD" ;;
+esac
 
 echo "-- 2) 健康探针（服务器回环）"
 LIVE="$(remote "curl -fsS --max-time 5 '$BASE_URL/health/live'")" \
@@ -164,4 +183,4 @@ if errors:
     sys.exit(1)
 PY
 
-echo "RESULT: PASS（release ${REL_VERSION}：image id/标签、容器健康、Alembic head、健康探针、版本页字段全部一致）"
+echo "RESULT: PASS（release ${REL_VERSION}：api+worker image id/标签、容器健康、Alembic head、健康探针、版本页字段全部一致）"

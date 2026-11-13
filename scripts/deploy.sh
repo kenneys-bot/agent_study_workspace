@@ -7,9 +7,9 @@
 # 3. `docker save | ssh docker load` 传到服务器，比对两端 image id；
 # 4. 用 git bundle 把服务器 checkout 精确重置到同一 SHA（不 push、不给服务器写凭据）；
 # 5. 服务器运行仓库外副本 deploy/compose.app.yml（与 compose.db.yml 同模式），
-#    配置从仓库外 .env.app 读取，端口只绑 127.0.0.1；
+#    配置从仓库外 .env.app 读取，端口只绑 127.0.0.1；同一镜像起 api + worker（T41）；
 # 6. 记录上一版镜像/SHA 到 ~/workspace/bank-assistant/deploy/state.env 供 rollback 使用；
-# 7. 校验 /health/live、/health/ready、端口回环绑定与版本页 SHA。
+# 7. 校验 /health/live、/health/ready、端口回环绑定、api+worker 容器与版本页 SHA。
 #
 # 可用环境变量：
 #   DEPLOY_HOST=my-ubuntu-server  REMOTE_ROOT=~/workspace/bank-assistant
@@ -133,7 +133,7 @@ if [ -n "$CURRENT_IMAGE" ] && [ "$CURRENT_IMAGE" != "$IMAGE" ]; then
 fi
 [ -n "$PREVIOUS_IMAGE" ] || echo "   提示：暂无上一版镜像（首次部署，回滚点为空）"
 
-echo "-- docker compose up（restart=unless-stopped，127.0.0.1:${API_PORT}）"
+echo "-- docker compose up（api + worker，restart=unless-stopped，API 127.0.0.1:${API_PORT}）"
 remote "mkdir -p '$REMOTE_ROOT/deploy' && umask 022 && cat > '$STATE_FILE'" <<EOF
 DEPLOYED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 CURRENT_IMAGE=$IMAGE
@@ -143,6 +143,7 @@ CURRENT_IMAGE_ID=$REMOTE_IMAGE_ID
 PREVIOUS_IMAGE=$PREVIOUS_IMAGE
 PREVIOUS_SHA=$PREVIOUS_SHA
 API_PORT=$API_PORT
+WORKER_CONTAINER=bank-assistant-worker
 EOF
 
 remote "cd '$REMOTE_REPO' && \
@@ -153,8 +154,13 @@ remote "cd '$REMOTE_REPO' && \
   API_IMAGE='$IMAGE' APP_GIT_SHA='$CODE_SHA' APP_GIT_BRANCH='$BRANCH' \
   docker compose -f '$REMOTE_ROOT/deploy/compose.app.yml' up -d --wait --wait-timeout 180"
 
-echo "-- 校验部署"
-EXPECT_CODE_SHA="$CODE_SHA" REQUIRE_INDEX="${REQUIRE_INDEX:-0}" \
+# make deploy 输出里显式给出 worker 状态；细节断言在 verify_deployment.sh 的 worker 段。
+WORKER_STATE="$(remote "docker inspect -f '{{.State.Status}}/{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' bank-assistant-worker")" \
+  || fail "worker 容器未创建（compose 未包含 worker 或启动失败）"
+echo "   worker bank-assistant-worker: $WORKER_STATE"
+
+echo "-- 校验部署（api + worker）"
+EXPECT_CODE_SHA="$CODE_SHA" REQUIRE_INDEX="${REQUIRE_INDEX:-0}" EXPECT_WORKER=1 \
   bash "$REPO_ROOT/scripts/verify_deployment.sh"
 
 echo "OK: deployed ${IMAGE}（code_sha=$CODE_SHA image_id=${REMOTE_IMAGE_ID}）"

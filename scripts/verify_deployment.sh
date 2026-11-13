@@ -4,17 +4,20 @@
 # 校验项：
 # - /health/live 与 /health/ready 从服务器回环真实返回 200；
 # - API 端口只绑 127.0.0.1（docker port 与 ss 两处证据），不从 0.0.0.0 暴露；
+# - worker 容器正在运行、healthy、与 API 同一镜像、无发布端口（T41/#41）；
 # - 用演示账号登录（演示密码是仓库里公开的 demo-only 值，不是秘密）后读取
 #   /api/v1/system/version，断言代码 SHA / 活动索引 / 模型字段；
 # - 不打印令牌、密码或连接串。
 #
-# 环境变量：DEPLOY_HOST、API_PORT、EXPECT_CODE_SHA（可选）、REQUIRE_INDEX=1（可选）
+# 环境变量：DEPLOY_HOST、API_PORT、EXPECT_CODE_SHA（可选）、REQUIRE_INDEX=1（可选）、
+#   EXPECT_WORKER=1（默认；回滚到无 worker 的旧编排时传 0，断言 worker 未运行）
 set -euo pipefail
 
 DEPLOY_HOST="${DEPLOY_HOST:-my-ubuntu-server}"
 API_PORT="${API_PORT:-8000}"
 EXPECT_CODE_SHA="${EXPECT_CODE_SHA:-}"
 REQUIRE_INDEX="${REQUIRE_INDEX:-1}"
+EXPECT_WORKER="${EXPECT_WORKER:-1}"
 DEMO_USER="${DEMO_USER:-demo-author}"
 # 与 scripts/seed_demo_accounts.py 的公开演示密码一致；不是任何环境的秘密。
 DEMO_PASSWORD="${DEMO_PASSWORD:-demo-only-correct-horse-battery}"
@@ -66,7 +69,36 @@ while IFS= read -r addr; do
   esac
 done <<< "$LISTEN"
 
-echo "-- 3) 登录演示账号并读取版本页（令牌不打印）"
+echo "-- 3) worker 容器（常驻质检进程，T41/#41）"
+API_IMAGE_TAG="$(remote "docker inspect -f '{{.Config.Image}}' bank-assistant-api")" \
+  || fail "无法读取 API 容器镜像标签"
+if [ "$EXPECT_WORKER" = "1" ]; then
+  WORKER_INFO="$(remote "docker inspect -f '{{.State.Status}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}|{{.Config.Image}}|{{.HostConfig.RestartPolicy.Name}}|{{if .HostConfig.PortBindings}}{{json .HostConfig.PortBindings}}{{else}}null{{end}}|{{json .Config.Cmd}}' bank-assistant-worker")" \
+    || fail "无法读取 worker 容器 bank-assistant-worker（compose 未编排或未启动）"
+  IFS='|' read -r W_STATUS W_HEALTH W_IMAGE W_RESTART W_PORTS W_CMD <<< "$WORKER_INFO"
+  [ "$W_STATUS" = "running" ] || fail "worker 容器状态是 $W_STATUS，不是 running"
+  [ "$W_HEALTH" = "healthy" ] || fail "worker 健康状态是 $W_HEALTH，不是 healthy"
+  [ "$W_IMAGE" = "$API_IMAGE_TAG" ] \
+    || fail "worker 镜像 $W_IMAGE 与 API 镜像 $API_IMAGE_TAG 不一致（同一不可变镜像约束）"
+  [ "$W_RESTART" = "unless-stopped" ] || fail "worker restart 策略是 $W_RESTART，不是 unless-stopped"
+  case "$W_PORTS" in
+    null|"{}") ;;
+    *) fail "worker 不应发布端口：$W_PORTS" ;;
+  esac
+  case "$W_CMD" in
+    *bank_assistant.worker*) ;;
+    *) fail "worker command 不是 python -m bank_assistant.worker：$W_CMD" ;;
+  esac
+  echo "   worker: $W_STATUS/$W_HEALTH image=$W_IMAGE restart=$W_RESTART ports=${W_PORTS}"
+  echo "   command: $W_CMD"
+else
+  W_STATUS="$(remote "docker inspect -f '{{.State.Status}}' bank-assistant-worker 2>/dev/null" || true)"
+  [ "$W_STATUS" != "running" ] \
+    || fail "EXPECT_WORKER=0 但 worker 容器仍在运行（回滚到旧编排前应先停 worker）"
+  echo "   跳过 worker 常驻校验（EXPECT_WORKER=0；worker=${W_STATUS:-absent}）"
+fi
+
+echo "-- 4) 登录演示账号并读取版本页（令牌不打印）"
 LOGIN_JSON="$(python3 - "$DEMO_USER" "$DEMO_PASSWORD" <<'PY'
 import json, sys
 print(json.dumps({"username": sys.argv[1], "password": sys.argv[2]}))
@@ -110,4 +142,4 @@ if os.environ.get("REQUIRE_INDEX") == "1":
 print("   版本页断言：PASS")
 PY
 
-echo "RESULT: PASS（live/ready 200、端口回环、版本页真实且与部署 SHA 一致）"
+echo "RESULT: PASS（live/ready 200、端口回环、api+worker 容器、版本页真实且与部署 SHA 一致）"
