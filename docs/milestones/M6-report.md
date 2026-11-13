@@ -81,10 +81,17 @@ dev 迭代记录（分母 68 answerable；complaint 23 / fee 19 / lost 26）：
   （`tests/test_eval_retrieval.py::test_title_index_rebuild_reproduces_index_version_and_ranking`）。
 - 冻结 test 哈希未变：`869a8bd02b231d071fe1cff3299bd587e6ccd4771675b2485327685463c70096`。
 
-**范围说明（不夸大）**：本次改动落在评测检索快照层 `RetrievalHarness`；生产
-Chroma 索引（`knowledge/indexing.py`）仍只对正文做 embedding。要在生产获得
-同等收益，需把标题拼入生产索引输入并按 ADR-0005 新建/重建索引版本；该落地
-不在本票范围，因此上面的数字是评测口径，不是生产上线声明。
+**范围说明（T37 已关闭，不夸大）**：T36 的改动原先只落在评测检索快照层
+`RetrievalHarness`；T37（#37）已把同一套实现（`knowledge/ranking.py`）落到
+生产：生产索引的 embedding 输入按 `embedding_text=title_chunk` 拼入标题，
+`SuggestionService` 在候选池内做 α=0.2 的确定性重排并把 `rerank_status`/参数
+写入 `retrieval_snapshot`。线上活动索引 `idx-20261113T025706Z-f7974a6a`
+（`embedding_text=title_chunk`、校准 sha `136e030a…`、内容身份
+`08542afd…`，两次重建一致），镜像 `bank-assistant:api-3a04952`，
+`make release-verify` PASS。固定查询「挂失可以通过哪些渠道办理」的生产 Top1
+从「境外与异地挂失的处理路径」变为「挂失受理渠道与身份核验」，端到端引用
+可打开原文。**但上面的召回/MRR 数字仍是冻结 test 的评测口径**；生产侧只证明
+改进已生效、索引身份可追溯，没有重新测生产语义质量，也不把评测分数当业务收益。
 
 **残余差距**：整体 0.944（≥0.85）与 complaint 0.867（≥0.80）均过线，但
 complaint 分母只有 15，2 条未命中就等于 13.3 个百分点，单条样本敏感；且标注
@@ -148,7 +155,7 @@ complaint 分母只有 15，2 条未命中就等于 13.3 个百分点，单条�
 
 1. **Ubuntu 复跑未执行**：`make eval` 目前在 Mac 上跑（DB 经隧道），需在 Ubuntu 上复跑一次才算完全满足计划书 M6 门槛。
 2. **引用支持度/人工相关性未标注**：需要人工抽检 ≥50 条，属负责人/业务侧工作，模型不能自称完成。
-3. ~~**Recall@5 未达 0.85**：complaint 场景 0.600 是主要短板~~ → T36 已把 test 核心诉求 Recall@5 提到 0.944（complaint 0.867），见上方「检索（T36 改进后）」。残余风险：complaint 分母 15、单条敏感；生产索引尚未落地标题拼入，需按 ADR-0005 新建索引版本后再宣称生产收益。
+3. ~~**Recall@5 未达 0.85**：complaint 场景 0.600 是主要短板~~ → T36 已把 test 核心诉求 Recall@5 提到 0.944（complaint 0.867），见上方「检索（T36 改进后）」。~~生产索引尚未落地标题拼入~~ → T37（#37）已在生产落地 `title_chunk` + α=0.2 重排并重建线上索引（`idx-20261113T025706Z-f7974a6a`，镜像 `api-3a04952`）。残余风险：complaint 分母 15、单条敏感；生产侧只做了端到端与索引身份验证，未重测生产语义质量。
 4. 微调为条件任务，默认不阻塞 M7；如需执行，等待 GPU 窗口与安装授权。
 5. relay 无公开价目表，成本为估算值，已在报告中标注。
 
