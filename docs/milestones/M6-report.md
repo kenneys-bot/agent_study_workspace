@@ -37,6 +37,60 @@
 | 核心诉求分场景 | lost 0.962 / fee 0.941 / complaint 0.600 | — |
 | 无答案处理（分母 5） | original 2 / contextual 0 / core 5 | — |
 
+### 检索（T36 改进后，冻结 test，50 条；最终报告一次）
+
+T36（#36）诊断：dev complaint 基线 0.891，3 条失败全部是「混合意图 + 硬业务
+过滤」把跨业务金标挡在候选外；同时索引输入只用正文、标题不参与 embedding。
+失败分类与样例见 [`docs/eval/complaint-diagnosis.md`](../eval/complaint-diagnosis.md)。
+
+改动（全部在 `configs/eval/replay.yaml:retrieval`，每项可单独关闭回退）：
+
+1. `embedding_text: title_chunk`——把知识标题拼入 embedding 输入；分块边界与
+   `chunk_id` 不变，索引向量变化，`index_version` 随之变化（ADR-0005）。
+2. `rerank_alpha: 0.2`——候选池（20）内用查询字符二元组覆盖率做确定性本地
+   重排；不调用模型、不联网。
+3. `business_filter: soft` + `scenario_overrides` 已实现，但 dev 上收益仅来自
+   混合意图样本且整体 MRR 下降，**最终未启用**，保留为可回退开关。
+
+| 指标（冻结 test） | 原实现 | T36 改进后 |
+|---|---|---|
+| 核心诉求 Recall@5（分母 45） | 0.833 | **0.944** |
+| 核心诉求 MRR | 0.660 | **0.887** |
+| complaint Recall@5（分母 15） | 0.600 | **0.867**（13/15） |
+| credit_card_fee Recall@5（分母 17） | 0.941 | **1.000** |
+| lost_card Recall@5（分母 13） | 0.962 | **0.962** |
+| 无答案处理（分母 5） | 5/5 | **5/5** |
+
+dev 迭代记录（分母 68 answerable；complaint 23 / fee 19 / lost 26）：
+
+| 轮次 | 配置 | dev R@5 | dev MRR | complaint | fee | lost |
+|---|---|---:|---:|---:|---:|---:|
+| R0 基线 | chunk / hard / rerank 0 | 0.8309 | 0.5870 | 0.8913 | 0.7895 | 0.8077 |
+| R1 | title_chunk / hard / rerank 0 | 0.9485 | 0.7248 | 0.8913 | 1.0000 | 0.9615 |
+| R2（采用） | title_chunk / hard / rerank 0.2 | 0.9485 | **0.8044** | 0.8913 | 1.0000 | 0.9615 |
+| R3（探索，不采用） | R2 + complaint soft | 0.9559 | 0.7824 | 0.9130 | 1.0000 | 0.9615 |
+
+索引身份与重建验证（ADR-0005）：
+
+- `embedding_version=replay-lexical-char2gram-v1@512`；
+- `index_version`：旧 `eval-replay-lexical-char2gram-4b7845effc25` →
+  新 `eval-replay-lexical-char2gram-de9584124d4f`（标题拼入导致变化）；
+- `calibration_vector_sha256=bf224de4493846c91ec723000a8e63b67b855448b2d6ed61250036915413e853`
+  （final replay run manifest/metrics 记录）；
+- 重建验证：同一语料/provider/参数重建两次得到同一 `index_version` 与同一排序
+  （`tests/test_eval_retrieval.py::test_title_index_rebuild_reproduces_index_version_and_ranking`）。
+- 冻结 test 哈希未变：`869a8bd02b231d071fe1cff3299bd587e6ccd4771675b2485327685463c70096`。
+
+**范围说明（不夸大）**：本次改动落在评测检索快照层 `RetrievalHarness`；生产
+Chroma 索引（`knowledge/indexing.py`）仍只对正文做 embedding。要在生产获得
+同等收益，需把标题拼入生产索引输入并按 ADR-0005 新建/重建索引版本；该落地
+不在本票范围，因此上面的数字是评测口径，不是生产上线声明。
+
+**残余差距**：整体 0.944（≥0.85）与 complaint 0.867（≥0.80）均过线，但
+complaint 分母只有 15，2 条未命中就等于 13.3 个百分点，单条样本敏感；且标注
+仍是 `developer_single_annotator`、非人工金标。整体仍有 5.6% 的覆盖率缺口
+（lost 0.5/13、complaint 2/15），不宣称满分。
+
 ### 质检（replay，替身模型）
 
 | 基线 | macro-F1 | 高风险 Recall | 证据定位 |
@@ -62,7 +116,7 @@
 
 | 门槛 | 要求 | 实测 | 结论 |
 |---|---|---|---|
-| 检索 Recall@5 | ≥ 0.85（固定 test，按场景） | replay 全量核心诉求 0.833；live 20 条 1.0（样本过小） | **未达标**（0.833 < 0.85），complaint 0.600 为主要拖累 |
+| 检索 Recall@5 | ≥ 0.85（固定 test，按场景） | replay 全量核心诉求原 0.833；T36 改进后 **0.944**（complaint 0.867 / fee 1.000 / lost 0.962）；live 20 条 1.0（样本过小） | **达标**（T36 后 0.944 ≥ 0.85，complaint ≥ 0.80；原 0.833 未达标已保留） |
 | 无答案处理 | ≥ 0.90 | 5 条子集，core 5/5、original 2/5 | 分母过小，**不足以判定** |
 | 引用合法性 | 100% | 100%（构造性保证 + 断言） | 达标 |
 | 引用支持度 | ≥ 0.95（人工抽检 ≥50） | 未标注支持度标签 | **NOT_MEASURED**，不宣称 |
@@ -84,13 +138,14 @@
 
 - `docs/milestones/M6-tuning-report.md`：模型卡 + 资源证据 + NOT_RUN 决策与后续条件。
 - run manifest 按契约 §6：`artifacts/evals/eval-replay-…`（sha256 `a98b2d11…`）、`artifacts/evals/eval-live-…`（sha256 `d1ab369e…`），均含 code_sha、worktree_clean、dataset/split 哈希、index/knowledge/rule 快照、模型标识与时间。
+- T36 最终 test run：`artifacts/evals/eval-replay-bank-cs-m6-synthetic-v1-20261113T024251Z/`，manifest 记录 `retrieval_options`、新 `index_version`、`calibration_vector_sha256`；冻结 test 哈希 `869a8bd0…` 未变。
 - 测试集未参与训练或调参（`split_guard` + 训练脚本拒收非 train split；有测试）。
 
 ## 遗留与下一步
 
 1. **Ubuntu 复跑未执行**：`make eval` 目前在 Mac 上跑（DB 经隧道），需在 Ubuntu 上复跑一次才算完全满足计划书 M6 门槛。
 2. **引用支持度/人工相关性未标注**：需要人工抽检 ≥50 条，属负责人/业务侧工作，模型不能自称完成。
-3. **Recall@5 未达 0.85**：complaint 场景 0.600 是主要短板，下一步应先修检索/知识覆盖，而不是上微调。
+3. ~~**Recall@5 未达 0.85**：complaint 场景 0.600 是主要短板~~ → T36 已把 test 核心诉求 Recall@5 提到 0.944（complaint 0.867），见上方「检索（T36 改进后）」。残余风险：complaint 分母 15、单条敏感；生产索引尚未落地标题拼入，需按 ADR-0005 新建索引版本后再宣称生产收益。
 4. 微调为条件任务，默认不阻塞 M7；如需执行，等待 GPU 窗口与安装授权。
 5. relay 无公开价目表，成本为估算值，已在报告中标注。
 

@@ -64,6 +64,31 @@ live 模式必须在配置里给出 `max_items`（样本上限）与 `budget_cny
 无答案/信息不足子集的处理率、答案样本误拒率、过期知识泄漏率、延迟 p50/p95。
 无相关样本的样本不进入 Recall/@MRR 分母，单独计入无答案子集。
 
+### T36 检索改进开关（`retrieval` 段）
+
+`EVAL_CONFIG.retrieval` 的每一项都可单独关闭、回退到 T27 行为；缺省值就是旧行为：
+
+| 键 | 取值 | 作用 | 缺省 |
+|---|---|---|---|
+| `embedding_text` | `chunk` / `title_chunk` / `title_source_chunk` | embedding 输入是否拼入标题/来源；会改变 `index_version`，不改变分块边界与 `chunk_id` | `chunk` |
+| `business_filter` | `hard` / `soft` / `off` | `hard` 只留业务内候选；`soft` 给业务内候选加 `business_bonus` 但不硬排除跨业务 | `hard` |
+| `business_bonus` | 0–1 | `soft` 的业务奖励分 | `0.02` |
+| `rerank_alpha` | 0–1 | 候选池内用查询字符二元组覆盖率做确定性本地重排；0 关闭 | `0.0` |
+| `rerank_pool` | 正整数 | 重排候选池大小 | `20` |
+| `scenario_overrides` | 场景 → `{business_filter,min_similarity,top_k}` | 按场景覆盖上述参数 | `{}` |
+
+dev 调参入口（**参数层拒绝 test**；冻结 test 只用 `make eval` 报告一次）：
+
+```bash
+uv run python -m scripts.tune_retrieval --scenario complaint
+uv run python -m scripts.tune_retrieval --embedding-text chunk --rerank-alpha 0 \
+  --dump artifacts/t36/r0-baseline.dev.jsonl
+```
+
+诊断与逐轮记录见 [`complaint-diagnosis.md`](complaint-diagnosis.md)；`replay.yaml`
+当前启用 `embedding_text: title_chunk` + `rerank_alpha: 0.2`，业务过滤仍为 `hard`。
+manifest/metrics 的 `run.retrieval_options` 记录实际生效的开关组合。
+
 ## 质检对比（M6-04）
 
 判定单元是「会话 × 适用规则」，同一规则快照下比较：

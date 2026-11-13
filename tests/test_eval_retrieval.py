@@ -183,3 +183,115 @@ def test_run_retrieval_counts_tokens_and_no_answer_decisions() -> None:
     assert all(record.predicted_no_answer for record in records)
     assert all(record.input_tokens > 0 for record in records)
     assert predictions[0]["predicted_no_answer"] is True
+
+
+def test_title_prepending_changes_index_identity_but_not_chunk_spans() -> None:
+    corpus = load_corpus()
+    baseline = RetrievalHarness(
+        corpus=corpus,
+        provider=ReplayLexicalEmbedding(),
+        embedding_text="chunk",
+    )
+    titled = RetrievalHarness(
+        corpus=corpus,
+        provider=ReplayLexicalEmbedding(),
+        embedding_text="title_chunk",
+    )
+    # 分块边界与原文不变（引用仍可逐字回验），只有 embedding 输入与索引身份变化。
+    assert [chunk.key for chunk in baseline.chunks] == [
+        chunk.key for chunk in titled.chunks
+    ]
+    assert [chunk.text for chunk in baseline.chunks] == [
+        chunk.text for chunk in titled.chunks
+    ]
+    assert baseline.index_version != titled.index_version
+
+    def rank(harness: RetrievalHarness, doc_id: str) -> int:
+        hits = harness.query(
+            "补卡需要多久", business_type="lost_card", require_active=True
+        )
+        return [hit.doc_id for hit in hits].index(doc_id) + 1
+
+    # 标题「补卡时限与工本费」被拼入后，相关文档排名上升。
+    assert rank(titled, "lost-card-demo-03") < rank(baseline, "lost-card-demo-03")
+
+
+def test_soft_business_filter_keeps_cross_business_candidates() -> None:
+    corpus = load_corpus()
+    hard = RetrievalHarness(
+        corpus=corpus,
+        provider=ReplayLexicalEmbedding(),
+        business_filter="hard",
+    )
+    soft = RetrievalHarness(
+        corpus=corpus,
+        provider=ReplayLexicalEmbedding(),
+        business_filter="soft",
+        business_bonus=0.02,
+    )
+    hard_hits = hard.query("年费为什么收", business_type="complaint", require_active=True)
+    soft_hits = soft.query("年费为什么收", business_type="complaint", require_active=True)
+    assert all(hit.business_type == "complaint" for hit in hard_hits)
+    assert any(hit.business_type == "credit_card_fee" for hit in soft_hits)
+    assert soft_hits[0].doc_id == "fee-demo-01"
+
+
+def test_scenario_overrides_control_filter_and_top_k() -> None:
+    harness = RetrievalHarness(
+        corpus=load_corpus(),
+        provider=ReplayLexicalEmbedding(),
+        top_k=5,
+        business_filter="hard",
+        scenario_overrides={
+            "complaint": {"business_filter": "soft", "top_k": 2, "min_similarity": 0.9}
+        },
+    )
+    assert harness.business_filter_mode("complaint") == "soft"
+    assert harness.business_filter_mode("lost_card") == "hard"
+    assert len(harness.query("投诉回访怎么做", business_type="complaint", scenario="complaint")) == 2
+    assert harness.top_k_for("lost_card") == 5
+    assert harness.similarity_threshold("complaint") == 0.9
+    assert harness.similarity_threshold("lost_card") == harness.min_similarity
+
+
+def test_reranker_is_deterministic_and_configurable() -> None:
+    corpus = load_corpus()
+    harness = RetrievalHarness(
+        corpus=corpus,
+        provider=ReplayLexicalEmbedding(),
+        rerank_alpha=0.2,
+        rerank_pool=10,
+    )
+    first = harness.query("投诉回访怎么做", business_type="complaint", require_active=True)
+    second = harness.query("投诉回访怎么做", business_type="complaint", require_active=True)
+    assert [hit.chunk_key for hit in first] == [hit.chunk_key for hit in second]
+    assert len(first) == 5
+    assert harness.rerank_alpha == 0.2 and harness.rerank_pool == 10
+
+
+def test_title_index_rebuild_reproduces_index_version_and_ranking() -> None:
+    """ADR-0005 的重建验证：同一语料/provider/参数重建得到同一索引身份与排序。"""
+    from bank_assistant.knowledge.embedding import calibration_vector_sha256
+
+    corpus = load_corpus()
+    provider = ReplayLexicalEmbedding()
+    first = RetrievalHarness(
+        corpus=corpus,
+        provider=provider,
+        embedding_text="title_chunk",
+        rerank_alpha=0.2,
+    )
+    second = RetrievalHarness(
+        corpus=corpus,
+        provider=ReplayLexicalEmbedding(),
+        embedding_text="title_chunk",
+        rerank_alpha=0.2,
+    )
+    assert first.index_version == second.index_version
+    assert calibration_vector_sha256(provider) == calibration_vector_sha256(
+        ReplayLexicalEmbedding()
+    )
+    query = "投诉回访怎么做"
+    assert [hit.chunk_key for hit in first.query(query, business_type="complaint")] == [
+        hit.chunk_key for hit in second.query(query, business_type="complaint")
+    ]
