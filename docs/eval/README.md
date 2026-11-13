@@ -106,7 +106,7 @@ live 模式必须在配置里给出 `max_items`（样本上限）与 `budget_cny
 会递归扫描键名与值，命中疑似凭据（`sk-…`、`*_API_KEY=`、`api_key` 字段等）
 直接拒绝。失败实验也保留目录，不静默覆盖。
 
-## 意图分类评测（T28 / #29，条件任务）
+## 意图分类评测（T28 / #29 → T35 / #35，真实执行）
 
 T28 的意图分类**不复用** #28 的检索/质检 runner（那套只认
 `retrieval`/`inspection`，指标是 Recall/规则 P-R-F1），但复用同一套冻结口径、
@@ -118,11 +118,14 @@ T28 的意图分类**不复用** #28 的检索/质检 runner（那套只认
 - 训练只接受 `train` split，正式评测只接受冻结 `test`
   （`split_guard.require_split_for` / `require_frozen_test_split`）；
 - 产物写到 `artifacts/training/<run_id>/{manifest.json,model-card.md,config.json}`，
+  另含 `training-log.json`（loss 曲线、global_steps、allocated/reserved 显存峰值）、
+  `eval/`（baseline/tuned 逐条预测与 `comparison.json`）与 `adapter/`；
   manifest 记录 code sha、数据/标签 schema 哈希、超参、seed、硬件、显存峰值、
   耗时与状态；
 - baseline 与 tuned 使用**同一基础模型、同一 prompt、同一解码参数、同一 seed**：
-  baseline 关闭 LoRA adapter（zero-shot），tuned 启用 adapter；test 只在训练后
-  评一次，不参与训练或 checkpoint 选择。
+  baseline 关闭 LoRA adapter（zero-shot），tuned 启用 adapter；评测前切 `model.eval()`
+  关闭 LoRA dropout；test 只在训练后评一次，不参与训练或 checkpoint 选择
+  （`save_strategy="no"`，`checkpoints/` 为空）。
 
 指标：accuracy、macro-F1（只在有支持/预测的标签上平均）、逐标签
 Precision/Recall/F1/support、混淆矩阵、无效输出计数、困难样本子集准确率。
@@ -130,13 +133,16 @@ Precision/Recall/F1/support、混淆矩阵、无效输出计数、困难样本�
 
 ```bash
 make train                                        # 默认 dry-run：不训练，写 NOT_RUN 报告
-make train TRAIN_ARGS=--execute                   # 真实训练（需空闲 8GB GPU）
-make train TRAIN_CONFIG=configs/train/qlora-intent-qwen3-1.7b.yaml
+make train TRAIN_ARGS=--execute                   # 真实训练（需空闲 8GB GPU 与已缓存权重）
+make train TRAIN_CONFIG=configs/train/qlora-intent-qwen3-1.7b-t35.yaml \
+          TRAIN_ARGS="--execute --allow-download"  # 2026-11-13 实际执行的口径
 uv run python -m scripts.train_intent_lora --config configs/train/qlora-intent-qwen3-0.6b.yaml --dry-run
 ```
 
 dry-run 退出码 `0`（报告可以是 `NOT_RUN`）；配置/split/数据集哈希错误退出 `2`；
-真实训练因资源不足而 `NOT_RUN` 退出 `1` 并保留报告。详见
+真实训练因资源不足而 `NOT_RUN` 退出 `1` 并保留报告。`--allow-download` 才允许从
+HF 拉取权重（默认只用本地缓存）。2026-11-13 的真实结果是冻结 test 上
+accuracy 0.64 → 0.76、macro-F1 0.6138 → 0.7441（n=50，不宣称显著）；详见
 [M6 微调报告](../milestones/M6-tuning-report.md)。
 
 ## 数据库与 ADR-0006（重要）
