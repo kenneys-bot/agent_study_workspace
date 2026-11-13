@@ -88,3 +88,58 @@ def test_restore_target_guard_accepts_only_restore_check_databases():
         ("bank_assistant_demo_restore_check; drop table users", "bank_assistant_demo"),
     ]:
         assert _run_guard(target, source).returncode != 0, target
+
+
+def test_compose_app_runs_api_and_worker_from_same_immutable_image():
+    """T41/#41：compose 必须同时编排 api + worker，worker 不发布端口、同一镜像。"""
+    services = load_compose()["services"]
+    assert set(services) == {"api", "worker"}
+    api, worker = services["api"], services["worker"]
+
+    # 同一不可变镜像：worker 不能 build、不能再打别的 tag。
+    assert worker["image"] == api["image"]
+    assert "build" not in worker
+    assert worker["restart"] == "unless-stopped"
+    # 常驻进程没有 HTTP 入口：host 网络下不写 ports，也就不可能对外发布端口。
+    assert "ports" not in worker
+    assert worker["network_mode"] == api["network_mode"] == "host"
+    assert worker["container_name"] == "bank-assistant-worker"
+
+    command = [str(part) for part in worker["command"]]
+    assert command == ["python", "-m", "bank_assistant.worker"]
+
+    # 配置与挂载和 api 完全一致（同一个仓库外 env、同一 data/artifacts）。
+    assert worker["env_file"] == api["env_file"]
+    assert worker["volumes"] == api["volumes"]
+    assert worker["environment"]["GIT_SHA"] == api["environment"]["GIT_SHA"]
+
+    healthcheck = " ".join(str(part) for part in worker["healthcheck"]["test"])
+    assert "bank_assistant.worker" in healthcheck
+    assert "--healthcheck" in healthcheck
+
+
+def test_live_worker_pids_finds_worker_and_ignores_probe_itself(tmp_path):
+    """worker 存活探针按 argv 精确匹配，且必须排除探针自身（否则永远 healthy）。"""
+    import os
+
+    from bank_assistant.worker import live_worker_pids
+
+    def write_pid(pid: int, argv: list[bytes]) -> None:
+        directory = tmp_path / str(pid)
+        directory.mkdir()
+        (directory / "cmdline").write_bytes(b"\0".join(argv) + b"\0")
+
+    write_pid(101, [b"/usr/local/bin/python", b"-m", b"bank_assistant.worker"])
+    write_pid(103, [b"uvicorn", b"bank_assistant.main:app"])
+    write_pid(104, [b"python", b"-c", b"print('bank_assistant.worker')"])
+    write_pid(os.getpid(), [b"python", b"-m", b"bank_assistant.worker"])
+    (tmp_path / "not-a-pid").mkdir()
+    (tmp_path / "105").mkdir()  # 进程已退出、cmdline 读不到：跳过而不是崩溃
+
+    assert live_worker_pids(tmp_path) == [101]
+
+
+def test_live_worker_pids_returns_empty_without_proc(tmp_path):
+    from bank_assistant.worker import live_worker_pids
+
+    assert live_worker_pids(tmp_path / "missing") == []

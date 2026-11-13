@@ -1,14 +1,15 @@
-# 部署与运维手册（v0.1.1 / M7；T29+T30+T31+T37+T38）
+# 部署与运维手册（v0.1.2 / M7；T29+T30+T31+T37+T38+T41）
 
 本手册是 Ubuntu 服务器上 API 部署、索引重建、备份恢复、回滚、监控排查与
 **发布校验**的**可执行步骤**。所有命令都在 Mac 的仓库根执行（除标注“服务器”的
 只读检查）；**不包含任何密码、密钥或连接串**。部署形态是个人项目的生产就绪演练，
 不是任何机构的正式上线。
 
-当前发布：`v0.1.1`，代码 `3a04952`，镜像 `bank-assistant:api-3a04952`，
-活动索引 `idx-20261113T025706Z-f7974a6a`（`embedding_text=title_chunk`）。
-发布记录 [docs/releases/v0.1.1.md](../releases/v0.1.1.md)（上一版
-[v0.1.0](../releases/v0.1.0.md) 保留为回滚点）、机器可读清单
+当前发布：`v0.1.2`，代码 `7542309`，镜像 `bank-assistant:api-7542309`
+（compose 同时运行 `bank-assistant-api` 与 `bank-assistant-worker`），
+活动索引 `idx-20261113T025706Z-f7974a6a`（`embedding_text=title_chunk`，本次未重建）。
+发布记录 [docs/releases/v0.1.2.md](../releases/v0.1.2.md)（上一版
+[v0.1.1](../releases/v0.1.1.md)、[v0.1.0](../releases/v0.1.0.md) 保留为回滚点）、机器可读清单
 [release.json](../../release.json)、风险清单 [risk-register.md](risk-register.md)、
 依赖审计 [dependency-audit.md](dependency-audit.md)。
 
@@ -20,25 +21,26 @@
 | 项目根 | `~/workspace/bank-assistant/`（`repo`、`data`、`artifacts`、`backups`、`deploy`） |
 | 数据库 | 已有 PostgreSQL 18 容器 `bank-assistant-db-db-1`，只绑 `127.0.0.1:5432` |
 | API 容器 | `bank-assistant-api`（compose 项目 `bank-assistant-app`） |
+| worker 容器 | `bank-assistant-worker`（与 API 同一不可变镜像、常驻、**不发布端口**；T41 起编入 compose） |
 | API 端口 | **只绑服务器回环** `127.0.0.1:8000`；外部访问走 SSH（`ss -tln` 判据） |
 | 容器网络 | `network_mode: host`（让 `DATABASE_URL=127.0.0.1:5432` 指向宿主 PG）；端口隔离由 uvicorn `--host 127.0.0.1` 保证，不写 `ports:` |
-| 镜像 | `bank-assistant:api-<code_sha7>`，不可变；服务器不重建源码；当前 `api-3a04952`（回滚点 `api-59a5869`） |
+| 镜像 | `bank-assistant:api-<code_sha7>`，不可变；服务器不重建源码；当前 `api-7542309`（回滚点 `api-3a04952`） |
 | 配置 | 仓库外 `~/workspace/bank-assistant/.env.app`（chmod 600），模板 `deploy/env.app.example` |
 | compose | 仓库 `deploy/compose.app.yml`；服务器运行副本 `~/workspace/bank-assistant/deploy/compose.app.yml` |
 | 索引/模型缓存 | `~/workspace/bank-assistant/data/{index,models}`（可重建，不随镜像发布）；当前索引 `idx-20261113T025706Z-f7974a6a`，上一版 `idx-20261112T110703Z-2334d03e` 保留 |
 | 备份 | `~/workspace/bank-assistant/backups/<UTC timestamp>/` |
 | 部署状态 | `~/workspace/bank-assistant/deploy/state.env`（当前/上一版镜像与 SHA，非秘密） |
 | 发布清单 | 仓库根 `release.json`；`make release-verify` 对照线上实例 |
-| worker | **未编排进 compose**；只能手工用同一镜像启动（见 §8.2），队列会停留 `queued` |
+| worker | compose 服务 `worker`：同一镜像 `python -m bank_assistant.worker`、`restart: unless-stopped`、host 网络无 ports、同一 env/挂载、`--healthcheck` 存活探针 |
 
 ### 1.1 文件与配置矩阵（别混用）
 
 | 文件 | 用在哪 | 作用 | 是否进 Git |
 |---|---|---|---|
 | `deploy/compose.yml` | 仅 Mac 开发/冒烟 | 本机构建 `bank-assistant:dev`、端口映射 8000 | 是（无真实值） |
-| `deploy/compose.app.yml` | 服务器 API | 不可变镜像、host 网络、仅回环、仓库外 env | 是 |
+| `deploy/compose.app.yml` | 服务器 API + worker | 不可变镜像、host 网络、API 仅回环、worker 无端口、仓库外 env | 是 |
 | `deploy/compose.db.yml` | 仅服务器数据库 | PostgreSQL 18、仅回环 5432、bind mount | 是 |
-| `~/workspace/bank-assistant/.env.app` | 服务器 API | 模型 key、`DATABASE_URL`、`SECRET_KEY` | **否**（600） |
+| `~/workspace/bank-assistant/.env.app` | 服务器 API + worker | 模型 key、`DATABASE_URL`、`SECRET_KEY` | **否**（600） |
 | `~/workspace/bank-assistant/.env.pg` | 服务器 DB compose | `POSTGRES_*`、`PG_DATA_DIR` | **否**（600） |
 | 本机 `.env` | Mac 开发/评测 | 经隧道连 `15432`，模型 key | **否**（600，gitignore） |
 
@@ -82,7 +84,8 @@ make deploy
 
 `make deploy` 依次做：构建 `bank-assistant:api-<sha7>` → `docker save | ssh docker load`
 → 用 `git bundle` 把服务器 checkout 精确重置到同一 SHA → 同步 compose 到仓库外副本
-→ `docker compose up -d --wait` → 校验 live/ready、回环绑定与版本页 SHA。
+→ `docker compose up -d --wait`（**api + worker**）→ 校验 live/ready、回环绑定、
+worker 运行/健康/同一镜像/无端口与版本页 SHA。
 首次部署没有上一版镜像，回滚点为空是预期的；下一次部署会记录回滚点。
 
 ### 2.3 建索引（首次与知识变更后）
@@ -147,11 +150,12 @@ make release-verify
 ```
 
 该目标读取仓库根 `release.json`，通过 SSH 与服务器回环逐项核对：
-运行容器 image id/标签、`/health/live`、`/health/ready`、Alembic head、
+运行容器（api + worker）image id/标签、worker 运行/健康/restart/无端口、
+`/health/live`、`/health/ready`、Alembic head、
 `/api/v1/system/version` 的 `code_sha`、活动索引版本、校准 sha256、索引 embedding
 模型、生成 provider/模型。**任一不一致即非零退出**；不改配置、不重启服务。
 
-发布记录/清单在版本发布时冻结（当前 [v0.1.0](../releases/v0.1.0.md)），
+发布记录/清单在版本发布时冻结（当前 [v0.1.2](../releases/v0.1.2.md)），
 后续文档提交不改变已部署镜像身份。更新版本时先改 `release.json` 的
 `release.version` 与部署字段，再执行 `make release-verify`，最后在
 `docs/releases/<version>.md` 记录真实输出。
@@ -171,7 +175,9 @@ make verify-deploy         # 可选：随时复核线上真实状态
 - 服务器 `HEAD=<sha>` 且工作树干净；
 - `/health/live`、`/health/ready` 均 200；
 - `ss -tln` 只出现 `127.0.0.1:8000`；host 网络下同时检查容器 `command` 含
-  `--host 127.0.0.1`（不写 `0.0.0.0`），不依赖 `docker port`。
+  `--host 127.0.0.1`（不写 `0.0.0.0`），不依赖 `docker port`；
+- `worker bank-assistant-worker: running/healthy`，且 worker 的 `image`/`restart`/
+  `ports` 与 API 一致（worker 无发布端口）。
 
 ## 4. 备份（每次发布/迁移前）
 
@@ -254,10 +260,11 @@ make index-activate INDEX_VERSION=idx-20261113T025706Z-f7974a6a
 make release-verify
 ```
 
-`make rollback` 步骤：读取 `state.env` 的上一版 → 用**上一版不可变镜像**
-`up -d --wait` → 校验 `/health/live`、`/health/ready`、版本页 `code_sha`
-（=上一版 SHA）与当时的活动索引版本 → 再切回当前镜像并校验。全程不重启
-服务器、不降 schema、不动数据库/`dingtalk-*`/redis 容器。
+`make rollback` 步骤：读取 `state.env` 的上一版 → **先停 worker、只用上一版不可变
+镜像起 api**（旧编排没有常驻 worker；T41 起恢复段会再起 api+worker）→ 校验
+`/health/live`、`/health/ready`、版本页 `code_sha`（=上一版 SHA）与当时的活动索引
+版本，并断言 worker 未运行 → 再切回当前镜像（api + worker）并校验 worker
+`running/healthy`。全程不重启服务器、不降 schema、不动数据库/`dingtalk-*`/redis 容器。
 
 - 上一版镜像必须仍在服务器上（部署脚本保留 tag，不自动清理）；
 - 若 `state.env` 没有上一版（首次部署），用 `BACK_TO=<镜像> make rollback` 指定；
@@ -276,7 +283,9 @@ make release-verify
 |---|---|
 | `make deploy` 报工作树不干净 | 先提交；部署只允许提交，脏树会让镜像 SHA 不可信 |
 | `test -f .env.app` 失败 | 按 §2.1 创建，chmod 600；不要从仓库复制真实值 |
-| `compose up --wait` 超时 | `ssh my-ubuntu-server 'docker logs --tail 100 bank-assistant-api'` 看启动错误 |
+| `compose up --wait` 超时 | `ssh my-ubuntu-server 'docker logs --tail 100 bank-assistant-api'` / `bank-assistant-worker` 看启动错误 |
+| worker 容器 `unhealthy` 或反复重启 | `docker logs bank-assistant-worker` 看是否缺模型凭据/数据库不可达；`--healthcheck` 只判断进程，healthy≠业务正常 |
+| 质检任务停在 `queued` | 先看 worker 是否 `running/healthy`（§9），再看 `bank_task_queue_depth`；worker 在 compose 里，不要手工 `docker run` 抢同一队列 |
 | `/health/ready` 503 | 数据库容器未起/凭据不对：`docker ps`、`docker inspect bank-assistant-db-db-1` |
 | `/system/version` 的 `index_version` 为 null | 没建索引：`make deploy-index` |
 | 索引构建报 embedding 下载失败 | 服务器网络受限时重试；模型缓存在 `data/models`，成功后不重复下载 |
@@ -291,8 +300,8 @@ make release-verify
 
 1. 记录时间、影响端点、`x-trace-id`；不贴请求体/会话原文/令牌；
 2. 只读诊断：`/health/live`、`/health/ready`、`/metrics`、容器状态与最近日志；
-3. 只允许重启 `bank-assistant-api`（§10.5）；**不重启服务器整机**，数据库/`dingtalk-*`
-   容器未经负责人逐次批准不动；
+3. 只允许重启 `bank-assistant-api` / `bank-assistant-worker`（§10.5）；
+   **不重启服务器整机**，数据库/`dingtalk-*` 容器未经负责人逐次批准不动；
 4. 不为了“恢复”关闭限流、放宽输入上限、删除失败任务或手工改 `tasks.status`；
 5. 诊断证据（计数/状态/时间线）保留在事故记录中，不删除容器日志。
 
@@ -333,33 +342,44 @@ ssh my-ubuntu-server 'docker logs --since 30m --tail 300 bank-assistant-api 2>&1
 
 **worker 卡住 / 队列积压**：
 
-- 事实：`deploy/compose.app.yml` **只编排 API，没有 worker 服务**（R-07）；
-  服务器上新质检任务会停在 `queued`，必须手工启动同一镜像的 worker；
-- 先只读确认：
+- 事实：T41 起 `deploy/compose.app.yml` **同时编排 API 和 worker**
+  （`bank-assistant-worker`，同一镜像、`restart: unless-stopped`、无发布端口）；
+  正常情况下不需要手工启动 worker。
+- 先只读确认 worker 进程与队列：
 
   ```bash
+  ssh my-ubuntu-server 'docker inspect -f "{{.State.Status}} {{.State.Health.Status}} {{.Config.Image}}" bank-assistant-worker'
+  ssh my-ubuntu-server 'docker logs --since 30m --tail 100 bank-assistant-worker 2>&1 | tail -40'
   ssh my-ubuntu-server 'curl -fsS http://127.0.0.1:8000/metrics | grep -E "bank_task_(queue_depth|events_total)"'
   ssh my-ubuntu-server 'docker exec bank-assistant-db-db-1 psql -U bank -d bank_assistant_demo -At -F "|" \
     -c "select status, count(*), min(created_at) from tasks group by status order by status"'
   ```
 
-- 一次性排空（**用已部署不可变镜像**，不装宿主依赖）：
+- 只重启 worker（不重启服务器、不动数据库）：
+
+  ```bash
+  ssh my-ubuntu-server 'docker restart bank-assistant-worker'
+  ```
+
+  重启只影响本进程；在途任务不被强写，租约（CT-11）到期后会被重新领取。
+- worker 起不来（`docker logs` 显示缺模型凭据/数据库不可达）时按 503/凭据问题排查；
+  `--healthcheck` 只回答“进程在不在”，**healthy 不等于业务正常**。
+- 需要一次性排空/诊断队列（**用已部署不可变镜像**，不装宿主依赖；临时容器名不要
+  与 compose 的 `bank-assistant-worker` 冲突）：
 
   ```bash
   APP_UID=$(ssh my-ubuntu-server id -u); APP_GID=$(ssh my-ubuntu-server id -g)
   IMAGE=$(ssh my-ubuntu-server "sed -n 's/^CURRENT_IMAGE=//p' ~/workspace/bank-assistant/deploy/state.env")
-  ssh my-ubuntu-server "docker run --rm --network host \
+  ssh my-ubuntu-server "docker run --rm --network host --name bank-assistant-worker-once \
     --env-file ~/workspace/bank-assistant/.env.app \
     --user $APP_UID:$APP_GID \
     -e INDEX_DIR=/app/data/index -e DATA_ROOT=/app/data -e ARTIFACT_ROOT=/app/artifacts \
+    -e HOME=/app/data/home -e FASTEMBED_CACHE_PATH=/app/data/models \
     -v ~/workspace/bank-assistant/data:/app/data \
     -v ~/workspace/bank-assistant/artifacts:/app/artifacts \
     $IMAGE python -m bank_assistant.worker --once"
   ```
 
-- 若需要常驻（仍不写进 compose）：把上面 `--rm` 换成
-  `-d --name bank-assistant-worker --restart unless-stopped`，去掉 `--once`；
-  停止用 `ssh my-ubuntu-server 'docker rm -f bank-assistant-worker'`；
 - 卡在 `running`：看 `bank_task_events_total{event="lease_lost"|"reclaim"}` 与 worker
   日志；租约到期会被重新领取（CT-11），**不要手工改状态或删除任务**；
 - 处理后确认同一质检只有一份最终结果、`failed` 有稳定 `error_code`，再关闭事故。
@@ -368,11 +388,11 @@ ssh my-ubuntu-server 'docker logs --since 30m --tail 300 bank-assistant-api 2>&1
 
 ```bash
 make sync-check                                        # 两端 SHA 与未提交状态
-make verify-deploy                                     # live/ready/版本页/回环端口
+make verify-deploy                                     # live/ready/api+worker/版本页/回环端口
 make release-verify                                    # 发布清单 vs 线上（image/alembic/index/version）
 make db-tunnel-status                                  # Mac 侧隧道状态（开发/集成测试用）
 ssh my-ubuntu-server 'docker ps --filter name=bank-assistant --format "{{.Names}} {{.Status}} {{.Ports}}"'
-ssh my-ubuntu-server 'docker inspect -f "{{.State.Health.Status}}" bank-assistant-api'
+ssh my-ubuntu-server 'docker inspect -f "{{.State.Health.Status}}" bank-assistant-api bank-assistant-worker'
 ssh my-ubuntu-server 'ss -tln | grep -E ":(8000|5432) "'
 ssh my-ubuntu-server 'du -sh ~/workspace/bank-assistant/{data,backups}'
 ssh my-ubuntu-server 'curl -fsS http://127.0.0.1:8000/metrics | grep -E "bank_(db_ready|task_queue_depth)"'
@@ -426,7 +446,7 @@ SQLite/mock 后宣称通过（ADR-0006）。
 | 模型限流 | `status="rate_limited"` 任意增长或 > 5%/10 分钟 | 检查供应商配额；429 会带 `Retry-After`，调用方按提示退避 |
 | 模型超时 | `status="timeout"` 增长或 P95 > 30s | 查供应商状态/网络；超时映射 504，不重试成假成功 |
 | 数据库不可用 | `bank_db_ready == 0` 持续 1 分钟 | `docker ps`、`docker inspect bank-assistant-db-db-1`，按 §8 排查；API 端点应返回 503 |
-| 队列积压 | `bank_task_queue_depth{status="queued"} > 50` 或 oldest queued > 5 分钟 | 启动/检查 worker；确认没有永久 running |
+| 队列积压 | `bank_task_queue_depth{status="queued"} > 50` 或 oldest queued > 5 分钟 | 检查 compose 的 worker 容器是否 running/healthy；确认没有永久 running |
 | 租约回收 | `event="reclaim"` 或 `lease_lost` 增长 | 可能 worker 崩溃/租约过短；查 worker 日志，确认无重复最终结果 |
 | 任务失败 | `event="fail"` 增长 / `MAX_ATTEMPTS_EXCEEDED` | 查 `error_code` 与模型输出校验日志；不要清空问题列表 |
 | 限流/输入拒绝 | `bank_rate_limit_rejections_total`、`bank_input_rejections_total` 突增 | 可能是攻击/误配置；核对 `RATE_LIMIT_*`、`MAX_REQUEST_BYTES` |
@@ -476,7 +496,8 @@ ssh my-ubuntu-server 'docker logs --since 24h bank-assistant-api 2>&1 | grep -c 
 
 ### 10.5 故障恢复边界
 
-- 需要重启容器验证恢复时，**只允许** `ssh my-ubuntu-server 'docker restart bank-assistant-api'`；
+- 需要重启容器验证恢复时，**只允许** `ssh my-ubuntu-server 'docker restart bank-assistant-api'`
+  或 `docker restart bank-assistant-worker`；
 - 不重启服务器整机、不重启/不触碰 `bank-assistant-db-db-1` 以外的数据库容器，
   更不触碰 `dingtalk-*` 容器；
 - 重启 API 会清空进程内指标与限流桶；日志/数据库不受影响。
@@ -495,14 +516,14 @@ ssh my-ubuntu-server 'docker logs --since 24h bank-assistant-api 2>&1 | grep -c 
 
 | 命令 | 实现 | 说明 |
 |---|---|---|
-| `make deploy` | `scripts/deploy.sh` | 构建/传输/对齐 SHA/compose up/校验 |
+| `make deploy` | `scripts/deploy.sh` | 构建/传输/对齐 SHA/compose up（api+worker）/校验（含 worker 状态） |
 | `make deploy-index` | `scripts/deploy_index.sh` | 服务器一次性容器重建索引（默认 `title_chunk`） |
 | `make index-activate` | `scripts/index_activate.sh` | T37 新增：指针切回旧索引版本（`INDEX_VERSION=idx-...`） |
-| `make verify-deploy` | `scripts/verify_deployment.sh` | live/ready/回环/版本页 |
+| `make verify-deploy` | `scripts/verify_deployment.sh` | live/ready/回环/api+worker/版本页（`EXPECT_WORKER=0` 用于回滚旧编排） |
 | `make release-verify` | `scripts/release_verify.sh` | T31 新增：对照 `release.json` |
 | `make backup` | `scripts/backup.sh`（经 SSH） | 只读源库，仓库外备份 |
 | `make restore-check` | `scripts/restore_check.sh`（经 SSH） | 只写 `*_restore_check` |
-| `make rollback` | `scripts/rollback.sh` | 切上一版 → 校验 → 恢复当前版 |
+| `make rollback` | `scripts/rollback.sh` | 切上一版（停 worker、只起 api）→ 校验 → 恢复当前版（api+worker） |
 | `make sync-check` | `scripts/sync-check.sh` | 两端 SHA/工作树只读检查 |
 | `make db-tunnel` / `db-tunnel-status` | `scripts/pg-tunnel.sh` | Mac 开发隧道，幂等 |
 | `make doctor` | `scripts/doctor.sh` | 依赖/隧道/目标库检查，不打印秘密 |
@@ -528,7 +549,7 @@ scp scripts/load_test.py my-ubuntu-server:$ART/load_test.py
 ssh my-ubuntu-server "cd $ART && docker run --rm --network host \
   --user \"\$(id -u):\$(id -g)\" -v \"\$PWD:/work\" \
   -e LOADTEST_PASSWORD=\"\${DEMO_PASSWORD:?公开演示密码}\" \
-  --entrypoint python bank-assistant:api-3a04952 /work/load_test.py \
+  --entrypoint python bank-assistant:api-7542309 /work/load_test.py \
   --base-url http://127.0.0.1:8000 --duration-seconds 600 --concurrency 10 \
   --inspection-id <已存在的演示质检 UUID> --output-dir /work/nonmodel"
 ```
@@ -559,12 +580,12 @@ ssh my-ubuntu-server 'cd ~/workspace/bank-assistant && docker run -d --rm \
   -e FASTEMBED_CACHE_PATH=/app/data/models -e HOME=/app/data/home \
   -v ~/workspace/bank-assistant/data:/app/data \
   -v ~/workspace/bank-assistant/artifacts:/app/artifacts \
-  bank-assistant:api-3a04952 uvicorn bank_assistant.main:app --host 127.0.0.1 --port 8011'
+  bank-assistant:api-7542309 uvicorn bank_assistant.main:app --host 127.0.0.1 --port 8011'
 
 # 4) 2 分钟 / 5 并发
 ssh my-ubuntu-server "cd $ART && docker run --rm --network host --user \"\$(id -u):\$(id -g)\" \
   -v \"\$PWD:/work\" -e LOADTEST_PASSWORD=\"\${DEMO_PASSWORD}\" \
-  --entrypoint python bank-assistant:api-3a04952 /work/load_test.py \
+  --entrypoint python bank-assistant:api-7542309 /work/load_test.py \
   --base-url http://127.0.0.1:8011 --phase suggestion --endpoints suggestion \
   --duration-seconds 120 --concurrency 5 --output-dir /work/replay"
 
@@ -651,3 +672,4 @@ DB 重启 1.820s（首次 503→200，命令→200 2.127s）；完整数据见
 | 2026-11-12（T31） | 增补发布记录/清单与 `make release-verify`（§2.4）、配置矩阵（§1.1）、事故第一响应与 worker 运维（§8.2）、命令索引（§12）；核对全部 `make` 命令存在 |
 | 2026-11-13（T37） | 发布 v0.1.1（`api-3a04952`，索引 `idx-20261113T025706Z-f7974a6a`）；§2.3 补索引文本形态/内容身份/指针备份与 `make index-activate`（§2.3.1）；§7 回滚演练补索引指针步骤与镜像/索引配对约束 |
 | 2026-11-13（T38） | 新增 §13：10 并发压测、24h 探测启停、受控 API/DB 重启演练与任务不变量核对；§14 为原变更记录 |
+| 2026-11-13（T41） | 发布 v0.1.2（`api-7542309`，索引不变）；compose 增补常驻 `worker`（同一镜像、无端口、`--healthcheck`）；部署/发布校验/回滚/日常检查与 §8.2 worker 运维改为 api+worker 口径（R-07 关闭） |
