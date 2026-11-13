@@ -26,6 +26,10 @@ Ubuntu代码SHA：`3a04952`（服务镜像与服务器 checkout 一致；镜像 
 | 风险 | **R-19 CLOSED**（合成数据）；见 [M7 性能报告](milestones/M7-performance-report.md) §14、[风险清单](ops/risk-register.md) §4 |
 | 报告/脚本 | `scripts/inspection_latency_measure.py`（新增 verdict/证据回验/429 重试）；产物 `.local-data/t40-artifacts/`（gitignore） |
 
+## 2026-11-13 质检成功率修复（T40，R-19 关闭）
+
+quote-first 证据定位（prompt `inspection-v2:f9740dfe…`）：模型只回逐字 quote，后端精确匹配 → NFKC/空白归一化并按字符映射回原码点，无法定位的 hit 降级 `insufficient_evidence` 且不拖垮整次 run。真实 DeepSeek、隔离库、60 次：成功率 **16.7% → 100%**、完成 P95 **41.879s → 15.042s**、hit span 100/100 精确、成本 **¥0.8117 → ¥0.4202**。
+
 ## 2026-11-13 质检延迟与供应商故障演练（T39）
 
 真实 DeepSeek、`bank_assistant_test`、60 次：接收 P95 245.2ms（达标）、完成 P50/P95/P99 24.00/41.88/46.30s（P95 ≤60s 达标）、成功任务 P95 32.15s；**成功率仅 16.7%（10/60），50 次 EVIDENCE_INVALID** → 风险 R-19（功能不健康），已由 T40 修复（见上方 T40 小节，60/60 succeeded）。故障演练：429/504/503/502 四类映射全部正确、无假成功、无零分报告。
