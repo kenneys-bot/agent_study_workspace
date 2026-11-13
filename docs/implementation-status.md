@@ -43,6 +43,10 @@ Ubuntu代码SHA：`7542309`（服务镜像与服务器 checkout 一致；镜像 
 | 风险 | **R-19 CLOSED**（合成数据）；见 [M7 性能报告](milestones/M7-performance-report.md) §14、[风险清单](ops/risk-register.md) §4 |
 | 报告/脚本 | `scripts/inspection_latency_measure.py`（新增 verdict/证据回验/429 重试）；产物 `.local-data/t40-artifacts/`（gitignore） |
 
+## 2026-11-13 发布 v0.1.2（T41）
+
+镜像 `bank-assistant:api-7542309`（id `3fff5246…`）；compose `api`+`worker` 同镜像、`restart: unless-stopped`、worker 无端口；`/system/version` code_sha=7542309、index `idx-20261113T025706Z-f7974a6a` 未变。线上真实质检 6/6 succeeded（POST 0.013–0.056s、完成 7.1–9.1s），hit 证据 span 9/9、全部 span 22/22 逐字回验；成本约 ¥0.116。`make release-verify` PASS；回滚演练 PASS；tag `v0.1.2` 已推送。R-07（部署无 worker）关闭，High 6→5。
+
 ## 2026-11-13 质检成功率修复（T40，R-19 关闭）
 
 quote-first 证据定位（prompt `inspection-v2:f9740dfe…`）：模型只回逐字 quote，后端精确匹配 → NFKC/空白归一化并按字符映射回原码点，无法定位的 hit 降级 `insufficient_evidence` 且不拖垮整次 run。真实 DeepSeek、隔离库、60 次：成功率 **16.7% → 100%**、完成 P95 **41.879s → 15.042s**、hit span 100/100 精确、成本 **¥0.8117 → ¥0.4202**。
